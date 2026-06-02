@@ -1,0 +1,113 @@
+/**
+ * GET  /api/qrcodes       — List all QR codes for the authenticated user
+ * POST /api/qrcodes       — Create a new QR code
+ */
+
+import { getSession } from '@/lib/auth';
+import { nanoid } from 'nanoid';
+
+const { getQRCodesByUserId, createQRCode } = require('@/lib/db');
+
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
+
+/**
+ * Transform a DB record (snake_case) to a client-friendly shape (camelCase)
+ * and attach the public redirect URL.
+ */
+function toClientQRCode(qrcode) {
+  return {
+    id: qrcode.id,
+    shortId: qrcode.short_id,
+    userId: qrcode.user_id,
+    title: qrcode.title,
+    destinationUrl: qrcode.destination_url,
+    fgColor: qrcode.foreground_color,
+    bgColor: qrcode.background_color,
+    scanCount: qrcode.scan_count,
+    createdAt: qrcode.created_at,
+    updatedAt: qrcode.updated_at,
+    redirectUrl: `${BASE_URL}/r/${qrcode.short_id}`,
+  };
+}
+
+// ── GET — list QR codes ────────────────────────
+export async function GET() {
+  try {
+    const session = await getSession();
+    if (!session) {
+      return Response.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    const qrcodes = getQRCodesByUserId(session.userId);
+    return Response.json({ qrcodes: qrcodes.map(toClientQRCode) });
+  } catch (error) {
+    console.error('GET /api/qrcodes error:', error);
+    return Response.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+// ── POST — create QR code ──────────────────────
+export async function POST(request) {
+  try {
+    const session = await getSession();
+    if (!session) {
+      return Response.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json();
+    const {
+      title,
+      destinationUrl,
+      foregroundColor,
+      backgroundColor,
+      fgColor,
+      bgColor,
+    } = body;
+
+    // Validation
+    if (!title || !destinationUrl) {
+      return Response.json(
+        { error: 'Title and destination URL are required' },
+        { status: 400 }
+      );
+    }
+
+    // Basic URL validation
+    try {
+      new URL(destinationUrl);
+    } catch {
+      return Response.json(
+        { error: 'Invalid destination URL' },
+        { status: 400 }
+      );
+    }
+
+    const shortId = nanoid(10);
+
+    const qrcode = createQRCode({
+      shortId,
+      userId: session.userId,
+      title,
+      destinationUrl,
+      foregroundColor: foregroundColor || fgColor || '#000000',
+      backgroundColor: backgroundColor || bgColor || '#ffffff',
+    });
+
+    return Response.json({ qrcode: toClientQRCode(qrcode) }, { status: 201 });
+  } catch (error) {
+    console.error('POST /api/qrcodes error:', error);
+    return Response.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
