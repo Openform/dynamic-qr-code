@@ -30,7 +30,7 @@ export async function GET(request, { params }) {
       destination = `https://${destination}`;
     }
 
-    return NextResponse.redirect(destination, 302);
+    return NextResponse.redirect(new URL(destination), 302);
   } catch (error) {
     console.error('Redirect error:', error);
     return NextResponse.redirect(new URL('/', request.url));

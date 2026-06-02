@@ -30,7 +30,13 @@ export default function CreateEditModal({ isOpen, onClose, onSave, qrcode }) {
 
   // Live QR preview
   useEffect(() => {
-    const text = destinationUrl || 'https://example.com';
+    let text = 'https://example.com';
+    if (qrcode && typeof window !== 'undefined') {
+      text = `${window.location.origin}/r/${qrcode.shortId}`;
+    } else if (destinationUrl) {
+      text = destinationUrl;
+    }
+
     QRCode.toDataURL(text, {
       width: 180,
       margin: 2,
@@ -41,7 +47,7 @@ export default function CreateEditModal({ isOpen, onClose, onSave, qrcode }) {
     })
       .then(setPreviewUrl)
       .catch(() => setPreviewUrl(''));
-  }, [destinationUrl, fgColor, bgColor]);
+  }, [destinationUrl, fgColor, bgColor, qrcode]);
 
   async function handleSubmit(e) {
     e.preventDefault();
