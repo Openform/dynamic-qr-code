@@ -70,23 +70,7 @@ export default function DashboardPage() {
     }
   }
 
-  async function handleDownload(qr) {
-    try {
-      const res = await fetch(`/api/qrcodes/${qr.id}/image`);
-      if (!res.ok) throw new Error('Download failed');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${qr.title || 'qrcode'}.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch {
-      // fallback: silently fail
-    }
-  }
+
 
   const handleSave = useCallback(
     async (formData) => {
@@ -243,7 +227,6 @@ export default function DashboardPage() {
                 qrcode={qr}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
-                onDownload={handleDownload}
               />
             ))}
           </div>

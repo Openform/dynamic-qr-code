@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import QRCode from 'qrcode';
+import { useState, useEffect, useRef } from 'react';
+import QRCodeStyling from 'qr-code-styling';
 
 export default function CreateEditModal({ isOpen, onClose, onSave, qrcode }) {
   const isEdit = Boolean(qrcode);
@@ -10,8 +10,14 @@ export default function CreateEditModal({ isOpen, onClose, onSave, qrcode }) {
   const [destinationUrl, setDestinationUrl] = useState('');
   const [fgColor, setFgColor] = useState('#000000');
   const [bgColor, setBgColor] = useState('#ffffff');
+  const [logoUrl, setLogoUrl] = useState('');
+  const [dotStyle, setDotStyle] = useState('square');
+  const [cornerSquareStyle, setCornerSquareStyle] = useState('square');
+  const [cornerDotStyle, setCornerDotStyle] = useState('square');
   const [loading, setSaving] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState('');
+
+  const qrRef = useRef(null);
+  const qrCodeObj = useRef(null);
 
   // Pre-fill when editing
   useEffect(() => {
@@ -20,11 +26,19 @@ export default function CreateEditModal({ isOpen, onClose, onSave, qrcode }) {
       setDestinationUrl(qrcode.destinationUrl || '');
       setFgColor(qrcode.fgColor || '#000000');
       setBgColor(qrcode.bgColor || '#ffffff');
+      setLogoUrl(qrcode.logoUrl || '');
+      setDotStyle(qrcode.dotStyle || 'square');
+      setCornerSquareStyle(qrcode.cornerSquareStyle || 'square');
+      setCornerDotStyle(qrcode.cornerDotStyle || 'square');
     } else {
       setTitle('');
       setDestinationUrl('');
       setFgColor('#000000');
       setBgColor('#ffffff');
+      setLogoUrl('');
+      setDotStyle('square');
+      setCornerSquareStyle('square');
+      setCornerDotStyle('square');
     }
   }, [qrcode, isOpen]);
 
@@ -37,17 +51,54 @@ export default function CreateEditModal({ isOpen, onClose, onSave, qrcode }) {
       text = destinationUrl;
     }
 
-    QRCode.toDataURL(text, {
-      width: 180,
-      margin: 2,
-      color: {
-        dark: fgColor,
-        light: bgColor,
+    const options = {
+      width: 300,
+      height: 300,
+      type: 'svg',
+      data: text,
+      image: logoUrl ? `/api/proxy-image?url=${encodeURIComponent(logoUrl)}` : '',
+      qrOptions: {
+        errorCorrectionLevel: 'H',
       },
-    })
-      .then(setPreviewUrl)
-      .catch(() => setPreviewUrl(''));
-  }, [destinationUrl, fgColor, bgColor, qrcode]);
+      dotsOptions: {
+        color: fgColor,
+        type: dotStyle,
+      },
+      backgroundOptions: {
+        color: bgColor,
+      },
+      cornersSquareOptions: {
+        type: cornerSquareStyle,
+        color: fgColor,
+      },
+      cornersDotOptions: {
+        type: cornerDotStyle,
+        color: fgColor,
+      },
+      imageOptions: {
+        crossOrigin: 'anonymous',
+        margin: 10,
+        imageSize: 0.4,
+      },
+    };
+
+    if (!qrCodeObj.current) {
+      qrCodeObj.current = new QRCodeStyling(options);
+    } else {
+      qrCodeObj.current.update(options);
+    }
+
+    if (qrRef.current) {
+      qrRef.current.innerHTML = '';
+      qrCodeObj.current.append(qrRef.current);
+      // Ensure the generated SVG scales to the container
+      const svg = qrRef.current.querySelector('svg');
+      if (svg) {
+        svg.style.width = '100%';
+        svg.style.height = '100%';
+      }
+    }
+  }, [destinationUrl, fgColor, bgColor, logoUrl, dotStyle, cornerSquareStyle, cornerDotStyle, qrcode]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -58,6 +109,10 @@ export default function CreateEditModal({ isOpen, onClose, onSave, qrcode }) {
         destinationUrl,
         fgColor,
         bgColor,
+        logoUrl,
+        dotStyle,
+        cornerSquareStyle,
+        cornerDotStyle,
       });
     } finally {
       setSaving(false);
@@ -84,7 +139,7 @@ export default function CreateEditModal({ isOpen, onClose, onSave, qrcode }) {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="modal-card">
+      <div className="modal-card" style={{ maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' }}>
         {/* Header */}
         <div className="modal-header">
           <h2 className="modal-title">
@@ -100,92 +155,152 @@ export default function CreateEditModal({ isOpen, onClose, onSave, qrcode }) {
         </div>
 
         <form onSubmit={handleSubmit}>
-          {/* Title */}
-          <div className="input-group">
-            <label htmlFor="qr-title" className="input-label">
-              Title
-            </label>
-            <input
-              id="qr-title"
-              type="text"
-              className="input-field"
-              placeholder="My QR Code"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              required
-            />
-          </div>
-
-          {/* Destination URL */}
-          <div className="input-group">
-            <label htmlFor="qr-destination-url" className="input-label">
-              Destination URL
-            </label>
-            <input
-              id="qr-destination-url"
-              type="url"
-              className="input-field"
-              placeholder="https://example.com"
-              value={destinationUrl}
-              onChange={(e) => setDestinationUrl(e.target.value)}
-              required
-            />
-          </div>
-
-          {/* Colors */}
-          <div style={styles.colorRow}>
-            <div style={styles.colorGroup}>
-              <label htmlFor="qr-fg-color" className="input-label">
-                Foreground
-              </label>
-              <div style={styles.colorPickerWrap}>
+          <div style={styles.contentGrid}>
+            <div style={styles.formSection}>
+              {/* Title */}
+              <div className="input-group">
+                <label htmlFor="qr-title" className="input-label">
+                  Title
+                </label>
                 <input
-                  id="qr-fg-color"
-                  type="color"
-                  value={fgColor}
-                  onChange={(e) => setFgColor(e.target.value)}
-                  style={styles.colorInput}
+                  id="qr-title"
+                  type="text"
+                  className="input-field"
+                  placeholder="My QR Code"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  required
                 />
-                <span style={styles.colorHex}>{fgColor}</span>
               </div>
-            </div>
-            <div style={styles.colorGroup}>
-              <label htmlFor="qr-bg-color" className="input-label">
-                Background
-              </label>
-              <div style={styles.colorPickerWrap}>
-                <input
-                  id="qr-bg-color"
-                  type="color"
-                  value={bgColor}
-                  onChange={(e) => setBgColor(e.target.value)}
-                  style={styles.colorInput}
-                />
-                <span style={styles.colorHex}>{bgColor}</span>
-              </div>
-            </div>
-          </div>
 
-          {/* Live Preview */}
-          <div style={styles.previewSection}>
-            <p className="input-label" style={{ marginBottom: '12px' }}>
-              Preview
-            </p>
-            <div style={styles.previewCard}>
-              {previewUrl ? (
-                <img
-                  src={previewUrl}
-                  alt="QR code preview"
-                  style={styles.previewImg}
+              {/* Destination URL */}
+              <div className="input-group">
+                <label htmlFor="qr-destination-url" className="input-label">
+                  Destination URL
+                </label>
+                <input
+                  id="qr-destination-url"
+                  type="url"
+                  className="input-field"
+                  placeholder="https://example.com"
+                  value={destinationUrl}
+                  onChange={(e) => setDestinationUrl(e.target.value)}
+                  required
                 />
-              ) : (
-                <div className="skeleton" style={{ width: 140, height: 140 }} />
-              )}
+              </div>
+
+              {/* Logo URL */}
+              <div className="input-group">
+                <label htmlFor="qr-logo-url" className="input-label">
+                  Logo URL (Optional)
+                </label>
+                <input
+                  id="qr-logo-url"
+                  type="url"
+                  className="input-field"
+                  placeholder="https://example.com/logo.png"
+                  value={logoUrl}
+                  onChange={(e) => setLogoUrl(e.target.value)}
+                />
+              </div>
+
+              {/* Colors */}
+              <div style={styles.gridRow}>
+                <div style={styles.colorGroup}>
+                  <label htmlFor="qr-fg-color" className="input-label">
+                    Foreground
+                  </label>
+                  <div style={styles.colorPickerWrap}>
+                    <input
+                      id="qr-fg-color"
+                      type="color"
+                      value={fgColor}
+                      onChange={(e) => setFgColor(e.target.value)}
+                      style={styles.colorInput}
+                    />
+                    <span style={styles.colorHex}>{fgColor}</span>
+                  </div>
+                </div>
+                <div style={styles.colorGroup}>
+                  <label htmlFor="qr-bg-color" className="input-label">
+                    Background
+                  </label>
+                  <div style={styles.colorPickerWrap}>
+                    <input
+                      id="qr-bg-color"
+                      type="color"
+                      value={bgColor}
+                      onChange={(e) => setBgColor(e.target.value)}
+                      style={styles.colorInput}
+                    />
+                    <span style={styles.colorHex}>{bgColor}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Advanced Styles */}
+              <div style={styles.gridRow}>
+                <div className="input-group" style={{ flex: 1 }}>
+                  <label htmlFor="qr-dot-style" className="input-label">Dot Style</label>
+                  <select
+                    id="qr-dot-style"
+                    className="input-field"
+                    value={dotStyle}
+                    onChange={(e) => setDotStyle(e.target.value)}
+                  >
+                    <option value="square">Square</option>
+                    <option value="dots">Dots</option>
+                    <option value="rounded">Rounded</option>
+                    <option value="classy">Classy</option>
+                    <option value="classy-rounded">Classy Rounded</option>
+                    <option value="extra-rounded">Extra Rounded</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div style={styles.gridRow}>
+                <div className="input-group" style={{ flex: 1 }}>
+                  <label htmlFor="qr-corner-square" className="input-label">Corner Square</label>
+                  <select
+                    id="qr-corner-square"
+                    className="input-field"
+                    value={cornerSquareStyle}
+                    onChange={(e) => setCornerSquareStyle(e.target.value)}
+                  >
+                    <option value="square">Square</option>
+                    <option value="dot">Dot</option>
+                    <option value="extra-rounded">Extra Rounded</option>
+                  </select>
+                </div>
+
+                <div className="input-group" style={{ flex: 1 }}>
+                  <label htmlFor="qr-corner-dot" className="input-label">Corner Dot</label>
+                  <select
+                    id="qr-corner-dot"
+                    className="input-field"
+                    value={cornerDotStyle}
+                    onChange={(e) => setCornerDotStyle(e.target.value)}
+                  >
+                    <option value="square">Square</option>
+                    <option value="dot">Dot</option>
+                  </select>
+                </div>
+              </div>
+
+            </div>
+
+            <div style={styles.previewSection}>
+              <p className="input-label" style={{ marginBottom: '12px' }}>
+                Preview
+              </p>
+              <div style={styles.previewCard}>
+                <div ref={qrRef} style={styles.previewImg} />
+              </div>
             </div>
           </div>
 
           {/* Footer Buttons */}
-          <div className="modal-footer">
+          <div className="modal-footer" style={{ marginTop: '24px' }}>
             <button
               id="cancel-qr-btn"
               type="button"
@@ -218,10 +333,18 @@ export default function CreateEditModal({ isOpen, onClose, onSave, qrcode }) {
 }
 
 const styles = {
-  colorRow: {
+  contentGrid: {
+    display: 'flex',
+    gap: '32px',
+    flexWrap: 'wrap',
+  },
+  formSection: {
+    flex: '1 1 300px',
+  },
+  gridRow: {
     display: 'flex',
     gap: '20px',
-    marginBottom: '24px',
+    marginBottom: '20px',
   },
   colorGroup: {
     flex: 1,
@@ -250,19 +373,22 @@ const styles = {
     fontFamily: 'monospace',
   },
   previewSection: {
-    marginBottom: '8px',
+    flex: '0 0 auto',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
   },
   previewCard: {
     display: 'flex',
     justifyContent: 'center',
-    padding: '20px',
+    padding: '24px',
     background: 'rgba(255,255,255,0.02)',
-    borderRadius: '12px',
+    borderRadius: '16px',
     border: '1px solid var(--glass-border)',
   },
   previewImg: {
-    width: '140px',
-    height: '140px',
+    width: '180px',
+    height: '180px',
     borderRadius: '8px',
   },
 };

@@ -23,6 +23,10 @@ function toClientQRCode(qrcode) {
     destinationUrl: qrcode.destination_url,
     fgColor: qrcode.foreground_color,
     bgColor: qrcode.background_color,
+    logoUrl: qrcode.logo_url,
+    dotStyle: qrcode.dot_style,
+    cornerSquareStyle: qrcode.corner_square_style,
+    cornerDotStyle: qrcode.corner_dot_style,
     scanCount: qrcode.scan_count,
     createdAt: qrcode.created_at,
     updatedAt: qrcode.updated_at,
@@ -80,6 +84,10 @@ export async function PUT(request, { params }) {
       backgroundColor,
       fgColor,
       bgColor,
+      logoUrl,
+      dotStyle,
+      cornerSquareStyle,
+      cornerDotStyle,
     } = body;
 
     const finalFgColor = foregroundColor || fgColor;
@@ -102,6 +110,10 @@ export async function PUT(request, { params }) {
       destinationUrl,
       foregroundColor: finalFgColor,
       backgroundColor: finalBgColor,
+      logoUrl,
+      dotStyle,
+      cornerSquareStyle,
+      cornerDotStyle,
     });
 
     if (!updated) {

@@ -43,12 +43,25 @@ db.exec(`
     destination_url TEXT NOT NULL,
     foreground_color TEXT DEFAULT '#000000',
     background_color TEXT DEFAULT '#ffffff',
+    logo_url TEXT,
+    dot_style TEXT DEFAULT 'square',
+    corner_square_style TEXT DEFAULT 'square',
+    corner_dot_style TEXT DEFAULT 'square',
     scan_count INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
 `);
+
+// Auto-migrate new columns if they don't exist
+const columnsInfo = db.pragma('table_info(qrcodes)');
+const columns = columnsInfo.map((c) => c.name);
+
+if (!columns.includes('logo_url')) db.exec("ALTER TABLE qrcodes ADD COLUMN logo_url TEXT;");
+if (!columns.includes('dot_style')) db.exec("ALTER TABLE qrcodes ADD COLUMN dot_style TEXT DEFAULT 'square';");
+if (!columns.includes('corner_square_style')) db.exec("ALTER TABLE qrcodes ADD COLUMN corner_square_style TEXT DEFAULT 'square';");
+if (!columns.includes('corner_dot_style')) db.exec("ALTER TABLE qrcodes ADD COLUMN corner_dot_style TEXT DEFAULT 'square';");
 
 // ──────────────────────────────────────────────
 // Indexes
@@ -77,8 +90,8 @@ const stmts = {
   ),
   getQRCodeByShortId: db.prepare('SELECT * FROM qrcodes WHERE short_id = ?'),
   createQRCode: db.prepare(`
-    INSERT INTO qrcodes (short_id, user_id, title, destination_url, foreground_color, background_color)
-    VALUES (@shortId, @userId, @title, @destinationUrl, @foregroundColor, @backgroundColor)
+    INSERT INTO qrcodes (short_id, user_id, title, destination_url, foreground_color, background_color, logo_url, dot_style, corner_square_style, corner_dot_style)
+    VALUES (@shortId, @userId, @title, @destinationUrl, @foregroundColor, @backgroundColor, @logoUrl, @dotStyle, @cornerSquareStyle, @cornerDotStyle)
   `),
   updateQRCode: db.prepare(`
     UPDATE qrcodes
@@ -86,6 +99,10 @@ const stmts = {
         destination_url = @destinationUrl,
         foreground_color = @foregroundColor,
         background_color = @backgroundColor,
+        logo_url = @logoUrl,
+        dot_style = @dotStyle,
+        corner_square_style = @cornerSquareStyle,
+        corner_dot_style = @cornerDotStyle,
         updated_at = CURRENT_TIMESTAMP
     WHERE id = @id AND user_id = @userId
   `),
@@ -137,7 +154,7 @@ function getQRCodeByShortId(shortId) {
 }
 
 /** Create a new QR code record. */
-function createQRCode({ shortId, userId, title, destinationUrl, foregroundColor, backgroundColor }) {
+function createQRCode({ shortId, userId, title, destinationUrl, foregroundColor, backgroundColor, logoUrl, dotStyle, cornerSquareStyle, cornerDotStyle }) {
   const result = stmts.createQRCode.run({
     shortId,
     userId,
@@ -145,12 +162,16 @@ function createQRCode({ shortId, userId, title, destinationUrl, foregroundColor,
     destinationUrl,
     foregroundColor: foregroundColor || '#000000',
     backgroundColor: backgroundColor || '#ffffff',
+    logoUrl: logoUrl || null,
+    dotStyle: dotStyle || 'square',
+    cornerSquareStyle: cornerSquareStyle || 'square',
+    cornerDotStyle: cornerDotStyle || 'square',
   });
   return stmts.getQRCodeById.get(result.lastInsertRowid, userId);
 }
 
 /** Update an existing QR code. Returns the updated record or null if not found/not owned. */
-function updateQRCode(id, userId, { title, destinationUrl, foregroundColor, backgroundColor }) {
+function updateQRCode(id, userId, { title, destinationUrl, foregroundColor, backgroundColor, logoUrl, dotStyle, cornerSquareStyle, cornerDotStyle }) {
   const existing = stmts.getQRCodeById.get(id, userId);
   if (!existing) return null;
 
@@ -161,6 +182,10 @@ function updateQRCode(id, userId, { title, destinationUrl, foregroundColor, back
     destinationUrl: destinationUrl ?? existing.destination_url,
     foregroundColor: foregroundColor ?? existing.foreground_color,
     backgroundColor: backgroundColor ?? existing.background_color,
+    logoUrl: logoUrl !== undefined ? logoUrl : existing.logo_url,
+    dotStyle: dotStyle ?? existing.dot_style,
+    cornerSquareStyle: cornerSquareStyle ?? existing.corner_square_style,
+    cornerDotStyle: cornerDotStyle ?? existing.corner_dot_style,
   });
 
   return stmts.getQRCodeById.get(id, userId);

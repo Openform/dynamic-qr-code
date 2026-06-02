@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import QRCode from 'qrcode';
+import { useState, useEffect, useRef } from 'react';
+import QRCodeStyling from 'qr-code-styling';
 
-export default function QRCodeCard({ qrcode, onEdit, onDelete, onDownload }) {
-  const [qrDataUrl, setQrDataUrl] = useState('');
+export default function QRCodeCard({ qrcode, onEdit, onDelete }) {
   const [copied, setCopied] = useState(false);
+  const qrRef = useRef(null);
+  const qrCodeObj = useRef(null);
 
   const redirectUrl =
     typeof window !== 'undefined'
@@ -13,23 +14,90 @@ export default function QRCodeCard({ qrcode, onEdit, onDelete, onDownload }) {
       : `/r/${qrcode.shortId}`;
 
   useEffect(() => {
-    QRCode.toDataURL(redirectUrl, {
-      width: 160,
-      margin: 2,
-      color: {
-        dark: qrcode.fgColor || '#000000',
-        light: qrcode.bgColor || '#ffffff',
-      },
-    })
-      .then(setQrDataUrl)
-      .catch(() => setQrDataUrl(''));
-  }, [redirectUrl, qrcode.fgColor, qrcode.bgColor]);
+    if (!qrCodeObj.current) {
+      qrCodeObj.current = new QRCodeStyling({
+        width: 300,
+        height: 300,
+        type: 'svg',
+        data: redirectUrl,
+        image: qrcode.logoUrl ? `/api/proxy-image?url=${encodeURIComponent(qrcode.logoUrl)}` : '',
+        qrOptions: {
+          errorCorrectionLevel: 'H',
+        },
+        dotsOptions: {
+          color: qrcode.fgColor || '#000000',
+          type: qrcode.dotStyle || 'square',
+        },
+        backgroundOptions: {
+          color: qrcode.bgColor || '#ffffff',
+        },
+        cornersSquareOptions: {
+          type: qrcode.cornerSquareStyle || 'square',
+          color: qrcode.fgColor || '#000000',
+        },
+        cornersDotOptions: {
+          type: qrcode.cornerDotStyle || 'square',
+          color: qrcode.fgColor || '#000000',
+        },
+        imageOptions: {
+          crossOrigin: 'anonymous',
+          margin: 10,
+          imageSize: 0.4,
+        },
+      });
+    } else {
+      qrCodeObj.current.update({
+        data: redirectUrl,
+        image: qrcode.logoUrl ? `/api/proxy-image?url=${encodeURIComponent(qrcode.logoUrl)}` : '',
+        dotsOptions: {
+          color: qrcode.fgColor || '#000000',
+          type: qrcode.dotStyle || 'square',
+        },
+        backgroundOptions: {
+          color: qrcode.bgColor || '#ffffff',
+        },
+        cornersSquareOptions: {
+          type: qrcode.cornerSquareStyle || 'square',
+          color: qrcode.fgColor || '#000000',
+        },
+        cornersDotOptions: {
+          type: qrcode.cornerDotStyle || 'square',
+          color: qrcode.fgColor || '#000000',
+        },
+      });
+    }
+
+    if (qrRef.current) {
+      qrRef.current.innerHTML = '';
+      qrCodeObj.current.append(qrRef.current);
+      // Ensure the generated SVG scales to the container
+      const svg = qrRef.current.querySelector('svg');
+      if (svg) {
+        svg.style.width = '100%';
+        svg.style.height = '100%';
+      }
+    }
+  }, [
+    redirectUrl,
+    qrcode.fgColor,
+    qrcode.bgColor,
+    qrcode.logoUrl,
+    qrcode.dotStyle,
+    qrcode.cornerSquareStyle,
+    qrcode.cornerDotStyle,
+  ]);
 
   function handleCopy() {
     navigator.clipboard.writeText(redirectUrl).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
+  }
+
+  function handleDownload() {
+    if (qrCodeObj.current) {
+      qrCodeObj.current.download({ name: qrcode.title || 'qrcode', extension: 'png' });
+    }
   }
 
   function formatDate(dateStr) {
@@ -44,15 +112,7 @@ export default function QRCodeCard({ qrcode, onEdit, onDelete, onDownload }) {
     <div className="glass-card animate-fadeIn" style={styles.card}>
       {/* QR Preview */}
       <div style={styles.previewWrap}>
-        {qrDataUrl ? (
-          <img
-            src={qrDataUrl}
-            alt={`QR code for ${qrcode.title}`}
-            style={styles.previewImg}
-          />
-        ) : (
-          <div className="skeleton" style={{ width: 120, height: 120 }} />
-        )}
+        <div ref={qrRef} style={styles.previewImg} />
       </div>
 
       {/* Info */}
@@ -112,7 +172,7 @@ export default function QRCodeCard({ qrcode, onEdit, onDelete, onDownload }) {
         <button
           id={`download-qr-${qrcode.id}`}
           className="btn btn-ghost btn-sm"
-          onClick={() => onDownload(qrcode)}
+          onClick={handleDownload}
           title="Download"
         >
           ⬇️ Download
@@ -140,13 +200,14 @@ const styles = {
   previewWrap: {
     display: 'flex',
     justifyContent: 'center',
+    alignItems: 'center',
     padding: '16px',
     background: 'rgba(255,255,255,0.02)',
     borderRadius: '12px',
   },
   previewImg: {
-    width: '120px',
-    height: '120px',
+    width: '160px',
+    height: '160px',
     borderRadius: '8px',
   },
   info: {
