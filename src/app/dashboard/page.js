@@ -65,8 +65,8 @@ export default function DashboardPage() {
       if (res.ok) {
         setQrcodes((prev) => prev.filter((q) => q.id !== qr.id));
       }
-    } catch {
-      // silently fail
+    } catch (err) {
+      console.error('Failed to delete QR code:', err);
     }
   }
 
