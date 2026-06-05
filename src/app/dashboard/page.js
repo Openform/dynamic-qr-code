@@ -36,7 +36,8 @@ export default function DashboardPage() {
           const qrData = await qrRes.json();
           setQrcodes(qrData.qrcodes ?? qrData ?? []);
         }
-      } catch {
+      } catch (error) {
+        console.error('Failed to load dashboard data:', error);
         window.location.href = '/login';
       } finally {
         setLoading(false);
@@ -65,8 +66,8 @@ export default function DashboardPage() {
       if (res.ok) {
         setQrcodes((prev) => prev.filter((q) => q.id !== qr.id));
       }
-    } catch {
-      // silently fail
+    } catch (error) {
+      console.error('Failed to delete QR code:', error);
     }
   }
 
@@ -110,8 +111,8 @@ export default function DashboardPage() {
   async function handleLogout() {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
-    } catch {
-      // ignore
+    } catch (error) {
+      console.error('Logout failed:', error);
     }
     window.location.href = '/';
   }
