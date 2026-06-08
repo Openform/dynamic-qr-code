@@ -21,7 +21,6 @@ export async function GET(request) {
       headers: {
         'Content-Type': contentType || 'image/png',
         'Cache-Control': 'public, max-age=86400',
-        'Access-Control-Allow-Origin': '*',
       },
     });
   } catch (error) {
