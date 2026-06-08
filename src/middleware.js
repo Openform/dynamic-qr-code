@@ -8,10 +8,15 @@
 import { NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'your-secret-key-change-in-production'
-);
 const COOKIE_NAME = 'qr-auth-token';
+
+function getJwtSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET environment variable is not set');
+  }
+  return new TextEncoder().encode(secret);
+}
 
 export async function middleware(request) {
   const token = request.cookies.get(COOKIE_NAME)?.value;
@@ -21,7 +26,7 @@ export async function middleware(request) {
   }
 
   try {
-    await jwtVerify(token, JWT_SECRET);
+    await jwtVerify(token, getJwtSecret());
     return NextResponse.next();
   } catch {
     return denyAccess(request);
