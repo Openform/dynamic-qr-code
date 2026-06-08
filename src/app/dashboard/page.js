@@ -8,6 +8,7 @@ import CreateEditModal from './components/CreateEditModal';
 export default function DashboardPage() {
   const [user, setUser] = useState(null);
   const [qrcodes, setQrcodes] = useState([]);
+  const [totalScans, setTotalScans] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
@@ -19,9 +20,10 @@ export default function DashboardPage() {
   useEffect(() => {
     async function loadData() {
       try {
-        const [userRes, qrRes] = await Promise.all([
+        const [userRes, qrRes, statsRes] = await Promise.all([
           fetch('/api/auth/me'),
           fetch('/api/qrcodes'),
+          fetch('/api/user/stats'),
         ]);
 
         if (!userRes.ok) {
@@ -35,6 +37,11 @@ export default function DashboardPage() {
         if (qrRes.ok) {
           const qrData = await qrRes.json();
           setQrcodes(qrData.qrcodes ?? qrData ?? []);
+        }
+
+        if (statsRes.ok) {
+          const statsData = await statsRes.json();
+          setTotalScans(statsData.totalScans ?? 0);
         }
       } catch (error) {
         console.error('Failed to load dashboard data:', error);
@@ -65,6 +72,7 @@ export default function DashboardPage() {
       const res = await fetch(`/api/qrcodes/${qr.id}`, { method: 'DELETE' });
       if (res.ok) {
         setQrcodes((prev) => prev.filter((q) => q.id !== qr.id));
+        setTotalScans((prev) => prev - (qr.scanCount ?? 0));
       }
     } catch (error) {
       console.error('Failed to delete QR code:', error);
@@ -120,11 +128,6 @@ export default function DashboardPage() {
   // ---- Derived data ----
   const filteredQRCodes = qrcodes.filter((qr) =>
     qr.title?.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const totalScans = qrcodes.reduce(
-    (sum, qr) => sum + (qr.scanCount ?? 0),
-    0
   );
 
   // ---- Loading state ----
