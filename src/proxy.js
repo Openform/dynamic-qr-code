@@ -1,5 +1,5 @@
 /**
- * Middleware – protects /dashboard and /api/qrcodes routes.
+ * Proxy – protects /dashboard and /api/qrcodes routes.
  *
  * Public routes (/, /login, /register, /r/:shortId, /api/auth/*) are allowed
  * through without a valid token.
@@ -18,7 +18,7 @@ function getJwtSecret() {
   return new TextEncoder().encode(secret);
 }
 
-export async function middleware(request) {
+export async function proxy(request) {
   const token = request.cookies.get(COOKIE_NAME)?.value;
 
   if (!token) {

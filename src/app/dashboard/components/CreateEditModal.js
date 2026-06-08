@@ -4,43 +4,47 @@ import { useState, useEffect, useRef } from 'react';
 import QRCodeStyling from 'qr-code-styling';
 
 export default function CreateEditModal({ isOpen, onClose, onSave, qrcode }) {
+  // Close on Escape
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === 'Escape') onClose();
+    }
+    if (isOpen) {
+      document.addEventListener('keydown', onKey);
+      return () => document.removeEventListener('keydown', onKey);
+    }
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  // Remount the form whenever a different QR code (or create vs. edit) is
+  // opened. This lets the fields initialize straight from props via useState,
+  // so there's no prop→state sync Effect feeding the live-preview Effect.
+  return (
+    <QRCodeForm
+      key={qrcode?.id ?? 'new'}
+      onClose={onClose}
+      onSave={onSave}
+      qrcode={qrcode}
+    />
+  );
+}
+
+function QRCodeForm({ onClose, onSave, qrcode }) {
   const isEdit = Boolean(qrcode);
 
-  const [title, setTitle] = useState('');
-  const [destinationUrl, setDestinationUrl] = useState('');
-  const [fgColor, setFgColor] = useState('#000000');
-  const [bgColor, setBgColor] = useState('#ffffff');
-  const [logoUrl, setLogoUrl] = useState('');
-  const [dotStyle, setDotStyle] = useState('square');
-  const [cornerSquareStyle, setCornerSquareStyle] = useState('square');
-  const [cornerDotStyle, setCornerDotStyle] = useState('square');
+  const [title, setTitle] = useState(qrcode?.title || '');
+  const [destinationUrl, setDestinationUrl] = useState(qrcode?.destinationUrl || '');
+  const [fgColor, setFgColor] = useState(qrcode?.fgColor || '#000000');
+  const [bgColor, setBgColor] = useState(qrcode?.bgColor || '#ffffff');
+  const [logoUrl, setLogoUrl] = useState(qrcode?.logoUrl || '');
+  const [dotStyle, setDotStyle] = useState(qrcode?.dotStyle || 'square');
+  const [cornerSquareStyle, setCornerSquareStyle] = useState(qrcode?.cornerSquareStyle || 'square');
+  const [cornerDotStyle, setCornerDotStyle] = useState(qrcode?.cornerDotStyle || 'square');
   const [loading, setSaving] = useState(false);
 
   const qrRef = useRef(null);
   const qrCodeObj = useRef(null);
-
-  // Pre-fill when editing
-  useEffect(() => {
-    if (qrcode) {
-      setTitle(qrcode.title || '');
-      setDestinationUrl(qrcode.destinationUrl || '');
-      setFgColor(qrcode.fgColor || '#000000');
-      setBgColor(qrcode.bgColor || '#ffffff');
-      setLogoUrl(qrcode.logoUrl || '');
-      setDotStyle(qrcode.dotStyle || 'square');
-      setCornerSquareStyle(qrcode.cornerSquareStyle || 'square');
-      setCornerDotStyle(qrcode.cornerDotStyle || 'square');
-    } else {
-      setTitle('');
-      setDestinationUrl('');
-      setFgColor('#000000');
-      setBgColor('#ffffff');
-      setLogoUrl('');
-      setDotStyle('square');
-      setCornerSquareStyle('square');
-      setCornerDotStyle('square');
-    }
-  }, [qrcode, isOpen]);
 
   // Live QR preview
   useEffect(() => {
@@ -118,19 +122,6 @@ export default function CreateEditModal({ isOpen, onClose, onSave, qrcode }) {
       setSaving(false);
     }
   }
-
-  // Close on Escape
-  useEffect(() => {
-    function onKey(e) {
-      if (e.key === 'Escape') onClose();
-    }
-    if (isOpen) {
-      document.addEventListener('keydown', onKey);
-      return () => document.removeEventListener('keydown', onKey);
-    }
-  }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
 
   return (
     <div
@@ -257,7 +248,7 @@ export default function CreateEditModal({ isOpen, onClose, onSave, qrcode }) {
                   </select>
                 </div>
               </div>
-              
+
               <div style={styles.gridRow}>
                 <div className="input-group" style={{ flex: 1 }}>
                   <label htmlFor="qr-corner-square" className="input-label">Corner Square</label>

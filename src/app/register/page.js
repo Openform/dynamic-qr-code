@@ -1,37 +1,38 @@
-'use client';
+"use client"
 
-import { useState } from 'react';
+import { useState } from "react"
+import Link from "next/link"
 
 export default function RegisterPage() {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [name, setName] = useState("")
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
 
   async function handleSubmit(e) {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
+    e.preventDefault()
+    setError("")
+    setLoading(true)
 
     try {
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password }),
-      });
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password })
+      })
 
-      const data = await res.json();
+      const data = await res.json()
 
       if (!res.ok) {
-        throw new Error(data.error || 'Registration failed');
+        throw new Error(data.error || "Registration failed")
       }
 
-      window.location.href = '/dashboard';
+      window.location.href = "/dashboard"
     } catch (err) {
-      setError(err.message);
+      setError(err.message)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
   }
 
@@ -41,38 +42,42 @@ export default function RegisterPage() {
       <div
         className="gradient-orb gradient-orb-purple"
         style={{
-          width: '400px',
-          height: '400px',
-          top: '-120px',
-          right: '-80px',
-          position: 'absolute',
+          width: "400px",
+          height: "400px",
+          top: "-120px",
+          right: "-80px",
+          position: "absolute"
         }}
       />
       <div
         className="gradient-orb gradient-orb-pink"
         style={{
-          width: '350px',
-          height: '350px',
-          bottom: '-100px',
-          left: '-100px',
-          position: 'absolute',
+          width: "350px",
+          height: "350px",
+          bottom: "-100px",
+          left: "-100px",
+          position: "absolute"
         }}
       />
 
       <div className="animate-slideUp" style={styles.card}>
         {/* Logo */}
         <div style={styles.header}>
-          <a href="/">
+          <Link href="/">
             <span className="gradient-text" style={styles.logo}>
               QRFlow
             </span>
-          </a>
+          </Link>
           <p style={styles.subtitle}>Create your free account</p>
         </div>
 
         {/* Error */}
         {error && (
-          <div className="error-message" role="alert" style={{ marginBottom: '20px' }}>
+          <div
+            className="error-message"
+            role="alert"
+            style={{ marginBottom: "20px" }}
+          >
             <span>⚠</span> {error}
           </div>
         )}
@@ -133,75 +138,75 @@ export default function RegisterPage() {
             type="submit"
             className="btn btn-primary"
             disabled={loading}
-            style={{ width: '100%', marginTop: '8px', padding: '14px' }}
+            style={{ width: "100%", marginTop: "8px", padding: "14px" }}
           >
             {loading ? (
               <>
                 <span className="spinner" /> Creating account…
               </>
             ) : (
-              'Create Account'
+              "Create Account"
             )}
           </button>
         </form>
 
         {/* Link to login */}
         <p style={styles.footerText}>
-          Already have an account?{' '}
-          <a href="/login" style={styles.link}>
+          Already have an account?{" "}
+          <Link href="/login" style={styles.link}>
             Sign in
-          </a>
+          </Link>
         </p>
       </div>
     </div>
-  );
+  )
 }
 
 const styles = {
   page: {
-    position: 'relative',
-    minHeight: '100vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '24px',
-    overflow: 'hidden',
+    position: "relative",
+    minHeight: "100vh",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "24px",
+    overflow: "hidden"
   },
   card: {
-    position: 'relative',
+    position: "relative",
     zIndex: 1,
-    width: '100%',
-    maxWidth: '420px',
-    background: 'rgba(255,255,255,0.04)',
-    border: '1px solid rgba(255,255,255,0.08)',
-    backdropFilter: 'blur(20px)',
-    WebkitBackdropFilter: 'blur(20px)',
-    borderRadius: '24px',
-    padding: '40px 32px',
+    width: "100%",
+    maxWidth: "420px",
+    background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    backdropFilter: "blur(20px)",
+    WebkitBackdropFilter: "blur(20px)",
+    borderRadius: "24px",
+    padding: "40px 32px"
   },
   header: {
-    textAlign: 'center',
-    marginBottom: '32px',
+    textAlign: "center",
+    marginBottom: "32px"
   },
   logo: {
-    fontSize: '2rem',
+    fontSize: "2rem",
     fontWeight: 700,
-    letterSpacing: '-0.02em',
+    letterSpacing: "-0.02em"
   },
   subtitle: {
-    color: 'var(--text-secondary)',
-    fontSize: '0.95rem',
-    marginTop: '8px',
+    color: "var(--text-secondary)",
+    fontSize: "0.95rem",
+    marginTop: "8px"
   },
   footerText: {
-    textAlign: 'center',
-    color: 'var(--text-secondary)',
-    fontSize: '0.9rem',
-    marginTop: '24px',
+    textAlign: "center",
+    color: "var(--text-secondary)",
+    fontSize: "0.9rem",
+    marginTop: "24px"
   },
   link: {
-    color: 'var(--cyan)',
+    color: "var(--cyan)",
     fontWeight: 500,
-    textDecoration: 'none',
-  },
-};
+    textDecoration: "none"
+  }
+}
