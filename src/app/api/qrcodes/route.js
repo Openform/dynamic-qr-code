@@ -45,7 +45,7 @@ export async function GET() {
       );
     }
 
-    const qrcodes = getQRCodesByUserId(session.userId);
+    const qrcodes = await getQRCodesByUserId(session.userId);
 
     // Attach redirectUrl to each QR code without instantiating new objects via map
     for (let i = 0; i < qrcodes.length; i++) {
@@ -107,7 +107,7 @@ export async function POST(request) {
 
     const shortId = nanoid(10);
 
-    const qrcode = createQRCode({
+    const qrcode = await createQRCode({
       shortId,
       userId: session.userId,
       title,

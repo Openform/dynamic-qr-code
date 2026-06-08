@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  serverExternalPackages: ['better-sqlite3'],
+  serverExternalPackages: ['mysql2'],
   allowedDevOrigins: ['192.168.0.44'],
 };
 

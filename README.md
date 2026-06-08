@@ -1,5 +1,22 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Database & Environment
+
+The app uses **MySQL/MariaDB** (via [`mysql2`](https://github.com/sidorares/node-mysql2)). Copy `.env.example` to `.env.local` and fill in the values:
+
+- `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE` — connection details
+- `MYSQL_CONNECTION_LIMIT` — pool size (keep low on shared hosting; default 5)
+- `JWT_SECRET` — secret for signing auth tokens
+- `BASE_URL` — public URL used to build QR redirect links
+
+Tables are created automatically on first run. You can also import [`schema.sql`](schema.sql) manually (e.g. via phpMyAdmin).
+
+### Deploying on Hostinger (Business shared hosting)
+
+1. **Databases → MySQL**: create a database and user, and assign the user to it.
+2. **Node.js app**: point it at this project and set the environment variables above (`MYSQL_HOST` is usually `localhost`).
+3. Build and start the app (`npm run build`, then `npm run start`). The schema is created on the first request, or import `schema.sql` beforehand.
+
 ## Getting Started
 
 First, run the development server:

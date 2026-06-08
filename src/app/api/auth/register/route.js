@@ -36,7 +36,7 @@ export async function POST(request) {
     }
 
     // ── Check for existing user ─────────────────
-    const existing = getUserByEmail(email);
+    const existing = await getUserByEmail(email);
     if (existing) {
       return Response.json(
         { error: 'An account with this email already exists' },
@@ -46,7 +46,7 @@ export async function POST(request) {
 
     // ── Create user ─────────────────────────────
     const passwordHash = await hashPassword(password);
-    const user = createUser(email, passwordHash, name);
+    const user = await createUser(email, passwordHash, name);
 
     // ── Set auth cookie ─────────────────────────
     await setAuthCookie(user.id);

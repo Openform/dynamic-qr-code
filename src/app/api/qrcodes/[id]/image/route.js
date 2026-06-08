@@ -24,7 +24,7 @@ export async function GET(request, { params }) {
       );
     }
 
-    const qrcode = getQRCodeById(Number(id), session.userId);
+    const qrcode = await getQRCodeById(Number(id), session.userId);
     if (!qrcode) {
       return Response.json(
         { error: 'QR code not found' },

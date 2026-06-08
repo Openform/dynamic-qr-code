@@ -10,8 +10,8 @@
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
-    "better-sqlite3": "^12.10.0",
     "jose": "^6.2.3",
+    "mysql2": "^3.22.5",
     "nanoid": "^5.1.11",
     "next": "16.2.7",
     "qr-code-styling": "^1.9.2",

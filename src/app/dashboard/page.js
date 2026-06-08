@@ -212,9 +212,9 @@ export default function DashboardPage() {
                 : "Get started by creating a dynamic QR code that you can update anytime."}
             </p>
             {!search && (
-              <Link href="/create">
-                <button className="btn btn-primary">+ Create QR Code</button>
-              </Link>
+              <button className="btn btn-primary" onClick={handleCreate}>
+                + Create QR Code
+              </button>
             )}
           </div>
         ) : (

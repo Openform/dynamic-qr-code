@@ -17,7 +17,7 @@ export async function GET() {
       );
     }
 
-    const user = getUserById(session.userId);
+    const user = await getUserById(session.userId);
     if (!user) {
       return Response.json(
         { error: 'User not found' },

@@ -11,7 +11,7 @@ export async function GET() {
       );
     }
 
-    const stats = getUserStats(session.userId);
+    const stats = await getUserStats(session.userId);
 
     return Response.json({
       totalQRCodes: stats.totalQRCodes,

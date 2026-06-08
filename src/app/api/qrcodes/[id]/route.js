@@ -46,7 +46,7 @@ export async function GET(request, { params }) {
       );
     }
 
-    const qrcode = getQRCodeById(Number(id), session.userId);
+    const qrcode = await getQRCodeById(Number(id), session.userId);
     if (!qrcode) {
       return Response.json(
         { error: 'QR code not found' },
@@ -105,7 +105,7 @@ export async function PUT(request, { params }) {
       }
     }
 
-    const updated = updateQRCode(Number(id), session.userId, {
+    const updated = await updateQRCode(Number(id), session.userId, {
       title,
       destinationUrl,
       foregroundColor: finalFgColor,
@@ -145,7 +145,7 @@ export async function DELETE(request, { params }) {
       );
     }
 
-    const deleted = deleteQRCode(Number(id), session.userId);
+    const deleted = await deleteQRCode(Number(id), session.userId);
     if (!deleted) {
       return Response.json(
         { error: 'QR code not found' },

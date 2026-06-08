@@ -15,14 +15,14 @@ export async function GET(request, { params }) {
   try {
     const { shortId } = await params;
 
-    const qrcode = getQRCodeByShortId(shortId);
+    const qrcode = await getQRCodeByShortId(shortId);
     if (!qrcode) {
       // QR code not found — redirect to home page
       return NextResponse.redirect(new URL('/', request.url));
     }
 
     // Increment scan counter
-    incrementScanCount(shortId);
+    await incrementScanCount(shortId);
 
     // Ensure the destination is an absolute URL
     let destination = qrcode.destination_url;
