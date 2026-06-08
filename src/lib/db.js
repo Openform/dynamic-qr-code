@@ -82,9 +82,26 @@ const stmts = {
   createUser: db.prepare(
     'INSERT INTO users (email, password_hash, name) VALUES (?, ?, ?)'
   ),
-  getQRCodesByUserId: db.prepare(
-    'SELECT * FROM qrcodes WHERE user_id = ? ORDER BY created_at DESC'
-  ),
+  getQRCodesByUserId: db.prepare(`
+    SELECT
+      id,
+      short_id AS shortId,
+      user_id AS userId,
+      title,
+      destination_url AS destinationUrl,
+      foreground_color AS fgColor,
+      background_color AS bgColor,
+      logo_url AS logoUrl,
+      dot_style AS dotStyle,
+      corner_square_style AS cornerSquareStyle,
+      corner_dot_style AS cornerDotStyle,
+      scan_count AS scanCount,
+      created_at AS createdAt,
+      updated_at AS updatedAt
+    FROM qrcodes
+    WHERE user_id = ?
+    ORDER BY created_at DESC
+  `),
   getQRCodeById: db.prepare(
     'SELECT * FROM qrcodes WHERE id = ? AND user_id = ?'
   ),
