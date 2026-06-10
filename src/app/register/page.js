@@ -7,6 +7,7 @@ export default function RegisterPage() {
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [inviteCode, setInviteCode] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
@@ -19,7 +20,7 @@ export default function RegisterPage() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password })
+        body: JSON.stringify({ name, email, password, inviteCode })
       })
 
       const data = await res.json()
@@ -68,7 +69,9 @@ export default function RegisterPage() {
               QRFlow
             </span>
           </Link>
-          <p style={styles.subtitle}>Create your free account</p>
+          <p style={styles.subtitle}>
+            Invite-only — enter your team code to create an account
+          </p>
         </div>
 
         {/* Error */}
@@ -84,6 +87,22 @@ export default function RegisterPage() {
 
         {/* Form */}
         <form onSubmit={handleSubmit}>
+          <div className="input-group">
+            <label htmlFor="register-invite-code" className="input-label">
+              Invite Code
+            </label>
+            <input
+              id="register-invite-code"
+              type="text"
+              className="input-field"
+              placeholder="Your team invite code"
+              value={inviteCode}
+              onChange={(e) => setInviteCode(e.target.value)}
+              required
+              autoComplete="off"
+            />
+          </div>
+
           <div className="input-group">
             <label htmlFor="register-name" className="input-label">
               Full Name

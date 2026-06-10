@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import StatsCards from "./components/StatsCards"
 import QRCodeCard from "./components/QRCodeCard"
 import CreateEditModal from "./components/CreateEditModal"
+import Avatar from "./components/Avatar"
 import Link from "next/link"
 
 export default function DashboardPage() {
@@ -154,7 +155,15 @@ export default function DashboardPage() {
             </Link>
           </div>
           <div style={styles.headerRight}>
-            <span style={styles.greeting}>👋 {user?.name || "User"}</span>
+            <Link
+              href="/dashboard/settings"
+              id="profile-settings-link"
+              style={styles.profileLink}
+              title="Profile settings"
+            >
+              <Avatar src={user?.avatar} name={user?.name} size={34} />
+              <span style={styles.greeting}>{user?.name || "User"}</span>
+            </Link>
             <button
               id="logout-btn"
               className="btn btn-ghost btn-sm"
@@ -282,6 +291,14 @@ const styles = {
   greeting: {
     fontSize: "0.9rem",
     color: "var(--text-secondary)"
+  },
+  profileLink: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    padding: "4px 12px 4px 4px",
+    borderRadius: "9999px",
+    border: "1px solid var(--glass-border)"
   },
   actionBar: {
     display: "flex",

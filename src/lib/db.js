@@ -55,6 +55,7 @@ async function initSchema() {
       email VARCHAR(255) NOT NULL UNIQUE,
       password_hash VARCHAR(255) NOT NULL,
       name VARCHAR(255) NOT NULL,
+      avatar MEDIUMTEXT NULL,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
@@ -111,6 +112,22 @@ async function migrateColumns() {
   }
 }
 
+/**
+ * Idempotently add columns that may be missing on the `users` table (e.g. the
+ * `avatar` column added after the table was first created).
+ */
+async function migrateUserColumns() {
+  const [rows] = await pool.query(
+    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users'`
+  );
+  const columns = new Set(rows.map((r) => r.COLUMN_NAME));
+
+  if (!columns.has('avatar')) {
+    await pool.query('ALTER TABLE users ADD COLUMN avatar MEDIUMTEXT NULL');
+  }
+}
+
 // Ensure the schema is set up exactly once. The shared promise means concurrent
 // first requests all wait on the same initialization rather than racing.
 let schemaReady = null;
@@ -119,6 +136,7 @@ function ensureSchema() {
     schemaReady = (async () => {
       await initSchema();
       await migrateColumns();
+      await migrateUserColumns();
     })().catch((err) => {
       // Allow a later request to retry if init failed (e.g. transient outage).
       schemaReady = null;
@@ -160,6 +178,25 @@ async function createUser(email, passwordHash, name) {
     { email, passwordHash, name }
   );
   return getUserById(result.insertId);
+}
+
+/** Update a user's display name and avatar. Returns the updated record. */
+async function updateUserProfile(userId, { name, avatar }) {
+  await ensureSchema();
+  await pool.execute(
+    'UPDATE users SET name = :name, avatar = :avatar WHERE id = :userId',
+    { userId, name, avatar: avatar ?? null }
+  );
+  return getUserById(userId);
+}
+
+/** Update a user's password hash. */
+async function updateUserPassword(userId, passwordHash) {
+  await ensureSchema();
+  await pool.execute(
+    'UPDATE users SET password_hash = :passwordHash WHERE id = :userId',
+    { userId, passwordHash }
+  );
 }
 
 /** Get all QR codes belonging to a user, newest first (camelCase keys). */
@@ -311,6 +348,8 @@ module.exports = {
   getUserByEmail,
   getUserById,
   createUser,
+  updateUserProfile,
+  updateUserPassword,
   getQRCodesByUserId,
   getQRCodeById,
   getQRCodeByShortId,

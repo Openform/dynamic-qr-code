@@ -131,15 +131,6 @@ export default function LoginPage() {
             )}
           </button>
         </form>
-
-        {/* Link to register */}
-        <p style={styles.footerText}>
-          Don&apos;t have an account?{" "}
-          <Link href="/register" style={styles.link}>
-            Create one
-          </Link>
-          .
-        </p>
       </div>
     </div>
   )

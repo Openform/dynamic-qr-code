@@ -44,15 +44,8 @@ export default function LandingPage() {
             </span>
           </Link>
           <div style={styles.navLinks}>
-            <Link href="/login" className="btn btn-ghost" id="nav-signin">
+            <Link href="/login" className="btn btn-primary btn-sm" id="nav-signin">
               Sign In
-            </Link>
-            <Link
-              href="/register"
-              className="btn btn-primary btn-sm"
-              id="nav-get-started"
-            >
-              Get Started
             </Link>
           </div>
         </div>
@@ -74,17 +67,10 @@ export default function LandingPage() {
               </p>
               <div style={styles.heroCTAs}>
                 <Link
-                  href="/register"
-                  className="btn btn-primary"
-                  id="hero-get-started"
-                  style={{ padding: "14px 32px", fontSize: "1.05rem" }}
-                >
-                  Start Creating — It&apos;s Free
-                </Link>
-                <Link
                   href="/login"
-                  className="btn btn-secondary"
+                  className="btn btn-primary"
                   id="hero-signin"
+                  style={{ padding: "14px 32px", fontSize: "1.05rem" }}
                 >
                   Sign In
                 </Link>
@@ -419,12 +405,12 @@ export default function LandingPage() {
               codes.
             </p>
             <Link
-              href="/register"
+              href="/login"
               className="btn btn-primary"
               id="cta-get-started"
               style={{ padding: "16px 40px", fontSize: "1.1rem" }}
             >
-              Create Your First QR Code
+              Sign In
             </Link>
           </div>
         </section>

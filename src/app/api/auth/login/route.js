@@ -46,6 +46,7 @@ export async function POST(request) {
       id: user.id,
       email: user.email,
       name: user.name,
+      avatar: user.avatar ?? null,
     });
   } catch (error) {
     console.error('Login error:', error);

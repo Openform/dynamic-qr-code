@@ -9,6 +9,7 @@
 import bcrypt from 'bcryptjs';
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
+import { timingSafeEqual } from 'node:crypto';
 
 const COOKIE_NAME = 'qr-auth-token';
 
@@ -32,6 +33,33 @@ export async function hashPassword(password) {
  */
 export async function verifyPassword(password, hash) {
   return bcrypt.compare(password, hash);
+}
+
+/**
+ * Validate a registration invite code against the SIGNUP_INVITE_CODE env var
+ * using a constant-time comparison.
+ *
+ * Registration is invite-only. Returns false when the code is missing, the
+ * wrong value/length, or when SIGNUP_INVITE_CODE is unset — i.e. it fails
+ * closed, so a misconfigured deployment blocks all sign-ups rather than
+ * letting everyone in.
+ */
+export function verifyInviteCode(provided) {
+  const expected = process.env.SIGNUP_INVITE_CODE;
+  if (!expected || typeof provided !== 'string' || provided.length === 0) {
+    return false;
+  }
+
+  const expectedBytes = new TextEncoder().encode(expected);
+  const providedBytes = new TextEncoder().encode(provided);
+
+  // timingSafeEqual requires equal-length inputs; a differing length is simply
+  // a mismatch (the length of a shared invite code is not itself a secret).
+  if (expectedBytes.length !== providedBytes.length) {
+    return false;
+  }
+
+  return timingSafeEqual(expectedBytes, providedBytes);
 }
 
 /**
