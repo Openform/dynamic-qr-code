@@ -95,12 +95,15 @@ export async function POST(request) {
       );
     }
 
-    // Basic URL validation
+    // Validate destination URL including protocol
     try {
-      new URL(destinationUrl);
+      const parsedUrl = new URL(destinationUrl);
+      if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+        throw new Error('Invalid protocol');
+      }
     } catch {
       return Response.json(
-        { error: 'Invalid destination URL' },
+        { error: 'Invalid destination URL. Must be http or https.' },
         { status: 400 }
       );
     }
