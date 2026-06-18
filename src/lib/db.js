@@ -105,10 +105,15 @@ async function migrateColumns() {
     ['corner_dot_style', "ADD COLUMN corner_dot_style VARCHAR(32) NOT NULL DEFAULT 'square'"],
   ];
 
+  const clausesToAdd = [];
   for (const [name, clause] of additions) {
     if (!columns.has(name)) {
-      await pool.query(`ALTER TABLE qrcodes ${clause}`);
+      clausesToAdd.push(clause);
     }
+  }
+
+  if (clausesToAdd.length > 0) {
+    await pool.query(`ALTER TABLE qrcodes ${clausesToAdd.join(', ')}`);
   }
 }
 
