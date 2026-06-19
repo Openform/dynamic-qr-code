@@ -102,7 +102,7 @@ export async function PUT(request, { params }) {
         }
       } catch {
         return Response.json(
-          { error: 'Invalid destination URL' },
+          { error: 'Invalid destination URL. Must be http or https.' },
           { status: 400 }
         );
       }
