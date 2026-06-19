@@ -13,7 +13,7 @@ import { timingSafeEqual } from 'node:crypto';
 
 const COOKIE_NAME = 'qr-auth-token';
 
-function getJwtSecret() {
+export function getJwtSecret() {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
     throw new Error('JWT_SECRET environment variable is not set');
