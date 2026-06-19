@@ -46,13 +46,9 @@ export async function GET() {
     }
 
     const qrcodes = await getQRCodesByUserId(session.userId);
+    const clientQRCodes = qrcodes.map(toClientQRCode);
 
-    // Attach redirectUrl to each QR code without instantiating new objects via map
-    for (let i = 0; i < qrcodes.length; i++) {
-      qrcodes[i].redirectUrl = `${BASE_URL}/r/${qrcodes[i].shortId}`;
-    }
-
-    return Response.json({ qrcodes });
+    return Response.json({ qrcodes: clientQRCodes });
   } catch (error) {
     console.error('GET /api/qrcodes error:', error);
     return Response.json(
