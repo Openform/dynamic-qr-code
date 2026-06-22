@@ -1,91 +1,67 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import QRCodeStyling from 'qr-code-styling';
+import { normalizeStyle, buildQRStylingOptions } from '@/lib/qrStyle';
+import { renderBwipCanvas, downloadBwip } from '@/lib/barcode';
 
 export default function QRCodeCard({ qrcode, onEdit, onDelete }) {
   const [copied, setCopied] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const qrRef = useRef(null);
   const qrCodeObj = useRef(null);
+  const menuRef = useRef(null);
 
   const redirectUrl =
     typeof window !== 'undefined'
       ? `${window.location.origin}/r/${qrcode.shortId}`
       : `/r/${qrcode.shortId}`;
 
-  useEffect(() => {
-    if (!qrCodeObj.current) {
-      qrCodeObj.current = new QRCodeStyling({
-        width: 300,
-        height: 300,
-        type: 'svg',
-        data: redirectUrl,
-        image: qrcode.logoUrl ? `/api/proxy-image?url=${encodeURIComponent(qrcode.logoUrl)}` : '',
-        qrOptions: {
-          errorCorrectionLevel: 'H',
-        },
-        dotsOptions: {
-          color: qrcode.fgColor || '#000000',
-          type: qrcode.dotStyle || 'square',
-        },
-        backgroundOptions: {
-          color: qrcode.bgColor || '#ffffff',
-        },
-        cornersSquareOptions: {
-          type: qrcode.cornerSquareStyle || 'square',
-          color: qrcode.fgColor || '#000000',
-        },
-        cornersDotOptions: {
-          type: qrcode.cornerDotStyle || 'square',
-          color: qrcode.fgColor || '#000000',
-        },
-        imageOptions: {
-          crossOrigin: 'anonymous',
-          margin: 10,
-          imageSize: 0.4,
-        },
-      });
-    } else {
-      qrCodeObj.current.update({
-        data: redirectUrl,
-        image: qrcode.logoUrl ? `/api/proxy-image?url=${encodeURIComponent(qrcode.logoUrl)}` : '',
-        dotsOptions: {
-          color: qrcode.fgColor || '#000000',
-          type: qrcode.dotStyle || 'square',
-        },
-        backgroundOptions: {
-          color: qrcode.bgColor || '#ffffff',
-        },
-        cornersSquareOptions: {
-          type: qrcode.cornerSquareStyle || 'square',
-          color: qrcode.fgColor || '#000000',
-        },
-        cornersDotOptions: {
-          type: qrcode.cornerDotStyle || 'square',
-          color: qrcode.fgColor || '#000000',
-        },
-      });
-    }
+  // Resolve the full style (from styleConfig, or legacy flat fields for old QRs).
+  const style = useMemo(() => normalizeStyle(qrcode), [qrcode]);
+  const isQR = style.codeType === 'qr';
 
-    if (qrRef.current) {
-      qrRef.current.innerHTML = '';
-      qrCodeObj.current.append(qrRef.current);
-      // Ensure the generated SVG scales to the container
-      const svg = qrRef.current.querySelector('svg');
-      if (svg) {
-        svg.style.width = '100%';
-        svg.style.height = '100%';
+  useEffect(() => {
+    if (isQR) {
+      const options = buildQRStylingOptions(style, { data: redirectUrl, width: 300, height: 300 });
+
+      // Recreate rather than .update(): qr-code-styling deep-merges options, so an
+      // edited QR that removes a gradient/logo would otherwise keep stale styling.
+      qrCodeObj.current = new QRCodeStyling(options);
+
+      if (qrRef.current) {
+        qrRef.current.innerHTML = '';
+        qrCodeObj.current.append(qrRef.current);
+        // Ensure the generated SVG scales to the container
+        const svg = qrRef.current.querySelector('svg');
+        if (svg) {
+          svg.style.width = '100%';
+          svg.style.height = '100%';
+        }
       }
+    } else {
+      // Data Matrix renders to a <canvas> via bwip-js.
+      qrCodeObj.current = null;
+      const canvas = document.createElement('canvas');
+      canvas.style.maxWidth = '100%';
+      canvas.style.height = 'auto';
+      if (qrRef.current) {
+        qrRef.current.innerHTML = '';
+        qrRef.current.appendChild(canvas);
+      }
+      renderBwipCanvas(canvas, style, redirectUrl, 6).catch(() => {});
     }
-  }, [
-    redirectUrl,
-    qrcode.fgColor,
-    qrcode.bgColor,
-    qrcode.logoUrl,
-    qrcode.dotStyle,
-    qrcode.cornerSquareStyle,
-    qrcode.cornerDotStyle,
-  ]);
+  }, [redirectUrl, style, isQR]);
+
+  // Close the download menu on outside click.
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onDoc(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+    }
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [menuOpen]);
 
   function handleCopy() {
     navigator.clipboard.writeText(redirectUrl).then(() => {
@@ -94,10 +70,16 @@ export default function QRCodeCard({ qrcode, onEdit, onDelete }) {
     });
   }
 
-  function handleDownload() {
-    if (qrCodeObj.current) {
-      qrCodeObj.current.download({ name: qrcode.title || 'qrcode', extension: 'png' });
+  function handleDownload(extension) {
+    const name = qrcode.title || 'qrcode';
+    if (isQR) {
+      if (qrCodeObj.current) {
+        qrCodeObj.current.download({ name, extension });
+      }
+    } else {
+      downloadBwip(style, redirectUrl, extension, name);
     }
+    setMenuOpen(false);
   }
 
   function formatDate(dateStr) {
@@ -169,14 +151,28 @@ export default function QRCodeCard({ qrcode, onEdit, onDelete }) {
         >
           ✏️ Edit
         </button>
-        <button
-          id={`download-qr-${qrcode.id}`}
-          className="btn btn-ghost btn-sm"
-          onClick={handleDownload}
-          title="Download"
-        >
-          ⬇️ Download
-        </button>
+        <div style={styles.downloadWrap} ref={menuRef}>
+          <button
+            id={`download-qr-${qrcode.id}`}
+            className="btn btn-ghost btn-sm"
+            onClick={() => setMenuOpen((o) => !o)}
+            title="Download"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+          >
+            ⬇️ Download ▾
+          </button>
+          {menuOpen && (
+            <div className="qr-download-menu" role="menu">
+              <button type="button" role="menuitem" onClick={() => handleDownload('png')}>
+                PNG
+              </button>
+              <button type="button" role="menuitem" onClick={() => handleDownload('svg')}>
+                SVG
+              </button>
+            </div>
+          )}
+        </div>
         <button
           id={`delete-qr-${qrcode.id}`}
           className="btn btn-danger btn-sm"
@@ -257,5 +253,8 @@ const styles = {
     paddingTop: '12px',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
+  },
+  downloadWrap: {
+    position: 'relative',
   },
 };

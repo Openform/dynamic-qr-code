@@ -690,3 +690,148 @@ select {
   font-size: 0.75rem;
   animation: fadeIn 0.2s ease;
 }
+
+/* ============================================
+   QR Customization Controls
+   ============================================ */
+
+/* ---- Tabs (section switcher in the editor) ---- */
+.qr-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  background: var(--bg-secondary);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: 4px;
+}
+
+.qr-tab {
+  flex: 1 1 auto;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.qr-tab:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.qr-tab-active,
+.qr-tab-active:hover {
+  background: var(--gradient-primary);
+  color: var(--text-inverse);
+  font-weight: 600;
+}
+
+/* ---- Segmented control (Solid / Gradient / Inherit, Code type) ---- */
+.qr-segmented {
+  display: inline-flex;
+  gap: 4px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: 4px;
+}
+
+.qr-seg {
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.qr-seg:hover {
+  color: var(--text-primary);
+}
+
+.qr-seg-active,
+.qr-seg-active:hover {
+  background: var(--cyan);
+  color: var(--text-inverse);
+  font-weight: 600;
+}
+
+/* ---- Preset chips ---- */
+.qr-preset {
+  padding: 8px 14px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+
+.qr-preset:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  background: rgba(0, 212, 255, 0.08);
+}
+
+/* ---- Toggle (checkbox row) ---- */
+.qr-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  margin-bottom: var(--space-lg);
+}
+
+.qr-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--cyan);
+  cursor: pointer;
+}
+
+/* ---- Range slider ---- */
+.qr-range {
+  width: 100%;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--bg-secondary);
+  border: 1px solid var(--glass-border);
+  accent-color: var(--cyan);
+  cursor: pointer;
+}
+
+/* ---- Download dropdown (QR card) ---- */
+.qr-download-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 110px;
+  padding: 4px;
+  background: var(--bg-surface);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  animation: fadeIn 0.15s ease;
+}
+
+.qr-download-menu button {
+  text-align: left;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  transition: all var(--transition-fast);
+}
+
+.qr-download-menu button:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--cyan);
+}

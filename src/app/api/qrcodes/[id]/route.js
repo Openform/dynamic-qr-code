@@ -7,9 +7,21 @@
  */
 
 import { getSession } from '@/lib/auth';
+import { sanitizeStyleConfig, legacyFieldsFromStyle } from '@/lib/qrStyle';
 const { getQRCodeById, updateQRCode, deleteQRCode } = require('@/lib/db');
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
+
+/** Safely parse a stored style_config value (string or already-parsed object). */
+function parseStyleConfig(value) {
+  if (!value) return null;
+  if (typeof value === 'object') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Transform a DB record (snake_case) to a client-friendly shape (camelCase).
@@ -27,6 +39,7 @@ function toClientQRCode(qrcode) {
     dotStyle: qrcode.dot_style,
     cornerSquareStyle: qrcode.corner_square_style,
     cornerDotStyle: qrcode.corner_dot_style,
+    styleConfig: parseStyleConfig(qrcode.style_config),
     scanCount: qrcode.scan_count,
     createdAt: qrcode.created_at,
     updatedAt: qrcode.updated_at,
@@ -88,6 +101,7 @@ export async function PUT(request, { params }) {
       dotStyle,
       cornerSquareStyle,
       cornerDotStyle,
+      styleConfig,
     } = body;
 
     const finalFgColor = foregroundColor || fgColor;
@@ -105,15 +119,26 @@ export async function PUT(request, { params }) {
       }
     }
 
+    // When a styleConfig is supplied, it is the source of truth: sanitize it and
+    // derive the legacy flat columns from it. Otherwise pass through the legacy
+    // body fields (undefined values leave the stored row untouched).
+    const sanitizedStyle = sanitizeStyleConfig(styleConfig);
+    const legacy = sanitizedStyle
+      ? legacyFieldsFromStyle(sanitizedStyle)
+      : {
+          foregroundColor: finalFgColor,
+          backgroundColor: finalBgColor,
+          logoUrl,
+          dotStyle,
+          cornerSquareStyle,
+          cornerDotStyle,
+        };
+
     const updated = await updateQRCode(Number(id), session.userId, {
       title,
       destinationUrl,
-      foregroundColor: finalFgColor,
-      backgroundColor: finalBgColor,
-      logoUrl,
-      dotStyle,
-      cornerSquareStyle,
-      cornerDotStyle,
+      ...legacy,
+      styleConfig: sanitizedStyle,
     });
 
     if (!updated) {
