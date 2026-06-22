@@ -5,34 +5,9 @@
 
 import { getSession } from '@/lib/auth';
 import { nanoid } from 'nanoid';
+import { BASE_URL, toClientQRCode } from '@/lib/utils';
 
 const { getQRCodesByUserId, createQRCode } = require('@/lib/db');
-
-const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
-
-/**
- * Transform a DB record (snake_case) to a client-friendly shape (camelCase)
- * and attach the public redirect URL.
- */
-function toClientQRCode(qrcode) {
-  return {
-    id: qrcode.id,
-    shortId: qrcode.short_id,
-    userId: qrcode.user_id,
-    title: qrcode.title,
-    destinationUrl: qrcode.destination_url,
-    fgColor: qrcode.foreground_color,
-    bgColor: qrcode.background_color,
-    logoUrl: qrcode.logo_url,
-    dotStyle: qrcode.dot_style,
-    cornerSquareStyle: qrcode.corner_square_style,
-    cornerDotStyle: qrcode.corner_dot_style,
-    scanCount: qrcode.scan_count,
-    createdAt: qrcode.created_at,
-    updatedAt: qrcode.updated_at,
-    redirectUrl: `${BASE_URL}/r/${qrcode.short_id}`,
-  };
-}
 
 // ── GET — list QR codes ────────────────────────
 export async function GET() {
@@ -46,13 +21,9 @@ export async function GET() {
     }
 
     const qrcodes = await getQRCodesByUserId(session.userId);
+    const clientQRCodes = qrcodes.map(toClientQRCode);
 
-    // Attach redirectUrl to each QR code without instantiating new objects via map
-    for (let i = 0; i < qrcodes.length; i++) {
-      qrcodes[i].redirectUrl = `${BASE_URL}/r/${qrcodes[i].shortId}`;
-    }
-
-    return Response.json({ qrcodes });
+    return Response.json({ qrcodes: clientQRCodes });
   } catch (error) {
     console.error('GET /api/qrcodes error:', error);
     return Response.json(

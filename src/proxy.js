@@ -7,16 +7,9 @@
 
 import { NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
+import { getJwtSecret } from './lib/auth.js';
 
 const COOKIE_NAME = 'qr-auth-token';
-
-function getJwtSecret() {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    throw new Error('JWT_SECRET environment variable is not set');
-  }
-  return new TextEncoder().encode(secret);
-}
 
 export async function proxy(request) {
   const token = request.cookies.get(COOKIE_NAME)?.value;
