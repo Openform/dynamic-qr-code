@@ -7,7 +7,6 @@
  */
 
 import { getSession } from '@/lib/auth';
-import { sanitizeStyleConfig, legacyFieldsFromStyle } from '@/lib/qrStyle';
 const { getQRCodeById, updateQRCode, deleteQRCode } = require('@/lib/db');
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
@@ -90,22 +89,14 @@ export async function PUT(request, { params }) {
     }
 
     const body = await request.json();
-    const {
-      title,
-      destinationUrl,
-      foregroundColor,
-      backgroundColor,
-      fgColor,
-      bgColor,
-      logoUrl,
-      dotStyle,
-      cornerSquareStyle,
-      cornerDotStyle,
-      styleConfig,
-    } = body;
+    const { title, destinationUrl } = body;
 
-    const finalFgColor = foregroundColor || fgColor;
-    const finalBgColor = backgroundColor || bgColor;
+    // A code's visual appearance is immutable after creation. Once it has been
+    // printed or shared, changing colours, code type, shape, logo, error
+    // correction, etc. would produce a different image that no longer matches
+    // the codes already in the wild. Only the title (an internal label) and the
+    // destination URL may change — any style fields in the body are ignored, so
+    // the lock holds even against a hand-crafted request.
 
     // Validate destination URL if provided
     if (destinationUrl) {
@@ -119,26 +110,9 @@ export async function PUT(request, { params }) {
       }
     }
 
-    // When a styleConfig is supplied, it is the source of truth: sanitize it and
-    // derive the legacy flat columns from it. Otherwise pass through the legacy
-    // body fields (undefined values leave the stored row untouched).
-    const sanitizedStyle = sanitizeStyleConfig(styleConfig);
-    const legacy = sanitizedStyle
-      ? legacyFieldsFromStyle(sanitizedStyle)
-      : {
-          foregroundColor: finalFgColor,
-          backgroundColor: finalBgColor,
-          logoUrl,
-          dotStyle,
-          cornerSquareStyle,
-          cornerDotStyle,
-        };
-
     const updated = await updateQRCode(Number(id), session.userId, {
       title,
       destinationUrl,
-      ...legacy,
-      styleConfig: sanitizedStyle,
     });
 
     if (!updated) {

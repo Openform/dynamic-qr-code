@@ -180,6 +180,32 @@ function QRCodeForm({ onClose, onSave, qrcode }) {
           <div style={styles.contentGrid}>
             {/* ── Controls column ── */}
             <div style={styles.formSection}>
+              {/*
+                After creation a code's appearance is frozen: only the title and
+                destination URL can change. So in edit mode we show just the
+                Content fields (no code type, presets, or style tabs) and leave
+                the logo locked too. The preview still renders from the stored
+                style so the user sees the exact code they're editing.
+              */}
+              {isEdit ? (
+                <div style={styles.tabPanel}>
+                  <ContentTab
+                    title={title}
+                    setTitle={setTitle}
+                    destinationUrl={destinationUrl}
+                    setDestinationUrl={setDestinationUrl}
+                    logoUrl={style.logoUrl}
+                    setLogoUrl={(v) => setField('logoUrl', v)}
+                    showLogo={false}
+                  />
+                  <p style={styles.hint}>
+                    The code&apos;s appearance is locked after creation so codes
+                    already printed or shared keep scanning. Only the title and
+                    destination URL can be changed.
+                  </p>
+                </div>
+              ) : (
+                <>
               {/* Code type */}
               <div style={{ marginBottom: '16px' }}>
                 <label className="input-label">Code type</label>
@@ -272,6 +298,8 @@ function QRCodeForm({ onClose, onSave, qrcode }) {
                   <AdvancedTab style={style} setField={setField} isQR={isQR} />
                 )}
               </div>
+                </>
+              )}
             </div>
 
             {/* ── Preview column ── */}
