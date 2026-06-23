@@ -5,7 +5,13 @@ import QRCodeStyling from "qr-code-styling"
 import { normalizeStyle, buildQRStylingOptions } from "@/lib/qrStyle"
 import { renderBwipCanvas, downloadBwip } from "@/lib/barcode"
 
-export default function QRCodeCard({ qrcode, onEdit, onDelete }) {
+export default function QRCodeCard({
+  qrcode,
+  collections = [],
+  onEdit,
+  onDelete,
+  onAssignCollection
+}) {
   const [copied, setCopied] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const qrRef = useRef(null)
@@ -155,6 +161,38 @@ export default function QRCodeCard({ qrcode, onEdit, onDelete }) {
           </span>
           <span style={styles.date}>{formatDate(qrcode.createdAt)}</span>
         </div>
+
+        {/* Collection assignment (only once the user has collections) */}
+        {collections.length > 0 && (
+          <div style={styles.collectionRow}>
+            <label
+              htmlFor={`collection-${qrcode.id}`}
+              style={styles.collectionLabel}
+            >
+              🗂️ Collection
+            </label>
+            <select
+              id={`collection-${qrcode.id}`}
+              className="input-field"
+              style={styles.collectionSelect}
+              value={qrcode.collectionId == null ? "" : String(qrcode.collectionId)}
+              onChange={(e) =>
+                onAssignCollection?.(
+                  qrcode,
+                  e.target.value === "" ? null : Number(e.target.value)
+                )
+              }
+              aria-label="Assign to collection"
+            >
+              <option value="">Default</option>
+              {collections.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Actions */}
@@ -265,6 +303,23 @@ const styles = {
     alignItems: "center",
     justifyContent: "space-between",
     marginTop: "4px"
+  },
+  collectionRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    marginTop: "4px"
+  },
+  collectionLabel: {
+    fontSize: "0.75rem",
+    color: "var(--text-tertiary)",
+    whiteSpace: "nowrap"
+  },
+  collectionSelect: {
+    flex: 1,
+    padding: "6px 10px",
+    fontSize: "0.8rem",
+    minWidth: 0
   },
   date: {
     fontSize: "0.78rem",

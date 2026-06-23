@@ -60,11 +60,29 @@ async function initSchema() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
+  // Collections let a user group their codes (e.g. all codes for one client).
+  // A code with collection_id IS NULL belongs to the implicit "Default
+  // Collection", so no per-user backfill is needed and existing codes keep
+  // working. The (user_id, name) unique key stops duplicate names per user.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS collections (
+      id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      user_id INT UNSIGNED NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_collections_user_id (user_id),
+      UNIQUE KEY uq_collections_user_name (user_id, name),
+      CONSTRAINT fk_collections_user FOREIGN KEY (user_id) REFERENCES users(id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS qrcodes (
       id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
       short_id VARCHAR(32) NOT NULL UNIQUE,
       user_id INT UNSIGNED NOT NULL,
+      collection_id INT UNSIGNED NULL,
       title VARCHAR(255) NOT NULL,
       destination_url VARCHAR(2048) NOT NULL,
       foreground_color VARCHAR(32) NOT NULL DEFAULT '#000000',
@@ -78,7 +96,10 @@ async function initSchema() {
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       INDEX idx_qrcodes_user_id (user_id),
-      CONSTRAINT fk_qrcodes_user FOREIGN KEY (user_id) REFERENCES users(id)
+      INDEX idx_qrcodes_collection_id (collection_id),
+      CONSTRAINT fk_qrcodes_user FOREIGN KEY (user_id) REFERENCES users(id),
+      CONSTRAINT fk_qrcodes_collection FOREIGN KEY (collection_id)
+        REFERENCES collections(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
@@ -105,6 +126,11 @@ async function migrateColumns() {
     ['corner_square_style', "ADD COLUMN corner_square_style VARCHAR(32) NOT NULL DEFAULT 'square'"],
     ['corner_dot_style', "ADD COLUMN corner_dot_style VARCHAR(32) NOT NULL DEFAULT 'square'"],
     ['style_config', 'ADD COLUMN style_config LONGTEXT NULL'],
+    // Collection grouping. On databases migrated from an older schema we add the
+    // column and its index but not a foreign key — deleteCollection() reverts a
+    // deleted collection's codes to Default in app code, so integrity holds
+    // without relying on ON DELETE SET NULL.
+    ['collection_id', 'ADD COLUMN collection_id INT UNSIGNED NULL, ADD INDEX idx_qrcodes_collection_id (collection_id)'],
   ];
 
   const clausesToAdd = [];
@@ -224,6 +250,7 @@ async function getQRCodesByUserId(userId) {
        id,
        short_id AS shortId,
        user_id AS userId,
+       collection_id AS collectionId,
        title,
        destination_url AS destinationUrl,
        foreground_color AS fgColor,
@@ -269,16 +296,17 @@ async function getQRCodeByShortId(shortId) {
 }
 
 /** Create a new QR code record. `styleConfig` (when provided) is a plain object stored as JSON. */
-async function createQRCode({ shortId, userId, title, destinationUrl, foregroundColor, backgroundColor, logoUrl, dotStyle, cornerSquareStyle, cornerDotStyle, styleConfig }) {
+async function createQRCode({ shortId, userId, collectionId, title, destinationUrl, foregroundColor, backgroundColor, logoUrl, dotStyle, cornerSquareStyle, cornerDotStyle, styleConfig }) {
   await ensureSchema();
   const [result] = await pool.execute(
     `INSERT INTO qrcodes
-       (short_id, user_id, title, destination_url, foreground_color, background_color, logo_url, dot_style, corner_square_style, corner_dot_style, style_config)
+       (short_id, user_id, collection_id, title, destination_url, foreground_color, background_color, logo_url, dot_style, corner_square_style, corner_dot_style, style_config)
      VALUES
-       (:shortId, :userId, :title, :destinationUrl, :foregroundColor, :backgroundColor, :logoUrl, :dotStyle, :cornerSquareStyle, :cornerDotStyle, :styleConfig)`,
+       (:shortId, :userId, :collectionId, :title, :destinationUrl, :foregroundColor, :backgroundColor, :logoUrl, :dotStyle, :cornerSquareStyle, :cornerDotStyle, :styleConfig)`,
     {
       shortId,
       userId,
+      collectionId: collectionId ?? null,
       title,
       destinationUrl,
       foregroundColor: foregroundColor || '#000000',
@@ -294,7 +322,7 @@ async function createQRCode({ shortId, userId, title, destinationUrl, foreground
 }
 
 /** Update an existing QR code. Returns the updated record or null if not found/not owned. */
-async function updateQRCode(id, userId, { title, destinationUrl, foregroundColor, backgroundColor, logoUrl, dotStyle, cornerSquareStyle, cornerDotStyle, styleConfig }) {
+async function updateQRCode(id, userId, { title, destinationUrl, foregroundColor, backgroundColor, logoUrl, dotStyle, cornerSquareStyle, cornerDotStyle, styleConfig, collectionId }) {
   await ensureSchema();
   const existing = await getQRCodeById(id, userId);
   if (!existing) return null;
@@ -310,6 +338,7 @@ async function updateQRCode(id, userId, { title, destinationUrl, foregroundColor
            corner_square_style = :cornerSquareStyle,
            corner_dot_style = :cornerDotStyle,
            style_config = :styleConfig,
+           collection_id = :collectionId,
            updated_at = CURRENT_TIMESTAMP
      WHERE id = :id AND user_id = :userId`,
     {
@@ -325,6 +354,10 @@ async function updateQRCode(id, userId, { title, destinationUrl, foregroundColor
       cornerDotStyle: cornerDotStyle ?? existing.corner_dot_style,
       // Replace when a new config is supplied; otherwise keep the stored JSON string.
       styleConfig: styleConfig != null ? JSON.stringify(styleConfig) : existing.style_config,
+      // `collectionId` is tri-state: a number moves the code, null moves it to
+      // the Default Collection, and undefined leaves it where it is. (null vs
+      // undefined matters here — `??` would treat an intentional null as "keep".)
+      collectionId: collectionId !== undefined ? collectionId : existing.collection_id,
     }
   );
 
@@ -348,6 +381,103 @@ async function incrementScanCount(shortId) {
     'UPDATE qrcodes SET scan_count = scan_count + 1 WHERE short_id = :shortId',
     { shortId }
   );
+}
+
+// ──────────────────────────────────────────────
+// Collections
+// ──────────────────────────────────────────────
+
+/**
+ * List a user's collections (newest first), each with a `count` of the codes
+ * assigned to it. The implicit "Default Collection" (codes with no collection)
+ * is not returned here — it's surfaced by the client from the unassigned codes.
+ */
+async function getCollectionsByUserId(userId) {
+  await ensureSchema();
+  const [rows] = await pool.execute(
+    `SELECT
+       c.id,
+       c.name,
+       c.created_at AS createdAt,
+       c.updated_at AS updatedAt,
+       COUNT(q.id) AS count
+     FROM collections c
+     LEFT JOIN qrcodes q ON q.collection_id = c.id
+     WHERE c.user_id = :userId
+     GROUP BY c.id
+     ORDER BY c.created_at DESC`,
+    { userId }
+  );
+  // COUNT comes back as a string (BIGINT) — coerce to a number.
+  for (const row of rows) {
+    row.count = Number(row.count) || 0;
+  }
+  return rows;
+}
+
+/** Get a single collection by ID, verifying ownership. Returns null if not found/not owned. */
+async function getCollectionById(id, userId) {
+  await ensureSchema();
+  const [rows] = await pool.execute(
+    'SELECT id, name, created_at AS createdAt, updated_at AS updatedAt FROM collections WHERE id = :id AND user_id = :userId LIMIT 1',
+    { id, userId }
+  );
+  return rows[0] || null;
+}
+
+/**
+ * Create a collection for a user. Throws a mysql2 ER_DUP_ENTRY error if the
+ * user already has a collection with the same name (the unique key); callers
+ * should translate that into a 409.
+ */
+async function createCollection(userId, name) {
+  await ensureSchema();
+  const [result] = await pool.execute(
+    'INSERT INTO collections (user_id, name) VALUES (:userId, :name)',
+    { userId, name }
+  );
+  return getCollectionById(result.insertId, userId);
+}
+
+/** Rename a collection. Returns the updated record, or null if not found/not owned. */
+async function updateCollection(id, userId, name) {
+  await ensureSchema();
+  const existing = await getCollectionById(id, userId);
+  if (!existing) return null;
+  await pool.execute(
+    'UPDATE collections SET name = :name, updated_at = CURRENT_TIMESTAMP WHERE id = :id AND user_id = :userId',
+    { id, userId, name }
+  );
+  return getCollectionById(id, userId);
+}
+
+/**
+ * Delete a collection. Any codes assigned to it are reverted to the Default
+ * Collection (collection_id set to NULL) first, so deleting a collection never
+ * deletes codes. Done in a transaction so the two steps can't half-apply.
+ * Returns true if a collection was deleted, false otherwise.
+ */
+async function deleteCollection(id, userId) {
+  await ensureSchema();
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.execute(
+      'UPDATE qrcodes SET collection_id = NULL WHERE collection_id = :id AND user_id = :userId',
+      { id, userId }
+    );
+    const [result] = await conn.execute(
+      'DELETE FROM collections WHERE id = :id AND user_id = :userId',
+      { id, userId }
+    );
+    await conn.commit();
+    return result.affectedRows > 0;
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
 }
 
 /** Get aggregate stats for a user: total QR codes and total scans. */
@@ -384,4 +514,9 @@ module.exports = {
   deleteQRCode,
   incrementScanCount,
   getUserStats,
+  getCollectionsByUserId,
+  getCollectionById,
+  createCollection,
+  updateCollection,
+  deleteCollection,
 };

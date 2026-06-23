@@ -18,7 +18,14 @@ import {
 } from "@/lib/qrStyle"
 import { renderBwipCanvas } from "@/lib/barcode"
 
-export default function CreateEditModal({ isOpen, onClose, onSave, qrcode }) {
+export default function CreateEditModal({
+  isOpen,
+  onClose,
+  onSave,
+  qrcode,
+  collections = [],
+  defaultCollectionId = null
+}) {
   // Close on Escape
   useEffect(() => {
     function onKey(e) {
@@ -41,6 +48,8 @@ export default function CreateEditModal({ isOpen, onClose, onSave, qrcode }) {
       onClose={onClose}
       onSave={onSave}
       qrcode={qrcode}
+      collections={collections}
+      defaultCollectionId={defaultCollectionId}
     />
   )
 }
@@ -68,13 +77,25 @@ const CORNER_STYLE_LABELS = {
   "extra-rounded": "Extra Rounded"
 }
 
-function QRCodeForm({ onClose, onSave, qrcode }) {
+function QRCodeForm({
+  onClose,
+  onSave,
+  qrcode,
+  collections = [],
+  defaultCollectionId = null
+}) {
   const isEdit = Boolean(qrcode)
 
   const [title, setTitle] = useState(qrcode?.title || "")
   const [destinationUrl, setDestinationUrl] = useState(
     qrcode?.destinationUrl || ""
   )
+  // Select value is a string ("" = Default Collection). New codes default to
+  // the collection currently being viewed on the dashboard.
+  const [collectionId, setCollectionId] = useState(() => {
+    const v = qrcode ? qrcode.collectionId : defaultCollectionId
+    return v == null ? "" : String(v)
+  })
   const [urlError, setUrlError] = useState("")
   // Single style object — the source of truth for all visual customization.
   const [style, setStyle] = useState(() => normalizeStyle(qrcode))
@@ -187,7 +208,17 @@ function QRCodeForm({ onClose, onSave, qrcode }) {
 
     setSaving(true)
     try {
-      await onSave({ title, destinationUrl: normalized, styleConfig: style })
+      // Collection is sent on both create and edit — it's an organizational
+      // label that doesn't affect the code's image, so it stays editable even
+      // though the appearance is locked after creation. The server ignores any
+      // style fields on edit.
+      const payload = {
+        title,
+        destinationUrl: normalized,
+        styleConfig: style,
+        collectionId: collectionId === "" ? null : Number(collectionId)
+      }
+      await onSave(payload)
     } finally {
       setSaving(false)
     }
@@ -257,10 +288,17 @@ function QRCodeForm({ onClose, onSave, qrcode }) {
                     setLogoUrl={(v) => setField("logoUrl", v)}
                     showLogo={false}
                   />
+                  {collections.length > 0 && (
+                    <CollectionSelect
+                      collections={collections}
+                      value={collectionId}
+                      onChange={setCollectionId}
+                    />
+                  )}
                   <p style={styles.hint}>
                     The code&apos;s appearance is locked after creation so codes
-                    already printed or shared keep scanning. Only the title and
-                    destination URL can be changed.
+                    already printed or shared keep scanning. Only the title,
+                    destination URL, and collection can be changed.
                   </p>
                 </div>
               ) : (
@@ -287,6 +325,15 @@ function QRCodeForm({ onClose, onSave, qrcode }) {
                       </p>
                     )}
                   </div>
+
+                  {/* Collection (only once the user has collections) */}
+                  {collections.length > 0 && (
+                    <CollectionSelect
+                      collections={collections}
+                      value={collectionId}
+                      onChange={setCollectionId}
+                    />
+                  )}
 
                   {/* Presets (QR only) */}
                   {isQR && (
@@ -756,6 +803,33 @@ function setFieldBoth(setField, obj) {
 
 function safeHex(v, fallback) {
   return typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v) ? v : fallback
+}
+
+// Collection picker shared by the create and edit forms. "" = Default Collection.
+function CollectionSelect({ collections, value, onChange }) {
+  return (
+    <div className="input-group">
+      <label htmlFor="qr-collection" className="input-label">
+        Collection
+      </label>
+      <select
+        id="qr-collection"
+        className="input-field"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        <option value="">Default Collection</option>
+        {collections.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.name}
+          </option>
+        ))}
+      </select>
+      <p style={styles.hint}>
+        Group this code with others — moving it won’t change the code itself.
+      </p>
+    </div>
+  )
 }
 
 function SelectField({
