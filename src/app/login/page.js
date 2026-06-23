@@ -64,7 +64,7 @@ export default function LoginPage() {
         <div style={styles.header}>
           <Link href="/">
             <span className="gradient-text" style={styles.logo}>
-              QRFlow
+              QR Flow
             </span>
           </Link>
           <p style={styles.subtitle}>Welcome back — sign in to your account</p>

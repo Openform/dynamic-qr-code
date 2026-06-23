@@ -305,7 +305,7 @@ select {
 
 .btn-primary:hover {
   box-shadow: var(--shadow-glow-cyan);
-  transform: translateY(-1px);
+  /* transform: translateY(-1px); */
   opacity: 0.95;
 }
 
@@ -323,12 +323,12 @@ select {
 .btn-secondary {
   background: transparent;
   color: var(--text-primary);
-  border: 1px solid var(--glass-border);
+  /* border: 1px solid var(--glass-border); */
   backdrop-filter: var(--glass-blur);
 }
 
 .btn-secondary:hover {
-  border-color: var(--cyan);
+  /* border-color: var(--cyan); */
   color: var(--cyan);
   box-shadow: 0 0 20px rgba(0, 212, 255, 0.15);
 }
@@ -466,7 +466,7 @@ select {
 .modal-footer {
   display: flex;
   gap: var(--space-md);
-  justify-content: flex-end;
+  justify-content: space-between;
   margin-top: var(--space-xl);
 }
 
@@ -908,6 +908,241 @@ select {
   border: 1px solid var(--glass-border);
   accent-color: var(--cyan);
   cursor: pointer;
+}
+
+/* ============================================
+   Hero — Animated "Living" Dynamic QR
+   ============================================ */
+.qr-hero-card {
+  position: relative;
+  padding: 30px 30px 26px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: var(--shadow-lg);
+  animation:
+    qr-card-float 7s ease-in-out infinite,
+    qr-card-glow 6s ease-in-out infinite;
+}
+
+.qr-hero-stage {
+  position: relative;
+  line-height: 0;
+}
+
+.qr-hero-svg {
+  display: block;
+}
+
+/* Camera-style viewfinder brackets around the code */
+.qr-bracket {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(0, 212, 255, 0.75);
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.35);
+  pointer-events: none;
+  animation: qr-bracket-pulse 2.6s ease-in-out infinite;
+}
+
+.qr-bracket-tl {
+  top: -9px;
+  left: -9px;
+  border-right: 0;
+  border-bottom: 0;
+  border-top-left-radius: 9px;
+}
+
+.qr-bracket-tr {
+  top: -9px;
+  right: -9px;
+  border-left: 0;
+  border-bottom: 0;
+  border-top-right-radius: 9px;
+}
+
+.qr-bracket-bl {
+  bottom: -9px;
+  left: -9px;
+  border-right: 0;
+  border-top: 0;
+  border-bottom-left-radius: 9px;
+}
+
+.qr-bracket-br {
+  bottom: -9px;
+  right: -9px;
+  border-left: 0;
+  border-top: 0;
+  border-bottom-right-radius: 9px;
+}
+
+/* "routing to ..." live destination label */
+.qr-route {
+  margin-top: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.qr-route-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.8);
+  animation: qr-live-pulse 1.6s ease-in-out infinite;
+  flex: none;
+}
+
+.qr-route-label {
+  color: var(--text-tertiary);
+}
+
+.qr-route-url {
+  color: var(--text-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, "Cascadia Code", monospace;
+  overflow: hidden;
+}
+
+.qr-url-text {
+  display: inline-block;
+  animation: qr-url-in 0.5s ease;
+}
+
+/* Floating real-time analytics pill */
+.qr-scan-pill {
+  position: absolute;
+  top: -20px;
+  right: -20px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(15, 15, 35, 0.72);
+  animation: qr-pill-bob 4.5s ease-in-out infinite;
+}
+
+.qr-spark {
+  display: block;
+}
+
+.qr-spark-bar {
+  transform-box: fill-box;
+  transform-origin: bottom;
+  animation: qr-spark-bar 1.8s ease-in-out infinite;
+}
+
+.qr-scan-num {
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1;
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.qr-scan-lbl {
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin-top: 3px;
+}
+
+@keyframes qr-bracket-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes qr-live-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.5);
+    opacity: 0.55;
+  }
+}
+
+@keyframes qr-url-in {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes qr-card-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes qr-card-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 18px 50px rgba(0, 0, 0, 0.5),
+      0 0 40px rgba(0, 212, 255, 0.1);
+  }
+  50% {
+    box-shadow:
+      0 18px 50px rgba(0, 0, 0, 0.5),
+      0 0 60px rgba(124, 58, 237, 0.22);
+  }
+}
+
+@keyframes qr-pill-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes qr-spark-bar {
+  0%,
+  100% {
+    transform: scaleY(0.5);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qr-hero-card,
+  .qr-bracket,
+  .qr-scan-pill,
+  .qr-route-dot,
+  .qr-url-text,
+  .qr-spark-bar {
+    animation: none !important;
+  }
 }
 
 /* ---- Download dropdown (QR card) ---- */

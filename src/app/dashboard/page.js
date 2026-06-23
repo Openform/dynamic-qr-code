@@ -237,9 +237,7 @@ export default function DashboardPage() {
   }
 
   const filteredQRCodes = qrcodes.filter((qr) => {
-    const matchesSearch = qr.title
-      ?.toLowerCase()
-      .includes(search.toLowerCase())
+    const matchesSearch = qr.title?.toLowerCase().includes(search.toLowerCase())
     let matchesCollection = true
     if (activeCollection === "default") {
       matchesCollection = qr.collectionId == null
@@ -273,7 +271,7 @@ export default function DashboardPage() {
           <div style={styles.headerLeft}>
             <Link href="/dashboard">
               <span className="gradient-text" style={styles.logo}>
-                QRFlow
+                QR Flow
               </span>
             </Link>
           </div>
