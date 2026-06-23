@@ -11,7 +11,7 @@ const PRESET_AVATARS = [
   "/avatars/sunset.svg",
   "/avatars/forest.svg",
   "/avatars/ember.svg",
-  "/avatars/grape.svg",
+  "/avatars/grape.svg"
 ]
 
 // Uploaded images are downscaled to this square size before being stored as a
@@ -34,7 +34,7 @@ function Message({ msg }) {
         marginBottom: "18px",
         background: isError ? "rgba(239,68,68,0.1)" : "rgba(16,185,129,0.1)",
         border: `1px solid ${isError ? "rgba(239,68,68,0.25)" : "rgba(16,185,129,0.25)"}`,
-        color: isError ? "var(--error)" : "var(--success)",
+        color: isError ? "var(--error)" : "var(--success)"
       }}
     >
       <span>{isError ? "⚠" : "✓"}</span> {msg.text}
@@ -102,7 +102,10 @@ export default function SettingsPage() {
           canvas.height = AVATAR_SIZE
           const ctx = canvas.getContext("2d")
           // Cover-crop: scale so the shorter side fills, then center.
-          const scale = Math.max(AVATAR_SIZE / img.width, AVATAR_SIZE / img.height)
+          const scale = Math.max(
+            AVATAR_SIZE / img.width,
+            AVATAR_SIZE / img.height
+          )
           const w = img.width * scale
           const h = img.height * scale
           ctx.drawImage(img, (AVATAR_SIZE - w) / 2, (AVATAR_SIZE - h) / 2, w, h)
@@ -135,7 +138,7 @@ export default function SettingsPage() {
       const res = await fetch("/api/user/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, avatar }),
+        body: JSON.stringify({ name, avatar })
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Failed to save profile")
@@ -155,7 +158,10 @@ export default function SettingsPage() {
     setPwMsg(null)
 
     if (newPassword.length < 6) {
-      setPwMsg({ type: "error", text: "New password must be at least 6 characters" })
+      setPwMsg({
+        type: "error",
+        text: "New password must be at least 6 characters"
+      })
       return
     }
     if (newPassword !== confirmPassword) {
@@ -168,7 +174,7 @@ export default function SettingsPage() {
       const res = await fetch("/api/user/password", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentPassword, newPassword }),
+        body: JSON.stringify({ currentPassword, newPassword })
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Failed to update password")
@@ -202,7 +208,7 @@ export default function SettingsPage() {
         <div className="container" style={styles.headerInner}>
           <Link href="/dashboard">
             <span className="gradient-text" style={styles.logo}>
-              QRFlow
+              QR Flow
             </span>
           </Link>
           <Link href="/dashboard" className="btn btn-ghost btn-sm">
@@ -219,7 +225,10 @@ export default function SettingsPage() {
         </p>
 
         {/* ---- Profile card ---- */}
-        <section className="glass-card-static animate-fadeIn" style={styles.card}>
+        <section
+          className="glass-card-static animate-fadeIn"
+          style={styles.card}
+        >
           <h2 style={styles.cardTitle}>Profile</h2>
           <form onSubmit={handleSaveProfile}>
             <Message msg={profileMsg} />
@@ -229,7 +238,8 @@ export default function SettingsPage() {
               <Avatar src={avatar} name={name} size={96} />
               <div style={{ flex: 1, minWidth: "200px" }}>
                 <p style={styles.help}>
-                  Pick a preset below or upload your own. Square images look best.
+                  Pick a preset below or upload your own. Square images look
+                  best.
                 </p>
                 <div style={styles.avatarActions}>
                   <button
@@ -277,7 +287,7 @@ export default function SettingsPage() {
                     aria-pressed={selected}
                     style={{
                       ...styles.presetBtn,
-                      ...(selected ? styles.presetSelected : {}),
+                      ...(selected ? styles.presetSelected : {})
                     }}
                   >
                     <Avatar src={preset} name="" size={56} />
@@ -338,7 +348,10 @@ export default function SettingsPage() {
         </section>
 
         {/* ---- Password card ---- */}
-        <section className="glass-card-static animate-fadeIn" style={styles.card}>
+        <section
+          className="glass-card-static animate-fadeIn"
+          style={styles.card}
+        >
           <h2 style={styles.cardTitle}>Change Password</h2>
           <form onSubmit={handleSavePassword}>
             <Message msg={pwMsg} />
@@ -419,7 +432,7 @@ const styles = {
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: "100vh",
+    minHeight: "100vh"
   },
   header: {
     position: "sticky",
@@ -428,63 +441,63 @@ const styles = {
     backdropFilter: "blur(16px)",
     WebkitBackdropFilter: "blur(16px)",
     background: "rgba(10, 10, 26, 0.85)",
-    borderBottom: "1px solid rgba(255,255,255,0.06)",
+    borderBottom: "1px solid rgba(255,255,255,0.06)"
   },
   headerInner: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    height: "64px",
+    height: "64px"
   },
   logo: {
     fontSize: "1.4rem",
     fontWeight: 700,
-    letterSpacing: "-0.02em",
+    letterSpacing: "-0.02em"
   },
   main: {
     maxWidth: "640px",
     paddingTop: "32px",
-    paddingBottom: "64px",
+    paddingBottom: "64px"
   },
   pageTitle: {
     fontSize: "1.8rem",
     fontWeight: 700,
-    letterSpacing: "-0.02em",
+    letterSpacing: "-0.02em"
   },
   pageSubtitle: {
     color: "var(--text-secondary)",
     marginTop: "6px",
-    marginBottom: "28px",
+    marginBottom: "28px"
   },
   card: {
     padding: "28px",
-    marginBottom: "24px",
+    marginBottom: "24px"
   },
   cardTitle: {
     fontSize: "1.15rem",
     fontWeight: 600,
-    marginBottom: "20px",
+    marginBottom: "20px"
   },
   avatarRow: {
     display: "flex",
     alignItems: "center",
     gap: "20px",
-    flexWrap: "wrap",
+    flexWrap: "wrap"
   },
   help: {
     color: "var(--text-secondary)",
     fontSize: "0.9rem",
-    marginBottom: "12px",
+    marginBottom: "12px"
   },
   avatarActions: {
     display: "flex",
     gap: "10px",
-    flexWrap: "wrap",
+    flexWrap: "wrap"
   },
   presetGrid: {
     display: "flex",
     gap: "12px",
-    flexWrap: "wrap",
+    flexWrap: "wrap"
   },
   presetBtn: {
     padding: "4px",
@@ -492,15 +505,15 @@ const styles = {
     background: "transparent",
     border: "2px solid transparent",
     transition: "all var(--transition-fast)",
-    lineHeight: 0,
+    lineHeight: 0
   },
   presetSelected: {
     border: "2px solid var(--cyan)",
-    boxShadow: "0 0 0 3px rgba(0,212,255,0.15)",
+    boxShadow: "0 0 0 3px rgba(0,212,255,0.15)"
   },
   cardFooter: {
     display: "flex",
     justifyContent: "flex-end",
-    marginTop: "24px",
-  },
+    marginTop: "24px"
+  }
 }

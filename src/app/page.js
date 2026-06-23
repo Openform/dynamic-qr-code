@@ -1,4 +1,5 @@
 import Link from "next/link"
+import HeroQR from "./components/HeroQR"
 
 export default function LandingPage() {
   return (
@@ -40,11 +41,15 @@ export default function LandingPage() {
         <div className="container" style={styles.navInner}>
           <Link href="/" style={styles.logo}>
             <span className="gradient-text" style={styles.logoText}>
-              QRFlow
+              QR Flow
             </span>
           </Link>
           <div style={styles.navLinks}>
-            <Link href="/login" className="btn btn-primary btn-sm" id="nav-signin">
+            <Link
+              href="/login"
+              className="btn btn-primary btn-sm"
+              id="nav-signin"
+            >
               Sign In
             </Link>
           </div>
@@ -77,232 +82,9 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* Decorative QR Code Visual */}
-            <div className="animate-float" style={styles.heroVisual}>
-              <div style={styles.qrVisualCard}>
-                <svg
-                  viewBox="0 0 200 200"
-                  width="220"
-                  height="220"
-                  style={styles.qrSvg}
-                >
-                  {/* QR-code-like decorative grid */}
-                  {[
-                    [0, 0],
-                    [0, 1],
-                    [0, 2],
-                    [0, 3],
-                    [0, 4],
-                    [0, 5],
-                    [0, 6],
-                    [0, 12],
-                    [0, 13],
-                    [0, 14],
-                    [0, 15],
-                    [0, 16],
-                    [0, 17],
-                    [0, 18],
-                    [1, 0],
-                    [1, 6],
-                    [1, 8],
-                    [1, 10],
-                    [1, 12],
-                    [1, 18],
-                    [2, 0],
-                    [2, 2],
-                    [2, 3],
-                    [2, 4],
-                    [2, 6],
-                    [2, 8],
-                    [2, 9],
-                    [2, 12],
-                    [2, 14],
-                    [2, 15],
-                    [2, 16],
-                    [2, 18],
-                    [3, 0],
-                    [3, 2],
-                    [3, 3],
-                    [3, 4],
-                    [3, 6],
-                    [3, 10],
-                    [3, 12],
-                    [3, 14],
-                    [3, 15],
-                    [3, 16],
-                    [3, 18],
-                    [4, 0],
-                    [4, 2],
-                    [4, 3],
-                    [4, 4],
-                    [4, 6],
-                    [4, 9],
-                    [4, 10],
-                    [4, 12],
-                    [4, 14],
-                    [4, 15],
-                    [4, 16],
-                    [4, 18],
-                    [5, 0],
-                    [5, 6],
-                    [5, 8],
-                    [5, 12],
-                    [5, 18],
-                    [6, 0],
-                    [6, 1],
-                    [6, 2],
-                    [6, 3],
-                    [6, 4],
-                    [6, 5],
-                    [6, 6],
-                    [6, 8],
-                    [6, 10],
-                    [6, 12],
-                    [6, 13],
-                    [6, 14],
-                    [6, 15],
-                    [6, 16],
-                    [6, 17],
-                    [6, 18],
-                    [7, 8],
-                    [7, 9],
-                    [7, 10],
-                    [8, 0],
-                    [8, 1],
-                    [8, 3],
-                    [8, 4],
-                    [8, 6],
-                    [8, 8],
-                    [8, 10],
-                    [8, 11],
-                    [8, 13],
-                    [8, 15],
-                    [8, 17],
-                    [8, 18],
-                    [9, 1],
-                    [9, 2],
-                    [9, 5],
-                    [9, 7],
-                    [9, 9],
-                    [9, 12],
-                    [9, 14],
-                    [9, 16],
-                    [10, 0],
-                    [10, 3],
-                    [10, 5],
-                    [10, 6],
-                    [10, 8],
-                    [10, 10],
-                    [10, 11],
-                    [10, 13],
-                    [10, 15],
-                    [10, 17],
-                    [10, 18],
-                    [11, 1],
-                    [11, 4],
-                    [11, 8],
-                    [11, 9],
-                    [11, 10],
-                    [11, 14],
-                    [11, 16],
-                    [12, 0],
-                    [12, 1],
-                    [12, 2],
-                    [12, 3],
-                    [12, 4],
-                    [12, 5],
-                    [12, 6],
-                    [12, 8],
-                    [12, 10],
-                    [12, 12],
-                    [12, 14],
-                    [12, 16],
-                    [12, 17],
-                    [12, 18],
-                    [13, 0],
-                    [13, 6],
-                    [13, 9],
-                    [13, 10],
-                    [13, 13],
-                    [13, 15],
-                    [14, 0],
-                    [14, 2],
-                    [14, 3],
-                    [14, 4],
-                    [14, 6],
-                    [14, 8],
-                    [14, 11],
-                    [14, 12],
-                    [14, 14],
-                    [14, 17],
-                    [14, 18],
-                    [15, 0],
-                    [15, 2],
-                    [15, 3],
-                    [15, 4],
-                    [15, 6],
-                    [15, 9],
-                    [15, 13],
-                    [15, 16],
-                    [16, 0],
-                    [16, 2],
-                    [16, 3],
-                    [16, 4],
-                    [16, 6],
-                    [16, 8],
-                    [16, 10],
-                    [16, 12],
-                    [16, 14],
-                    [16, 15],
-                    [16, 17],
-                    [16, 18],
-                    [17, 0],
-                    [17, 6],
-                    [17, 10],
-                    [17, 12],
-                    [17, 13],
-                    [17, 16],
-                    [18, 0],
-                    [18, 1],
-                    [18, 2],
-                    [18, 3],
-                    [18, 4],
-                    [18, 5],
-                    [18, 6],
-                    [18, 8],
-                    [18, 10],
-                    [18, 11],
-                    [18, 14],
-                    [18, 15],
-                    [18, 17],
-                    [18, 18]
-                  ].map(([row, col], i) => (
-                    <rect
-                      key={i}
-                      x={col * 10.5 + 2}
-                      y={row * 10.5 + 2}
-                      width="9"
-                      height="9"
-                      rx="1.5"
-                      fill={`url(#qrGradient)`}
-                      opacity={0.85}
-                    />
-                  ))}
-                  <defs>
-                    <linearGradient
-                      id="qrGradient"
-                      x1="0%"
-                      y1="0%"
-                      x2="100%"
-                      y2="100%"
-                    >
-                      <stop offset="0%" stopColor="#00d4ff" />
-                      <stop offset="50%" stopColor="#7c3aed" />
-                      <stop offset="100%" stopColor="#f472b6" />
-                    </linearGradient>
-                  </defs>
-                </svg>
-              </div>
+            {/* Animated dynamic QR visual */}
+            <div style={styles.heroVisual}>
+              <HeroQR />
             </div>
           </div>
         </section>
@@ -470,7 +252,10 @@ const styles = {
   hero: {
     paddingTop: "80px",
     paddingBottom: "80px",
-    position: "relative"
+    position: "relative",
+    minHeight: "90dvh",
+    display: "flex",
+    alignItems: "center"
   },
   heroContent: {
     display: "flex",
@@ -506,17 +291,6 @@ const styles = {
     flex: "0 1 auto",
     display: "flex",
     justifyContent: "center"
-  },
-  qrVisualCard: {
-    padding: "32px",
-    background: "rgba(255,255,255,0.03)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: "24px",
-    backdropFilter: "blur(20px)",
-    WebkitBackdropFilter: "blur(20px)"
-  },
-  qrSvg: {
-    display: "block"
   },
 
   /* Sections */
