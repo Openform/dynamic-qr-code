@@ -44,7 +44,11 @@ export default function LandingPage() {
             </span>
           </Link>
           <div style={styles.navLinks}>
-            <Link href="/login" className="btn btn-primary btn-sm" id="nav-signin">
+            <Link
+              href="/login"
+              className="btn btn-primary btn-sm"
+              id="nav-signin"
+            >
               Sign In
             </Link>
           </div>
@@ -470,7 +474,10 @@ const styles = {
   hero: {
     paddingTop: "80px",
     paddingBottom: "80px",
-    position: "relative"
+    position: "relative",
+    minHeight: "90dvh",
+    display: "flex",
+    alignItems: "center"
   },
   heroContent: {
     display: "flex",
