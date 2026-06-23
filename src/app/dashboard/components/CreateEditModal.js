@@ -14,6 +14,7 @@ import {
   QR_SHAPES,
   normalizeDestinationUrl,
   isValidDestinationUrl,
+  evaluateContrast,
 } from '@/lib/qrStyle';
 import { renderBwipCanvas } from '@/lib/barcode';
 
@@ -148,6 +149,11 @@ function QRCodeForm({ onClose, onSave, qrcode }) {
   // Content for rendering (no state write — avoids a cascading effect).
   const activeTab = visibleTabs.some((t) => t.id === tab) ? tab : 'content';
 
+  // Foreground/background contrast check. Only enforced while customizing (the
+  // appearance is locked in edit mode, so an existing code is never re-gated).
+  const contrast = evaluateContrast(style);
+  const blockSave = !isEdit && !contrast.scannable;
+
   // Prepend https:// when the user omits the scheme, so the field shows the
   // URL we'll actually save (and passes the native url-input validation).
   function handleUrlBlur() {
@@ -167,6 +173,9 @@ function QRCodeForm({ onClose, onSave, qrcode }) {
       return;
     }
     setUrlError('');
+
+    // Guard against saving an unscannable code (the button is also disabled).
+    if (blockSave) return;
 
     setSaving(true);
     try {
@@ -335,6 +344,7 @@ function QRCodeForm({ onClose, onSave, qrcode }) {
               <div style={styles.previewCard}>
                 <div ref={qrRef} style={styles.previewImg} />
               </div>
+              {!isEdit && <ContrastChecker contrast={contrast} />}
             </div>
           </div>
 
@@ -343,7 +353,13 @@ function QRCodeForm({ onClose, onSave, qrcode }) {
             <button id="cancel-qr-btn" type="button" className="btn btn-secondary" onClick={onClose}>
               Cancel
             </button>
-            <button id="save-qr-btn" type="submit" className="btn btn-primary" disabled={loading}>
+            <button
+              id="save-qr-btn"
+              type="submit"
+              className="btn btn-primary"
+              disabled={loading || blockSave}
+              title={blockSave ? 'Increase the contrast between the foreground and background to save.' : undefined}
+            >
               {loading ? (
                 <>
                   <span className="spinner" /> Saving…
@@ -557,14 +573,17 @@ function LogoTab({ style, setField }) {
         onChange={(v) => setField('hideBgDots', v)}
       />
       <p style={styles.hint}>
-        Add a logo URL in the Content tab. A higher error-correction level (Advanced) keeps the
-        code scannable behind a logo.
+        Add a logo URL in the Content tab. Error correction is raised to H automatically while a
+        logo is set, so the code stays scannable behind it.
       </p>
     </>
   );
 }
 
 function AdvancedTab({ style, setField, isQR }) {
+  // A center logo forces error correction up to H (mirrors
+  // effectiveErrorCorrectionLevel in qrStyle.js), so reflect that in the control.
+  const logoForcesH = isQR && Boolean(style.logoUrl);
   return (
     <>
       {isQR && (
@@ -591,8 +610,11 @@ function AdvancedTab({ style, setField, isQR }) {
           <SelectField
             id="qr-ec-level"
             label="Error correction"
-            value={style.errorCorrectionLevel}
+            // A logo forces H (see effectiveErrorCorrectionLevel); show that and
+            // lock the control so the displayed level matches what's encoded.
+            value={logoForcesH ? 'H' : style.errorCorrectionLevel}
             onChange={(v) => setField('errorCorrectionLevel', v)}
+            disabled={logoForcesH}
             options={ERROR_CORRECTION_LEVELS.map((v) => ({
               value: v,
               label: {
@@ -603,7 +625,11 @@ function AdvancedTab({ style, setField, isQR }) {
               }[v],
             }))}
           />
-          <p style={styles.hint}>Higher correction tolerates more damage/logo coverage but packs denser.</p>
+          <p style={styles.hint}>
+            {logoForcesH
+              ? 'Raised to H automatically while a logo is set, so the code stays scannable behind it. Lower levels (M is the default) make logo-free codes coarser and more minimal.'
+              : 'Higher correction tolerates more damage but packs denser. M (the default) keeps codes minimal; a logo raises this to H automatically.'}
+          </p>
         </>
       ) : (
         <p style={styles.hint}>Data Matrix auto-sizes and includes its own error correction.</p>
@@ -625,11 +651,17 @@ function safeHex(v, fallback) {
   return typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v) ? v : fallback;
 }
 
-function SelectField({ id, label, value, onChange, options }) {
+function SelectField({ id, label, value, onChange, options, disabled = false }) {
   return (
     <div className="input-group">
       <label htmlFor={id} className="input-label">{label}</label>
-      <select id={id} className="input-field" value={value} onChange={(e) => onChange(e.target.value)}>
+      <select
+        id={id}
+        className="input-field"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+      >
         {options.map((o) => (
           <option key={o.value} value={o.value}>{o.label}</option>
         ))}
@@ -796,6 +828,35 @@ function FillControl({ label, color, gradient, fallbackColor, allowInherit, onCh
   );
 }
 
+// Visual treatment per contrast level, keyed by evaluateContrast()'s `level`.
+const CONTRAST_UI = {
+  good: { color: 'var(--success, #10b981)', label: 'Scannable' },
+  warn: { color: 'var(--warning, #f59e0b)', label: 'Low contrast' },
+  fail: { color: 'var(--error, #ef4444)', label: 'Won’t scan' },
+  unknown: { color: 'var(--text-secondary)', label: 'Check contrast' },
+};
+
+/**
+ * Live foreground/background contrast badge shown under the preview. Surfaces a
+ * pass/risky/fail verdict so users don't build a code too low-contrast to scan;
+ * the parent also disables saving when `contrast.scannable` is false.
+ */
+function ContrastChecker({ contrast }) {
+  const ui = CONTRAST_UI[contrast.level] || CONTRAST_UI.unknown;
+  return (
+    <div role="status" aria-live="polite" style={{ ...styles.contrastBox, borderLeftColor: ui.color }}>
+      <div style={styles.contrastHead}>
+        <span style={{ ...styles.contrastDot, background: ui.color }} aria-hidden="true" />
+        <span style={{ ...styles.contrastLabel, color: ui.color }}>{ui.label}</span>
+        {contrast.ratio != null && (
+          <span style={styles.contrastRatio}>{Math.round(contrast.ratio * 10) / 10}:1</span>
+        )}
+      </div>
+      <p style={styles.contrastMsg}>{contrast.message}</p>
+    </div>
+  );
+}
+
 const styles = {
   contentGrid: {
     display: 'flex',
@@ -908,6 +969,44 @@ const styles = {
     fontSize: '0.78rem',
     color: 'var(--text-tertiary)',
     marginTop: '10px',
+    lineHeight: 1.5,
+  },
+  contrastBox: {
+    marginTop: '16px',
+    width: '100%',
+    maxWidth: '260px',
+    padding: '12px 14px',
+    background: 'rgba(255,255,255,0.02)',
+    borderRadius: 'var(--radius-md)',
+    borderStyle: 'solid',
+    borderWidth: '1px 1px 1px 3px',
+    borderColor: 'var(--glass-border)',
+  },
+  contrastHead: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  contrastDot: {
+    width: '10px',
+    height: '10px',
+    borderRadius: '50%',
+    flexShrink: 0,
+  },
+  contrastLabel: {
+    fontSize: '0.85rem',
+    fontWeight: 600,
+  },
+  contrastRatio: {
+    marginLeft: 'auto',
+    fontSize: '0.8rem',
+    fontFamily: 'monospace',
+    color: 'var(--text-secondary)',
+  },
+  contrastMsg: {
+    fontSize: '0.78rem',
+    color: 'var(--text-tertiary)',
+    marginTop: '8px',
     lineHeight: 1.5,
   },
 };
