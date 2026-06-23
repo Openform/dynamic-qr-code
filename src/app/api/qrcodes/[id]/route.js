@@ -10,6 +10,43 @@ import { getSession } from '@/lib/auth';
 import { toClientQRCode } from '@/lib/utils';
 const { getQRCodeById, updateQRCode, deleteQRCode } = require('@/lib/db');
 
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
+
+/** Safely parse a stored style_config value (string or already-parsed object). */
+function parseStyleConfig(value) {
+  if (!value) return null;
+  if (typeof value === 'object') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Transform a DB record (snake_case) to a client-friendly shape (camelCase).
+ */
+function toClientQRCode(qrcode) {
+  return {
+    id: qrcode.id,
+    shortId: qrcode.short_id,
+    userId: qrcode.user_id,
+    title: qrcode.title,
+    destinationUrl: qrcode.destination_url,
+    fgColor: qrcode.foreground_color,
+    bgColor: qrcode.background_color,
+    logoUrl: qrcode.logo_url,
+    dotStyle: qrcode.dot_style,
+    cornerSquareStyle: qrcode.corner_square_style,
+    cornerDotStyle: qrcode.corner_dot_style,
+    styleConfig: parseStyleConfig(qrcode.style_config),
+    scanCount: qrcode.scan_count,
+    createdAt: qrcode.created_at,
+    updatedAt: qrcode.updated_at,
+    redirectUrl: `${BASE_URL}/r/${qrcode.short_id}`,
+  };
+}
+
 // ── GET — single QR code ───────────────────────
 export async function GET(request, { params }) {
   try {
@@ -53,21 +90,14 @@ export async function PUT(request, { params }) {
     }
 
     const body = await request.json();
-    const {
-      title,
-      destinationUrl,
-      foregroundColor,
-      backgroundColor,
-      fgColor,
-      bgColor,
-      logoUrl,
-      dotStyle,
-      cornerSquareStyle,
-      cornerDotStyle,
-    } = body;
+    const { title, destinationUrl } = body;
 
-    const finalFgColor = foregroundColor || fgColor;
-    const finalBgColor = backgroundColor || bgColor;
+    // A code's visual appearance is immutable after creation. Once it has been
+    // printed or shared, changing colours, code type, shape, logo, error
+    // correction, etc. would produce a different image that no longer matches
+    // the codes already in the wild. Only the title (an internal label) and the
+    // destination URL may change — any style fields in the body are ignored, so
+    // the lock holds even against a hand-crafted request.
 
     // Validate destination URL if provided
     if (destinationUrl) {
@@ -87,12 +117,6 @@ export async function PUT(request, { params }) {
     const updated = await updateQRCode(Number(id), session.userId, {
       title,
       destinationUrl,
-      foregroundColor: finalFgColor,
-      backgroundColor: finalBgColor,
-      logoUrl,
-      dotStyle,
-      cornerSquareStyle,
-      cornerDotStyle,
     });
 
     if (!updated) {

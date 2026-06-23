@@ -73,6 +73,7 @@ async function initSchema() {
       dot_style VARCHAR(32) NOT NULL DEFAULT 'square',
       corner_square_style VARCHAR(32) NOT NULL DEFAULT 'square',
       corner_dot_style VARCHAR(32) NOT NULL DEFAULT 'square',
+      style_config LONGTEXT NULL,
       scan_count INT UNSIGNED NOT NULL DEFAULT 0,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -103,6 +104,7 @@ async function migrateColumns() {
     ['dot_style', "ADD COLUMN dot_style VARCHAR(32) NOT NULL DEFAULT 'square'"],
     ['corner_square_style', "ADD COLUMN corner_square_style VARCHAR(32) NOT NULL DEFAULT 'square'"],
     ['corner_dot_style', "ADD COLUMN corner_dot_style VARCHAR(32) NOT NULL DEFAULT 'square'"],
+    ['style_config', 'ADD COLUMN style_config LONGTEXT NULL'],
   ];
 
   const clausesToAdd = [];
@@ -154,6 +156,16 @@ function ensureSchema() {
 // ──────────────────────────────────────────────
 // Helper functions
 // ──────────────────────────────────────────────
+
+/** Safely parse a stored style_config JSON string into an object (null on empty/invalid). */
+function parseStyleConfig(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
 
 /** Look up a user by email address. */
 async function getUserByEmail(email) {
@@ -220,6 +232,7 @@ async function getQRCodesByUserId(userId) {
        dot_style AS dotStyle,
        corner_square_style AS cornerSquareStyle,
        corner_dot_style AS cornerDotStyle,
+       style_config AS styleConfig,
        scan_count AS scanCount,
        created_at AS createdAt,
        updated_at AS updatedAt
@@ -228,6 +241,10 @@ async function getQRCodesByUserId(userId) {
      ORDER BY created_at DESC`,
     { userId }
   );
+  // style_config is stored as a JSON string; expose it as a parsed object.
+  for (const row of rows) {
+    row.styleConfig = parseStyleConfig(row.styleConfig);
+  }
   return rows;
 }
 
@@ -251,14 +268,14 @@ async function getQRCodeByShortId(shortId) {
   return rows[0] || null;
 }
 
-/** Create a new QR code record. */
-async function createQRCode({ shortId, userId, title, destinationUrl, foregroundColor, backgroundColor, logoUrl, dotStyle, cornerSquareStyle, cornerDotStyle }) {
+/** Create a new QR code record. `styleConfig` (when provided) is a plain object stored as JSON. */
+async function createQRCode({ shortId, userId, title, destinationUrl, foregroundColor, backgroundColor, logoUrl, dotStyle, cornerSquareStyle, cornerDotStyle, styleConfig }) {
   await ensureSchema();
   const [result] = await pool.execute(
     `INSERT INTO qrcodes
-       (short_id, user_id, title, destination_url, foreground_color, background_color, logo_url, dot_style, corner_square_style, corner_dot_style)
+       (short_id, user_id, title, destination_url, foreground_color, background_color, logo_url, dot_style, corner_square_style, corner_dot_style, style_config)
      VALUES
-       (:shortId, :userId, :title, :destinationUrl, :foregroundColor, :backgroundColor, :logoUrl, :dotStyle, :cornerSquareStyle, :cornerDotStyle)`,
+       (:shortId, :userId, :title, :destinationUrl, :foregroundColor, :backgroundColor, :logoUrl, :dotStyle, :cornerSquareStyle, :cornerDotStyle, :styleConfig)`,
     {
       shortId,
       userId,
@@ -270,13 +287,14 @@ async function createQRCode({ shortId, userId, title, destinationUrl, foreground
       dotStyle: dotStyle || 'square',
       cornerSquareStyle: cornerSquareStyle || 'square',
       cornerDotStyle: cornerDotStyle || 'square',
+      styleConfig: styleConfig != null ? JSON.stringify(styleConfig) : null,
     }
   );
   return getQRCodeById(result.insertId, userId);
 }
 
 /** Update an existing QR code. Returns the updated record or null if not found/not owned. */
-async function updateQRCode(id, userId, { title, destinationUrl, foregroundColor, backgroundColor, logoUrl, dotStyle, cornerSquareStyle, cornerDotStyle }) {
+async function updateQRCode(id, userId, { title, destinationUrl, foregroundColor, backgroundColor, logoUrl, dotStyle, cornerSquareStyle, cornerDotStyle, styleConfig }) {
   await ensureSchema();
   const existing = await getQRCodeById(id, userId);
   if (!existing) return null;
@@ -291,6 +309,7 @@ async function updateQRCode(id, userId, { title, destinationUrl, foregroundColor
            dot_style = :dotStyle,
            corner_square_style = :cornerSquareStyle,
            corner_dot_style = :cornerDotStyle,
+           style_config = :styleConfig,
            updated_at = CURRENT_TIMESTAMP
      WHERE id = :id AND user_id = :userId`,
     {
@@ -304,6 +323,8 @@ async function updateQRCode(id, userId, { title, destinationUrl, foregroundColor
       dotStyle: dotStyle ?? existing.dot_style,
       cornerSquareStyle: cornerSquareStyle ?? existing.corner_square_style,
       cornerDotStyle: cornerDotStyle ?? existing.corner_dot_style,
+      // Replace when a new config is supplied; otherwise keep the stored JSON string.
+      styleConfig: styleConfig != null ? JSON.stringify(styleConfig) : existing.style_config,
     }
   );
 

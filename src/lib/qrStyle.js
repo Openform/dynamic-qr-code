@@ -1,11 +1,11 @@
 /**
- * Shared, client-safe helpers for QR code visual styling.
+ * Shared, client-safe helpers for QR / barcode visual styling.
  *
  * This is the single source of truth that turns our stored style config into
- * `qr-code-styling` options. It is imported by the dashboard components (live
- * preview + download) AND by the API routes (to sanitize untrusted input before
- * persisting), so it must stay framework-agnostic: pure functions, no React and
- * no server-only imports.
+ * `qr-code-styling` options (for QR) or `bwip-js` options (Data Matrix).
+ * It is imported by the dashboard components (live preview + download) AND by the
+ * API routes (to sanitize untrusted input before persisting), so it must stay
+ * framework-agnostic: pure functions, no React and no rendering-library imports.
  */
 
 // ── Allowed values (mirror qr-code-styling's supported types) ──
@@ -24,7 +24,6 @@ export const QR_SHAPES = ['square', 'circle'];
 export const CODE_TYPES = [
   { id: 'qr', label: 'QR Code', bcid: 'qrcode' },
   { id: 'datamatrix', label: 'Data Matrix', bcid: 'datamatrix' },
-  { id: 'aztec', label: 'Aztec', bcid: 'azteccode' },
 ];
 const CODE_TYPE_IDS = CODE_TYPES.map((c) => c.id);
 
@@ -133,7 +132,10 @@ export function normalizeStyle(qrcode) {
     }
   }
   if (cfg && typeof cfg === 'object') {
-    return { ...DEFAULT_STYLE, ...cfg };
+    const merged = { ...DEFAULT_STYLE, ...cfg };
+    // Coerce a removed/unknown symbology (e.g. a previously-saved Aztec) to QR.
+    if (!CODE_TYPE_IDS.includes(merged.codeType)) merged.codeType = 'qr';
+    return merged;
   }
 
   // Legacy fallback from flat fields.
@@ -202,7 +204,7 @@ export function buildQRStylingOptions(style, { data, width = 300, height = 300, 
 }
 
 /**
- * Build options for bwip-js (used for non-QR symbologies: Data Matrix, Aztec).
+ * Build options for bwip-js (used for non-QR symbologies: Data Matrix).
  * Pure — does not import bwip-js, so this module stays server-safe. bwip-js only
  * supports a flat foreground/background color + size/margin (no gradients,
  * shapes, or logos), so only those style fields are mapped.

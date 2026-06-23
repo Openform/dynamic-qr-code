@@ -1,7 +1,7 @@
 /**
- * Client-only wrapper around bwip-js for the non-QR symbologies (Data Matrix,
- * Aztec). Isolated from qrStyle.js so that bwip-js — which touches the DOM/canvas
- * — is never pulled into the server bundle or the API routes.
+ * Client-only wrapper around bwip-js for the non-QR symbologies (Data Matrix).
+ * Isolated from qrStyle.js so that bwip-js — which touches the DOM/canvas — is
+ * never pulled into the server bundle or the API routes.
  *
  * bwip-js is loaded via a lazy dynamic import so it stays out of the initial
  * bundle and never executes during SSR.
