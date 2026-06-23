@@ -7,7 +7,7 @@
  */
 
 import { getSession } from '@/lib/auth';
-import { toClientQRCode } from '@/lib/utils';
+import { normalizeDestinationUrl, isValidDestinationUrl } from '@/lib/qrStyle';
 const { getQRCodeById, updateQRCode, deleteQRCode } = require('@/lib/db');
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
@@ -90,7 +90,8 @@ export async function PUT(request, { params }) {
     }
 
     const body = await request.json();
-    const { title, destinationUrl } = body;
+    const { title } = body;
+    let { destinationUrl } = body;
 
     // A code's visual appearance is immutable after creation. Once it has been
     // printed or shared, changing colours, code type, shape, logo, error
@@ -99,16 +100,13 @@ export async function PUT(request, { params }) {
     // destination URL may change — any style fields in the body are ignored, so
     // the lock holds even against a hand-crafted request.
 
-    // Validate destination URL if provided
+    // Validate destination URL if provided: autofill https:// when the scheme
+    // is omitted, then require https — plain http URLs are rejected.
     if (destinationUrl) {
-      try {
-        const parsedUrl = new URL(destinationUrl);
-        if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-          throw new Error('Invalid protocol');
-        }
-      } catch {
+      destinationUrl = normalizeDestinationUrl(destinationUrl);
+      if (!isValidDestinationUrl(destinationUrl)) {
         return Response.json(
-          { error: 'Invalid destination URL. Must be http or https.' },
+          { error: 'Invalid destination URL. Must be a valid https URL.' },
           { status: 400 }
         );
       }

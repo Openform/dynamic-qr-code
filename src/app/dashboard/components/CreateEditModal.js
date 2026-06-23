@@ -12,6 +12,8 @@ import {
   CORNER_DOT_STYLES,
   ERROR_CORRECTION_LEVELS,
   QR_SHAPES,
+  normalizeDestinationUrl,
+  isValidDestinationUrl,
 } from '@/lib/qrStyle';
 import { renderBwipCanvas } from '@/lib/barcode';
 
@@ -70,6 +72,7 @@ function QRCodeForm({ onClose, onSave, qrcode }) {
 
   const [title, setTitle] = useState(qrcode?.title || '');
   const [destinationUrl, setDestinationUrl] = useState(qrcode?.destinationUrl || '');
+  const [urlError, setUrlError] = useState('');
   // Single style object — the source of truth for all visual customization.
   const [style, setStyle] = useState(() => normalizeStyle(qrcode));
   const [tab, setTab] = useState('content');
@@ -145,11 +148,29 @@ function QRCodeForm({ onClose, onSave, qrcode }) {
   // Content for rendering (no state write — avoids a cascading effect).
   const activeTab = visibleTabs.some((t) => t.id === tab) ? tab : 'content';
 
+  // Prepend https:// when the user omits the scheme, so the field shows the
+  // URL we'll actually save (and passes the native url-input validation).
+  function handleUrlBlur() {
+    const normalized = normalizeDestinationUrl(destinationUrl);
+    if (normalized !== destinationUrl) setDestinationUrl(normalized);
+    if (urlError) setUrlError('');
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
+
+    // Autofill https:// and reject anything that isn't https (e.g. http://).
+    const normalized = normalizeDestinationUrl(destinationUrl);
+    if (normalized !== destinationUrl) setDestinationUrl(normalized);
+    if (!isValidDestinationUrl(normalized)) {
+      setUrlError('Enter a valid https:// URL. Insecure http:// links aren’t allowed.');
+      return;
+    }
+    setUrlError('');
+
     setSaving(true);
     try {
-      await onSave({ title, destinationUrl, styleConfig: style });
+      await onSave({ title, destinationUrl: normalized, styleConfig: style });
     } finally {
       setSaving(false);
     }
@@ -194,6 +215,8 @@ function QRCodeForm({ onClose, onSave, qrcode }) {
                     setTitle={setTitle}
                     destinationUrl={destinationUrl}
                     setDestinationUrl={setDestinationUrl}
+                    onUrlBlur={handleUrlBlur}
+                    urlError={urlError}
                     logoUrl={style.logoUrl}
                     setLogoUrl={(v) => setField('logoUrl', v)}
                     showLogo={false}
@@ -272,6 +295,8 @@ function QRCodeForm({ onClose, onSave, qrcode }) {
                     setTitle={setTitle}
                     destinationUrl={destinationUrl}
                     setDestinationUrl={setDestinationUrl}
+                    onUrlBlur={handleUrlBlur}
+                    urlError={urlError}
                     logoUrl={style.logoUrl}
                     setLogoUrl={(v) => setField('logoUrl', v)}
                     showLogo={isQR}
@@ -340,7 +365,7 @@ function QRCodeForm({ onClose, onSave, qrcode }) {
 // Tab panels
 // ──────────────────────────────────────────────
 
-function ContentTab({ title, setTitle, destinationUrl, setDestinationUrl, logoUrl, setLogoUrl, showLogo }) {
+function ContentTab({ title, setTitle, destinationUrl, setDestinationUrl, onUrlBlur, urlError, logoUrl, setLogoUrl, showLogo }) {
   return (
     <>
       <div className="input-group">
@@ -365,8 +390,15 @@ function ContentTab({ title, setTitle, destinationUrl, setDestinationUrl, logoUr
           placeholder="https://example.com"
           value={destinationUrl}
           onChange={(e) => setDestinationUrl(e.target.value)}
+          onBlur={onUrlBlur}
+          aria-invalid={urlError ? true : undefined}
           required
         />
+        {urlError ? (
+          <p style={{ ...styles.hint, color: 'var(--danger, #e5484d)' }}>{urlError}</p>
+        ) : (
+          <p style={styles.hint}>We’ll add https:// if you leave it out. Insecure http:// links aren’t allowed.</p>
+        )}
       </div>
 
       {showLogo && (
