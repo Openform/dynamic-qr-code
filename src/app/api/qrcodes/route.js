@@ -59,13 +59,9 @@ export async function GET() {
     }
 
     const qrcodes = await getQRCodesByUserId(session.userId);
+    const clientQRCodes = qrcodes.map(toClientQRCode);
 
-    // Attach redirectUrl to each QR code without instantiating new objects via map
-    for (let i = 0; i < qrcodes.length; i++) {
-      qrcodes[i].redirectUrl = `${BASE_URL}/r/${qrcodes[i].shortId}`;
-    }
-
-    return Response.json({ qrcodes });
+    return Response.json({ qrcodes: clientQRCodes });
   } catch (error) {
     console.error('GET /api/qrcodes error:', error);
     return Response.json(
@@ -109,12 +105,15 @@ export async function POST(request) {
       );
     }
 
-    // Basic URL validation
+    // Validate destination URL including protocol
     try {
-      new URL(destinationUrl);
+      const parsedUrl = new URL(destinationUrl);
+      if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+        throw new Error('Invalid protocol');
+      }
     } catch {
       return Response.json(
-        { error: 'Invalid destination URL' },
+        { error: 'Invalid destination URL. Must be http or https.' },
         { status: 400 }
       );
     }

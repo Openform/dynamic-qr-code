@@ -6,11 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "bwip-js": "^4.11.1",
+    "ipaddr.js": "^2.4.0",
     "jose": "^6.2.3",
     "mysql2": "^3.22.5",
     "nanoid": "^5.1.11",
@@ -22,6 +24,7 @@
   },
   "devDependencies": {
     "eslint": "^9",
-    "eslint-config-next": "16.2.7"
+    "eslint-config-next": "16.2.7",
+    "vitest": "^4.1.9"
   }
 }

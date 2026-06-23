@@ -107,10 +107,15 @@ async function migrateColumns() {
     ['style_config', 'ADD COLUMN style_config LONGTEXT NULL'],
   ];
 
+  const clausesToAdd = [];
   for (const [name, clause] of additions) {
     if (!columns.has(name)) {
-      await pool.query(`ALTER TABLE qrcodes ${clause}`);
+      clausesToAdd.push(clause);
     }
+  }
+
+  if (clausesToAdd.length > 0) {
+    await pool.query(`ALTER TABLE qrcodes ${clausesToAdd.join(', ')}`);
   }
 }
 

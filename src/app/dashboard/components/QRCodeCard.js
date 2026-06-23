@@ -95,6 +95,21 @@ export default function QRCodeCard({ qrcode, onEdit, onDelete }) {
     })
   }
 
+  function getSafeUrl(url) {
+    if (!url) return '#';
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        return parsed.href;
+      }
+    } catch {
+      // ignore
+    }
+    return '#';
+  }
+
+  const safeDestinationUrl = getSafeUrl(qrcode.destinationUrl);
+
   return (
     <div className="glass-card animate-fadeIn" style={styles.card}>
       {/* QR Preview */}
@@ -109,7 +124,7 @@ export default function QRCodeCard({ qrcode, onEdit, onDelete }) {
         </h3>
 
         <a
-          href={qrcode.destinationUrl}
+          href={safeDestinationUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="truncate"
