@@ -4,12 +4,17 @@ import { useState, useEffect, useCallback } from "react"
 import StatsCards from "./components/StatsCards"
 import QRCodeCard from "./components/QRCodeCard"
 import CreateEditModal from "./components/CreateEditModal"
+import CollectionsBar from "./components/CollectionsBar"
+import CollectionModal from "./components/CollectionModal"
 import Avatar from "./components/Avatar"
 import Link from "next/link"
 
 export default function DashboardPage() {
   const [user, setUser] = useState(null)
   const [qrcodes, setQrcodes] = useState([])
+  const [collections, setCollections] = useState([])
+  // "all" | "default" | <collectionId number>
+  const [activeCollection, setActiveCollection] = useState("all")
   const [totalScans, setTotalScans] = useState(0)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
@@ -17,15 +22,18 @@ export default function DashboardPage() {
   // Modal state
   const [modalOpen, setModalOpen] = useState(false)
   const [editingQR, setEditingQR] = useState(null) // null = create, object = edit
+  // Collection create/rename modal: { mode: "create" | "rename", collection }
+  const [collectionModal, setCollectionModal] = useState(null)
 
   // ---- Fetch user & QR codes on mount ----
   useEffect(() => {
     async function loadData() {
       try {
-        const [userRes, qrRes, statsRes] = await Promise.all([
+        const [userRes, qrRes, statsRes, collectionsRes] = await Promise.all([
           fetch("/api/auth/me"),
           fetch("/api/qrcodes"),
-          fetch("/api/user/stats")
+          fetch("/api/user/stats"),
+          fetch("/api/collections")
         ])
 
         if (!userRes.ok) {
@@ -44,6 +52,11 @@ export default function DashboardPage() {
         if (statsRes.ok) {
           const statsData = await statsRes.json()
           setTotalScans(statsData.totalScans ?? 0)
+        }
+
+        if (collectionsRes.ok) {
+          const colData = await collectionsRes.json()
+          setCollections(colData.collections ?? [])
         }
       } catch (error) {
         console.error("Failed to load dashboard data:", error)
@@ -125,10 +138,120 @@ export default function DashboardPage() {
     window.location.href = "/"
   }
 
-  // ---- Derived data ----
-  const filteredQRCodes = qrcodes.filter((qr) =>
-    qr.title?.toLowerCase().includes(search.toLowerCase())
+  // ---- Collection handlers ----
+
+  // Create or rename a collection. Throws on failure so CollectionModal can
+  // surface the server's message (e.g. a duplicate name) inline.
+  const handleCollectionSubmit = useCallback(
+    async (name) => {
+      const mode = collectionModal?.mode
+      const isRename = mode === "rename"
+      const url = isRename
+        ? `/api/collections/${collectionModal.collection.id}`
+        : "/api/collections"
+
+      const res = await fetch(url, {
+        method: isRename ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name })
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || "Could not save collection.")
+      }
+
+      const saved = data.collection
+      if (isRename) {
+        setCollections((prev) =>
+          prev.map((c) => (c.id === saved.id ? { ...c, ...saved } : c))
+        )
+      } else {
+        setCollections((prev) => [saved, ...prev])
+        setActiveCollection(saved.id)
+      }
+      setCollectionModal(null)
+    },
+    [collectionModal]
   )
+
+  async function handleDeleteCollection(collection) {
+    if (
+      !confirm(
+        `Delete the "${collection.name}" collection? Its codes won't be deleted — they'll move to the Default collection.`
+      )
+    )
+      return
+
+    try {
+      const res = await fetch(`/api/collections/${collection.id}`, {
+        method: "DELETE"
+      })
+      if (res.ok) {
+        setCollections((prev) => prev.filter((c) => c.id !== collection.id))
+        // Codes in the deleted collection revert to Default (collectionId null).
+        setQrcodes((prev) =>
+          prev.map((q) =>
+            q.collectionId === collection.id ? { ...q, collectionId: null } : q
+          )
+        )
+        setActiveCollection((cur) => (cur === collection.id ? "all" : cur))
+      }
+    } catch (error) {
+      console.error("Failed to delete collection:", error)
+    }
+  }
+
+  // Assign a single code to a collection (null = Default) from its card.
+  async function handleAssignCollection(qr, collectionId) {
+    const previous = qr.collectionId ?? null
+    if (previous === collectionId) return
+
+    // Optimistic update — revert if the request fails.
+    setQrcodes((prev) =>
+      prev.map((q) => (q.id === qr.id ? { ...q, collectionId } : q))
+    )
+    try {
+      const res = await fetch(`/api/qrcodes/${qr.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ collectionId })
+      })
+      if (!res.ok) throw new Error("assign failed")
+    } catch (error) {
+      console.error("Failed to assign collection:", error)
+      setQrcodes((prev) =>
+        prev.map((q) => (q.id === qr.id ? { ...q, collectionId: previous } : q))
+      )
+    }
+  }
+
+  // ---- Derived data ----
+
+  // Live counts for the collection pills, derived from the loaded codes so they
+  // stay accurate as codes are created, moved, or deleted client-side.
+  function countFor(key) {
+    if (key === "all") return qrcodes.length
+    if (key === "default")
+      return qrcodes.filter((q) => q.collectionId == null).length
+    return qrcodes.filter((q) => q.collectionId === key).length
+  }
+
+  const filteredQRCodes = qrcodes.filter((qr) => {
+    const matchesSearch = qr.title
+      ?.toLowerCase()
+      .includes(search.toLowerCase())
+    let matchesCollection = true
+    if (activeCollection === "default") {
+      matchesCollection = qr.collectionId == null
+    } else if (activeCollection !== "all") {
+      matchesCollection = qr.collectionId === activeCollection
+    }
+    return matchesSearch && matchesCollection
+  })
+
+  // New codes default into whichever collection is currently being viewed.
+  const newCodeCollectionId =
+    typeof activeCollection === "number" ? activeCollection : null
 
   // ---- Loading state ----
   if (loading) {
@@ -185,6 +308,19 @@ export default function DashboardPage() {
           <StatsCards totalQRCodes={qrcodes.length} totalScans={totalScans} />
         </div>
 
+        {/* Collections */}
+        <CollectionsBar
+          collections={collections}
+          activeCollection={activeCollection}
+          countFor={countFor}
+          onSelect={setActiveCollection}
+          onNew={() => setCollectionModal({ mode: "create", collection: null })}
+          onRename={(collection) =>
+            setCollectionModal({ mode: "rename", collection })
+          }
+          onDelete={handleDeleteCollection}
+        />
+
         {/* Action Bar */}
         <div style={styles.actionBar} className="animate-fadeIn">
           <div style={styles.searchWrap}>
@@ -213,12 +349,18 @@ export default function DashboardPage() {
           <div style={styles.emptyState} className="animate-fadeIn">
             <div style={{ fontSize: "3rem", marginBottom: "16px" }}>📭</div>
             <h3 style={{ fontWeight: 600, marginBottom: "8px" }}>
-              {search ? "No QR codes found" : "Create your first QR code"}
+              {search
+                ? "No QR codes found"
+                : activeCollection !== "all"
+                  ? "No codes in this collection yet"
+                  : "Create your first QR code"}
             </h3>
             <p style={{ color: "var(--text-secondary)", marginBottom: "24px" }}>
               {search
                 ? "Try a different search term."
-                : "Get started by creating a dynamic QR code that you can update anytime."}
+                : activeCollection !== "all"
+                  ? "Create a code here, or assign existing ones to this collection from their cards."
+                  : "Get started by creating a dynamic QR code that you can update anytime."}
             </p>
             {!search && (
               <button className="btn btn-primary" onClick={handleCreate}>
@@ -232,8 +374,10 @@ export default function DashboardPage() {
               <QRCodeCard
                 key={qr.id}
                 qrcode={qr}
+                collections={collections}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
+                onAssignCollection={handleAssignCollection}
               />
             ))}
           </div>
@@ -246,7 +390,29 @@ export default function DashboardPage() {
         onClose={() => setModalOpen(false)}
         onSave={handleSave}
         qrcode={editingQR}
+        collections={collections}
+        defaultCollectionId={newCodeCollectionId}
       />
+
+      {/* ---- Collection Create / Rename Modal ---- */}
+      {collectionModal && (
+        <CollectionModal
+          key={`${collectionModal.mode}-${collectionModal.collection?.id ?? "new"}`}
+          title={
+            collectionModal.mode === "rename"
+              ? "Rename Collection"
+              : "New Collection"
+          }
+          submitLabel={
+            collectionModal.mode === "rename"
+              ? "Save Changes"
+              : "Create Collection"
+          }
+          initialName={collectionModal.collection?.name || ""}
+          onClose={() => setCollectionModal(null)}
+          onSubmit={handleCollectionSubmit}
+        />
+      )}
     </div>
   )
 }

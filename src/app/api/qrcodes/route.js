@@ -13,7 +13,7 @@ import {
   evaluateContrast,
 } from '@/lib/qrStyle';
 
-const { getQRCodesByUserId, createQRCode } = require('@/lib/db');
+const { getQRCodesByUserId, createQRCode, getCollectionById } = require('@/lib/db');
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 
@@ -42,6 +42,7 @@ function toClientQRCode(qrcode) {
     id: qrcode.id,
     shortId: qrcode.short_id,
     userId: qrcode.user_id,
+    collectionId: qrcode.collection_id,
     title: qrcode.title,
     destinationUrl: qrcode.destination_url,
     fgColor: qrcode.foreground_color,
@@ -111,6 +112,7 @@ export async function POST(request) {
       cornerSquareStyle,
       cornerDotStyle,
       styleConfig,
+      collectionId,
     } = body;
 
     // Validation
@@ -119,6 +121,18 @@ export async function POST(request) {
         { error: 'Title and destination URL are required' },
         { status: 400 }
       );
+    }
+
+    // Resolve the target collection. A missing/empty/null value means the
+    // Default Collection; any other value must be one of the user's own
+    // collections, so a crafted request can't drop a code into someone else's.
+    let resolvedCollectionId = null;
+    if (collectionId != null && collectionId !== '') {
+      const collection = await getCollectionById(Number(collectionId), session.userId);
+      if (!collection) {
+        return Response.json({ error: 'Collection not found' }, { status: 400 });
+      }
+      resolvedCollectionId = collection.id;
     }
 
     // Autofill https:// when the scheme is omitted, then require https — plain
@@ -162,6 +176,7 @@ export async function POST(request) {
     const qrcode = await createQRCode({
       shortId,
       userId: session.userId,
+      collectionId: resolvedCollectionId,
       title,
       destinationUrl: normalizedUrl,
       ...legacy,
