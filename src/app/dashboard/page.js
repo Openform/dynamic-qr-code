@@ -237,7 +237,9 @@ export default function DashboardPage() {
   }
 
   const filteredQRCodes = qrcodes.filter((qr) => {
-    const matchesSearch = qr.title?.toLowerCase().includes(search.toLowerCase())
+    const matchesSearch = qr.title
+      ?.toLowerCase()
+      .includes(search.toLowerCase())
     let matchesCollection = true
     if (activeCollection === "default") {
       matchesCollection = qr.collectionId == null
