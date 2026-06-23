@@ -59,7 +59,10 @@ export const DEFAULT_STYLE = {
   // structure
   shape: 'square',
   margin: 10,
-  errorCorrectionLevel: 'H',
+  // Default to M (15%) so logo-free codes stay visually minimal (fewer, larger
+  // modules). A logo auto-raises this to H at render time — see
+  // `effectiveErrorCorrectionLevel`.
+  errorCorrectionLevel: 'M',
 };
 
 // ── Small internal helpers ──
@@ -151,6 +154,21 @@ export function normalizeStyle(qrcode) {
 }
 
 /**
+ * The error-correction level actually used to encode a QR.
+ *
+ * A center logo overlays (punches out) the modules beneath it, so the code only
+ * stays scannable if there's enough redundancy to reconstruct them — that's what
+ * level H (30%) buys. So whenever a logo is set we force H regardless of the
+ * stored level. Without a logo we respect the user's choice (default M), which
+ * keeps logo-free codes coarse and minimal-looking instead of densely packed.
+ */
+export function effectiveErrorCorrectionLevel(style) {
+  const s = { ...DEFAULT_STYLE, ...(style || {}) };
+  if (s.logoUrl) return 'H';
+  return oneOf(s.errorCorrectionLevel, ERROR_CORRECTION_LEVELS, DEFAULT_STYLE.errorCorrectionLevel);
+}
+
+/**
  * Build the options object for `new QRCodeStyling(...)` / `.update(...)`.
  * @param {object} style  A (partial) style object — merged over DEFAULT_STYLE.
  * @param {object} opts   { data, width, height, type }
@@ -173,7 +191,7 @@ export function buildQRStylingOptions(style, { data, width = 300, height = 300, 
     margin: clampNumber(s.margin, 0, 50, DEFAULT_STYLE.margin),
     image: logoSrc,
     qrOptions: {
-      errorCorrectionLevel: oneOf(s.errorCorrectionLevel, ERROR_CORRECTION_LEVELS, 'H'),
+      errorCorrectionLevel: effectiveErrorCorrectionLevel(s),
     },
     dotsOptions: {
       type: oneOf(s.dotStyle, DOT_STYLES, 'square'),
@@ -286,6 +304,170 @@ export function legacyFieldsFromStyle(style) {
     cornerSquareStyle: s.cornerSquareStyle || DEFAULT_STYLE.cornerSquareStyle,
     cornerDotStyle: s.cornerDotStyle || DEFAULT_STYLE.cornerDotStyle,
   };
+}
+
+// ──────────────────────────────────────────────
+// Contrast / scannability
+// ──────────────────────────────────────────────
+
+/**
+ * Contrast-ratio thresholds (WCAG formula) applied to a QR's foreground (the
+ * dark "ink" — body dots + finder patterns) against its background. A scanner
+ * needs the two to differ enough in luminance to tell modules apart.
+ *
+ * These are deliberately far more lenient than WCAG text-readability ratios
+ * (4.5:1). A phone camera reads QR codes at much lower contrast than the eye
+ * needs for body text, and the WCAG luminance formula is especially pessimistic
+ * about saturated bright colors — e.g. cyan #00d4ff scores ~1.8:1 on white yet
+ * scans every time (it's near-black in the red channel). So the hard floor only
+ * catches colors that are genuinely close to indistinguishable; everything in
+ * between is allowed with an advisory. (Regression-tested so no shipped preset
+ * is ever blocked — see qrStyle.test.js.)
+ *
+ * - Below MIN_SCANNABLE_CONTRAST (colors nearly identical) saving is blocked.
+ * - Between MIN and GOOD it's allowed but flagged as risky.
+ * - At/above GOOD it's considered reliably scannable.
+ */
+export const MIN_SCANNABLE_CONTRAST = 1.5;
+export const GOOD_CONTRAST = 3;
+
+/** Parse a `#rgb` or `#rrggbb` hex string into { r, g, b } (0–255), or null. */
+function parseHexColor(c) {
+  if (typeof c !== 'string') return null;
+  let v = c.trim().replace(/^#/, '');
+  if (/^[0-9a-fA-F]{3}$/.test(v)) v = v.replace(/./g, (ch) => ch + ch);
+  if (!/^[0-9a-fA-F]{6}$/.test(v)) return null;
+  const n = parseInt(v, 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
+/** WCAG relative luminance (0–1) of an { r, g, b } color. */
+function relativeLuminance({ r, g, b }) {
+  const toLinear = (channel) => {
+    const s = channel / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+}
+
+/**
+ * WCAG contrast ratio (1–21) between two colors, or null if either isn't a hex
+ * color we can parse (e.g. a named CSS color or gradient placeholder).
+ */
+export function contrastRatio(colorA, colorB) {
+  const a = parseHexColor(colorA);
+  const b = parseHexColor(colorB);
+  if (!a || !b) return null;
+  const la = relativeLuminance(a);
+  const lb = relativeLuminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+/** Every color the foreground "ink" can take — gradient stops, or the solid
+ *  color, resolving blank corner colors back to the body color. */
+function foregroundColors(s) {
+  const out = [];
+  const add = (...cs) => cs.forEach((c) => c && out.push(c));
+  if (s.dotGradient) add(s.dotGradient.color1, s.dotGradient.color2);
+  else add(s.fgColor);
+  if (s.cornerSquareGradient) add(s.cornerSquareGradient.color1, s.cornerSquareGradient.color2);
+  else add(s.cornerSquareColor || s.fgColor);
+  if (s.cornerDotGradient) add(s.cornerDotGradient.color1, s.cornerDotGradient.color2);
+  else add(s.cornerDotColor || s.fgColor);
+  return out;
+}
+
+/** Every color the background can take — gradient stops or the solid color. */
+function backgroundColors(s) {
+  if (s.bgGradient) return [s.bgGradient.color1, s.bgGradient.color2].filter(Boolean);
+  return [s.bgColor].filter(Boolean);
+}
+
+function meanLuminance(colors) {
+  const lums = colors.map(parseHexColor).filter(Boolean).map(relativeLuminance);
+  return lums.length ? lums.reduce((sum, l) => sum + l, 0) / lums.length : null;
+}
+
+/**
+ * Assess whether a style's foreground/background colors give enough contrast to
+ * scan, so the UI can warn (or block) before an unreadable code is saved.
+ *
+ * Works for both QR (gradients, corner colors) and Data Matrix (flat fg/bg).
+ * Returns:
+ *   { level, ratio, scannable, inverted, message }
+ * where `level` is 'good' | 'warn' | 'fail' | 'unknown', `ratio` is the
+ * worst-case contrast (null when it can't be measured), and `scannable` is
+ * false only when the colors are confidently too low-contrast to read.
+ */
+export function evaluateContrast(style) {
+  const s = { ...DEFAULT_STYLE, ...(style || {}) };
+
+  // A transparent background takes on whatever surface it's placed over, so
+  // there's no fixed ratio to measure. Advise rather than block.
+  if (s.bgTransparent) {
+    return {
+      level: 'unknown',
+      ratio: null,
+      scannable: true,
+      inverted: false,
+      message:
+        'Transparent background — scannability depends on the surface behind the code. Place it on a light surface that strongly contrasts the foreground.',
+    };
+  }
+
+  const fgs = foregroundColors(s);
+  const bgs = backgroundColors(s);
+
+  // Worst-case (minimum) contrast across every foreground × background pair, so
+  // a single low-contrast gradient stop is still caught.
+  let ratio = Infinity;
+  for (const fg of fgs) {
+    for (const bg of bgs) {
+      const r = contrastRatio(fg, bg);
+      if (r != null && r < ratio) ratio = r;
+    }
+  }
+
+  // Couldn't parse the colors (e.g. a non-hex CSS value) — don't block.
+  if (!Number.isFinite(ratio)) {
+    return {
+      level: 'unknown',
+      ratio: null,
+      scannable: true,
+      inverted: false,
+      message: 'Couldn’t check contrast for these colors — use a dark foreground on a light background.',
+    };
+  }
+
+  // Inverted = light ink on a dark background. High-contrast inverted codes scan
+  // on modern phones but trip some older/native readers, so always flag them.
+  const fgLum = meanLuminance(fgs);
+  const bgLum = meanLuminance(bgs);
+  const inverted = fgLum != null && bgLum != null && fgLum > bgLum;
+
+  const rounded = Math.round(ratio * 10) / 10;
+  let level;
+  let scannable;
+  let message;
+  if (ratio < MIN_SCANNABLE_CONTRAST) {
+    level = 'fail';
+    scannable = false;
+    message = `Contrast ${rounded}:1 is too low — this code likely won’t scan. Use a darker foreground or a lighter background (aim for ${GOOD_CONTRAST}:1 or higher).`;
+  } else if (ratio < GOOD_CONTRAST) {
+    level = 'warn';
+    scannable = true;
+    message = `Contrast ${rounded}:1 is on the low side — it may fail in poor lighting or on low-quality cameras. ${GOOD_CONTRAST}:1 or higher is safer.`;
+  } else {
+    level = 'good';
+    scannable = true;
+    message = `Contrast ${rounded}:1 — looks reliably scannable.`;
+  }
+
+  if (inverted && scannable) {
+    message += ' Heads up: light-on-dark (inverted) codes aren’t read by every scanner — dark-on-light is safest.';
+  }
+
+  return { level, ratio, scannable, inverted, message };
 }
 
 /**

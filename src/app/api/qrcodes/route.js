@@ -10,6 +10,7 @@ import {
   legacyFieldsFromStyle,
   normalizeDestinationUrl,
   isValidDestinationUrl,
+  evaluateContrast,
 } from '@/lib/qrStyle';
 
 const { getQRCodesByUserId, createQRCode } = require('@/lib/db');
@@ -28,8 +29,13 @@ function parseStyleConfig(value) {
 }
 
 /**
- * Transform a DB record (snake_case) to a client-friendly shape (camelCase)
- * and attach the public redirect URL.
+ * Transform a raw `SELECT *` DB record (snake_case) to a client-friendly shape
+ * (camelCase) and attach the public redirect URL. Used for the POST response,
+ * whose record comes from `getQRCodeById` (snake_case columns).
+ *
+ * NOTE: do NOT use this for the GET list — `getQRCodesByUserId` already returns
+ * camelCase aliased fields, so re-mapping them here reads undefined for every
+ * field (the cause of URLs/styling vanishing on refresh). See GET below.
  */
 function toClientQRCode(qrcode) {
   return {
@@ -63,8 +69,13 @@ export async function GET() {
       );
     }
 
+    // getQRCodesByUserId already returns the client shape (camelCase fields with
+    // styleConfig parsed); only the public redirect URL needs attaching.
     const qrcodes = await getQRCodesByUserId(session.userId);
-    const clientQRCodes = qrcodes.map(toClientQRCode);
+    const clientQRCodes = qrcodes.map((qr) => ({
+      ...qr,
+      redirectUrl: `${BASE_URL}/r/${qr.shortId}`,
+    }));
 
     return Response.json({ qrcodes: clientQRCodes });
   } catch (error) {
@@ -126,6 +137,17 @@ export async function POST(request) {
     // legacy flat columns from it. Fall back to the legacy body fields for
     // older clients that don't send a styleConfig.
     const sanitizedStyle = sanitizeStyleConfig(styleConfig);
+
+    // Reject codes whose foreground/background contrast is too low to scan, so a
+    // crafted request can't bypass the client-side contrast check. Only a
+    // confident failure blocks — borderline/transparent cases are allowed.
+    if (sanitizedStyle && !evaluateContrast(sanitizedStyle).scannable) {
+      return Response.json(
+        { error: 'Foreground and background contrast is too low to scan reliably. Use a darker foreground or a lighter background.' },
+        { status: 400 }
+      );
+    }
+
     const legacy = sanitizedStyle
       ? legacyFieldsFromStyle(sanitizedStyle)
       : {
