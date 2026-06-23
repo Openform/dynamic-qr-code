@@ -5,7 +5,12 @@
 
 import { getSession } from '@/lib/auth';
 import { nanoid } from 'nanoid';
-import { sanitizeStyleConfig, legacyFieldsFromStyle } from '@/lib/qrStyle';
+import {
+  sanitizeStyleConfig,
+  legacyFieldsFromStyle,
+  normalizeDestinationUrl,
+  isValidDestinationUrl,
+} from '@/lib/qrStyle';
 
 const { getQRCodesByUserId, createQRCode } = require('@/lib/db');
 
@@ -105,15 +110,12 @@ export async function POST(request) {
       );
     }
 
-    // Validate destination URL including protocol
-    try {
-      const parsedUrl = new URL(destinationUrl);
-      if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-        throw new Error('Invalid protocol');
-      }
-    } catch {
+    // Autofill https:// when the scheme is omitted, then require https — plain
+    // http URLs are rejected.
+    const normalizedUrl = normalizeDestinationUrl(destinationUrl);
+    if (!isValidDestinationUrl(normalizedUrl)) {
       return Response.json(
-        { error: 'Invalid destination URL. Must be http or https.' },
+        { error: 'Invalid destination URL. Must be a valid https URL.' },
         { status: 400 }
       );
     }
@@ -139,7 +141,7 @@ export async function POST(request) {
       shortId,
       userId: session.userId,
       title,
-      destinationUrl,
+      destinationUrl: normalizedUrl,
       ...legacy,
       styleConfig: sanitizedStyle,
     });

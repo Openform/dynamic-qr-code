@@ -289,6 +289,40 @@ export function legacyFieldsFromStyle(style) {
 }
 
 /**
+ * Normalize a user-supplied destination URL.
+ *
+ * - Trims surrounding whitespace.
+ * - If no scheme is present (e.g. "example.com"), assumes https:// so the user
+ *   doesn't have to type it. An existing scheme (https://, http://, ftp://…) is
+ *   left untouched here — validity is enforced separately by
+ *   `isValidDestinationUrl`, which rejects anything that isn't https.
+ *
+ * Returns the normalized string. Non-strings pass through unchanged.
+ */
+export function normalizeDestinationUrl(url) {
+  if (typeof url !== 'string') return url;
+  const trimmed = url.trim();
+  if (!trimmed) return trimmed;
+  // Already has a "scheme://" prefix? Leave it as-is.
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return trimmed;
+  // Otherwise default to https.
+  return `https://${trimmed}`;
+}
+
+/**
+ * Validate a destination URL. Only absolute https:// URLs are allowed — plain
+ * http:// (and any other scheme) is rejected so every redirect goes over TLS.
+ * Run `normalizeDestinationUrl` first so scheme-less input is accepted.
+ */
+export function isValidDestinationUrl(url) {
+  try {
+    return new URL(url).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/**
  * One-click style bundles. Each preset's `style` contains visual fields only
  * (never logoUrl/title/url), so applying a preset preserves the user's logo.
  */
