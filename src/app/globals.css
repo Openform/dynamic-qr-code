@@ -383,7 +383,8 @@ select {
   color: var(--text-tertiary);
 }
 
-.input-field:focus {
+.input-field:focus,
+.input-wrapper:has(.input-field:focus) {
   border-color: var(--cyan);
   box-shadow:
     0 0 0 3px rgba(0, 212, 255, 0.1),
@@ -1174,4 +1175,32 @@ select {
 .qr-download-menu button:hover {
   background: rgba(255, 255, 255, 0.06);
   color: var(--cyan);
+}
+
+/* 1. The wrapper becomes the visual "input field" (right padding is 0 so the
+   inner input reaches the edge) */
+.input-wrapper {
+  display: flex;
+  align-items: center;
+  background-color: var(--bg-secondary);
+  border: 1px solid #2a2a35;
+  border-radius: 12px;
+  padding: 0 0 0 12px;
+  overflow: hidden;
+  transition: all var(--transition-base);
+}
+
+/* 2. Grey out the prefix */
+.prefix {
+  color: var(--text-tertiary);
+  margin-right: 2px;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* 3. Strip the inner input's own chrome so the wrapper reads as one field */
+.input-wrapper .input-field {
+  border: none !important;
+  padding-left: 0 !important;
+  box-shadow: none !important;
 }

@@ -85,6 +85,23 @@ function sanitizeColor(c) {
   return v;
 }
 
+/**
+ * Sanitize a logo URL for persistence. Logos are fetched server-side through the
+ * image proxy, so only absolute https URLs are kept — http and any other scheme
+ * (and over-long values) are dropped to `''`. The client always submits https,
+ * so this only ever rejects hand-crafted requests.
+ */
+function sanitizeLogoUrl(value) {
+  if (typeof value !== 'string') return '';
+  const v = value.trim();
+  if (!v || v.length > 2048) return '';
+  try {
+    return new URL(v).protocol === 'https:' ? v : '';
+  } catch {
+    return '';
+  }
+}
+
 /** bwip-js wants hex colors without a leading '#'; accepts RRGGBB or AARRGGBB. */
 function hexNoHash(c, fallback) {
   const v = typeof c === 'string' ? c.trim().replace(/^#/, '') : '';
@@ -276,10 +293,7 @@ export function sanitizeStyleConfig(input) {
     bgColor: sanitizeColor(input.bgColor) || DEFAULT_STYLE.bgColor,
     bgTransparent: Boolean(input.bgTransparent),
     bgGradient: sanitizeGradient(input.bgGradient),
-    logoUrl:
-      typeof input.logoUrl === 'string' && input.logoUrl.length <= 2048
-        ? input.logoUrl.trim()
-        : '',
+    logoUrl: sanitizeLogoUrl(input.logoUrl),
     logoSize: clampNumber(input.logoSize, 0.1, 0.6, DEFAULT_STYLE.logoSize),
     hideBgDots: input.hideBgDots === undefined ? DEFAULT_STYLE.hideBgDots : Boolean(input.hideBgDots),
     logoMargin: clampNumber(input.logoMargin, 0, 40, DEFAULT_STYLE.logoMargin),

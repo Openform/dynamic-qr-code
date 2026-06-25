@@ -6,6 +6,7 @@ import {
   evaluateContrast,
   effectiveErrorCorrectionLevel,
   buildQRStylingOptions,
+  sanitizeStyleConfig,
   DEFAULT_STYLE,
   MIN_SCANNABLE_CONTRAST,
   GOOD_CONTRAST,
@@ -177,5 +178,24 @@ describe('effectiveErrorCorrectionLevel', () => {
       { data: 'https://example.com' }
     );
     expect(withLogo.qrOptions.errorCorrectionLevel).toBe('H');
+  });
+});
+
+describe('sanitizeStyleConfig logoUrl', () => {
+  it('keeps an absolute https logo URL', () => {
+    const out = sanitizeStyleConfig({ logoUrl: 'https://cdn.example.com/logo.png' });
+    expect(out.logoUrl).toBe('https://cdn.example.com/logo.png');
+  });
+
+  it('drops http and other schemes (SSRF / mixed-content hardening)', () => {
+    expect(sanitizeStyleConfig({ logoUrl: 'http://example.com/logo.png' }).logoUrl).toBe('');
+    expect(sanitizeStyleConfig({ logoUrl: 'file:///etc/passwd' }).logoUrl).toBe('');
+    expect(sanitizeStyleConfig({ logoUrl: 'data:image/png;base64,AAAA' }).logoUrl).toBe('');
+    expect(sanitizeStyleConfig({ logoUrl: 'not a url' }).logoUrl).toBe('');
+  });
+
+  it('drops non-string and over-long values', () => {
+    expect(sanitizeStyleConfig({ logoUrl: 12345 }).logoUrl).toBe('');
+    expect(sanitizeStyleConfig({ logoUrl: 'https://x/' + 'a'.repeat(2100) }).logoUrl).toBe('');
   });
 });

@@ -3,6 +3,29 @@ import http from 'http';
 import https from 'https';
 import dns from 'dns';
 import ipaddr from 'ipaddr.js';
+import { rateLimit, getClientIp } from '@/lib/rateLimit';
+
+// This endpoint is public (no auth), so it's throttled per IP to stop it being
+// abused as an open relay. The limit is generous: a dashboard with many logo'd
+// codes fetches one image each on first load (then the browser caches them).
+const IP_LIMIT = { limit: 120, windowMs: 60_000 };
+
+// Only raster images are served. SVG is deliberately excluded: it can carry
+// script and, served from our own origin, would execute if opened directly.
+const ALLOWED_IMAGE_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/gif',
+  'image/webp',
+  'image/avif',
+  'image/bmp',
+  'image/x-icon',
+  'image/vnd.microsoft.icon',
+]);
+
+// Cap the proxied body so a huge/slow remote can't exhaust memory on a small host.
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
 
 // Check if an IP address string is an internal/private IP
 const isInternalIpAddress = (ip) => {
@@ -17,6 +40,14 @@ const isInternalIpAddress = (ip) => {
 };
 
 export async function GET(request) {
+  const rl = rateLimit(`proxy-image:ip:${getClientIp(request)}`, IP_LIMIT);
+  if (!rl.ok) {
+    return new NextResponse('Too many requests', {
+      status: 429,
+      headers: { 'Retry-After': String(rl.retryAfterSeconds) },
+    });
+  }
+
   const { searchParams } = new URL(request.url);
   const url = searchParams.get('url');
 
@@ -101,13 +132,39 @@ export async function GET(request) {
             return reject(new Error(`FETCH_FAILED:${res.statusCode}`));
           }
 
-          const resContentType = res.headers['content-type'];
+          // Only proxy real images. Normalize "image/png; charset=..." to the
+          // bare type and reject anything not on the allowlist, so an attacker
+          // can't have arbitrary (e.g. text/html) content served from our origin.
+          const baseType = (res.headers['content-type'] || '')
+            .split(';')[0]
+            .trim()
+            .toLowerCase();
+          if (!ALLOWED_IMAGE_TYPES.has(baseType)) {
+            res.destroy();
+            return reject(new Error('UNSUPPORTED_TYPE'));
+          }
+
+          // Fast-fail on an oversized declared length before downloading anything.
+          const declaredLength = Number(res.headers['content-length']);
+          if (Number.isFinite(declaredLength) && declaredLength > MAX_IMAGE_BYTES) {
+            res.destroy();
+            return reject(new Error('TOO_LARGE'));
+          }
+
+          let total = 0;
           const chunks = [];
-          res.on('data', (chunk) => chunks.push(chunk));
+          res.on('data', (chunk) => {
+            total += chunk.length;
+            if (total > MAX_IMAGE_BYTES) {
+              res.destroy();
+              return reject(new Error('TOO_LARGE'));
+            }
+            chunks.push(chunk);
+          });
           res.on('end', () => {
             resolve({
               status: res.statusCode,
-              contentType: resContentType,
+              contentType: baseType,
               buffer: Buffer.concat(chunks),
             });
           });
@@ -124,13 +181,26 @@ export async function GET(request) {
 
     return new NextResponse(buffer, {
       headers: {
+        // `contentType` is already validated against the image allowlist above.
         'Content-Type': contentType || 'image/png',
         'Cache-Control': 'public, max-age=86400',
+        // Defense in depth: never let the browser sniff this into something
+        // executable, force it to be treated as a standalone download/inline
+        // resource, and sandbox it so any direct navigation can't run script.
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Disposition': 'inline',
+        'Content-Security-Policy': "default-src 'none'; sandbox",
       },
     });
   } catch (error) {
     if (error.message === 'REDIRECT') {
       return new NextResponse('Redirects are not allowed', { status: 400 });
+    }
+    if (error.message === 'UNSUPPORTED_TYPE') {
+      return new NextResponse('Unsupported image type', { status: 415 });
+    }
+    if (error.message === 'TOO_LARGE') {
+      return new NextResponse('Image is too large', { status: 413 });
     }
     if (error.message.startsWith('FETCH_FAILED:')) {
       const status = parseInt(error.message.split(':')[1], 10);

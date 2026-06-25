@@ -7,10 +7,24 @@
  */
 
 import { hashPassword, setAuthCookie, verifyInviteCode } from '@/lib/auth';
+import { rateLimit, getClientIp } from '@/lib/rateLimit';
 const { getUserByEmail, createUser } = require('@/lib/db');
+
+// Throttle per IP so the shared invite code can't be brute-forced. Every attempt
+// counts (not just failures), since a flood of guesses is the thing to stop.
+const IP_LIMIT = { limit: 10, windowMs: 15 * 60_000 };
 
 export async function POST(request) {
   try {
+    // ── Rate-limit gate ─────────────────────────
+    const ipState = rateLimit(`register:ip:${getClientIp(request)}`, IP_LIMIT);
+    if (!ipState.ok) {
+      return Response.json(
+        { error: 'Too many attempts. Please wait a few minutes and try again.' },
+        { status: 429, headers: { 'Retry-After': String(ipState.retryAfterSeconds) } }
+      );
+    }
+
     const body = await request.json();
     const { email, password, name, inviteCode } = body;
 

@@ -4,15 +4,38 @@ import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import Avatar from "../components/Avatar"
 
+import { Style, avatar } from "@dicebear/core"
+import lorelei from "@dicebear/styles/lorelei.json" with { type: "json" }
+
 // Preset avatars served as static SVGs from /public/avatars.
-const PRESET_AVATARS = [
-  "/avatars/aurora.svg",
-  "/avatars/ocean.svg",
-  "/avatars/sunset.svg",
-  "/avatars/forest.svg",
-  "/avatars/ember.svg",
-  "/avatars/grape.svg"
+// Pick any seeds (names) you like!
+const seeds = [
+  "Felix",
+  "Aneka",
+  "Jude",
+  "Miya",
+  "Milo",
+  "Luna",
+  "Sophie",
+  "mqq401q4",
+  "rlnap45o"
 ]
+
+const PRESET_AVATARS = seeds.map((seed) => ({
+  id: seed,
+  name: seed,
+  // Change "notionists" to whatever DiceBear style you prefer (e.g., "avataaars", "bottts")
+  url: `https://api.dicebear.com/10.x/lorelei/svg?seed=${seed}`
+}))
+
+// const PRESET_AVATARS = [
+//   "/avatars/avatar1.jpg",
+//   "/avatars/ocean.svg",
+//   "/avatars/sunset.svg",
+//   "/avatars/forest.svg",
+//   "/avatars/ember.svg",
+//   "/avatars/grape.svg"
+// ]
 
 // Uploaded images are downscaled to this square size before being stored as a
 // data URL, keeping the payload small (must stay under the server's cap).
@@ -224,203 +247,244 @@ export default function SettingsPage() {
           Manage your profile picture, display name, and password.
         </p>
 
-        {/* ---- Profile card ---- */}
-        <section
-          className="glass-card-static animate-fadeIn"
-          style={styles.card}
-        >
-          <h2 style={styles.cardTitle}>Profile</h2>
-          <form onSubmit={handleSaveProfile}>
-            <Message msg={profileMsg} />
+        <div style={{ display: "flex", gap: "24px" }}>
+          {/* ---- Profile card ---- */}
+          <section
+            className="glass-card-static animate-fadeIn"
+            style={styles.card}
+          >
+            <h2 style={styles.cardTitle}>Profile</h2>
+            <form onSubmit={handleSaveProfile}>
+              <Message msg={profileMsg} />
 
-            {/* Avatar preview + upload */}
-            <div style={styles.avatarRow}>
-              <Avatar src={avatar} name={name} size={96} />
-              <div style={{ flex: 1, minWidth: "200px" }}>
-                <p style={styles.help}>
-                  Pick a preset below or upload your own. Square images look
-                  best.
-                </p>
-                <div style={styles.avatarActions}>
-                  <button
-                    type="button"
-                    id="upload-avatar-btn"
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => fileRef.current?.click()}
-                  >
-                    Upload image
-                  </button>
-                  {avatar && (
+              {/* Avatar preview + upload */}
+              <div style={styles.avatarRow}>
+                <Avatar src={avatar} name={name} size={96} />
+                <div style={{ flex: 1, minWidth: "200px" }}>
+                  <p style={styles.help}>
+                    Pick a preset below or upload your own. Square images look
+                    best.
+                  </p>
+                  <div style={styles.avatarActions}>
                     <button
                       type="button"
-                      id="remove-avatar-btn"
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => setAvatar(null)}
+                      id="upload-avatar-btn"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => fileRef.current?.click()}
                     >
-                      Remove
+                      Upload image
                     </button>
-                  )}
+                    {avatar && (
+                      <button
+                        type="button"
+                        id="remove-avatar-btn"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => setAvatar(null)}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFile}
+                    style={{ display: "none" }}
+                  />
                 </div>
+              </div>
+
+              {/* Preset grid */}
+              <p className="input-label" style={{ marginTop: "24px" }}>
+                Preset avatars
+              </p>
+              <div style={styles.presetGrid}>
+                {PRESET_AVATARS.map((preset) => {
+                  // Check if this preset URL matches the currently selected avatar
+                  const isSelected = avatar === preset.url
+
+                  return (
+                    <button
+                      type="button"
+                      key={preset.id}
+                      onClick={() => setAvatar(preset.url)}
+                      aria-label={`Select ${preset.name} avatar`}
+                      aria-pressed={isSelected}
+                      style={{
+                        ...styles.presetBtn,
+                        ...(isSelected ? styles.presetSelected : {})
+                      }}
+                    >
+                      {/* Pass the clean API URL directly to your UI component */}
+                      <Avatar src={preset.url} name="" size={56} />
+                    </button>
+                  )
+                })}
+              </div>
+              {/* <div style={styles.presetGrid}>
+                {PRESET_AVATARS.map((preset) => {
+                  const selected = avatar === preset
+                  return (
+                    <button
+                      type="button"
+                      key={preset}
+                      onClick={() => setAvatar(preset)}
+                      aria-label={`Select ${preset.split("/").pop().replace(".svg", "")} avatar`}
+                      aria-pressed={selected}
+                      style={{
+                        ...styles.presetBtn,
+                        ...(selected ? styles.presetSelected : {})
+                      }}
+                    >
+                      <Avatar src={preset} name="" size={56} />
+                    </button>
+                  )
+                })}
+              </div> */}
+
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "24px",
+                  flexWrap: "wrap",
+                  marginTop: "28px"
+                }}
+              >
+                {/* Display name */}
+                <div
+                  className="input-group"
+                  style={{ width: "calc(50% - 12px)" }}
+                >
+                  <label htmlFor="profile-name" className="input-label">
+                    Display Name
+                  </label>
+                  <input
+                    id="profile-name"
+                    type="text"
+                    className="input-field"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                    maxLength={255}
+                    autoComplete="name"
+                  />
+                </div>
+
+                {/* Email (read-only) */}
+                <div
+                  className="input-group"
+                  style={{ width: "calc(50% - 12px)" }}
+                >
+                  <label htmlFor="profile-email" className="input-label">
+                    Email
+                  </label>
+                  <input
+                    id="profile-email"
+                    type="email"
+                    className="input-field"
+                    value={user?.email || ""}
+                    disabled
+                    style={{ opacity: 0.6, cursor: "not-allowed" }}
+                  />
+                </div>
+              </div>
+
+              <div style={styles.cardFooter}>
+                <button
+                  id="save-profile-btn"
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={profileSaving}
+                >
+                  {profileSaving ? (
+                    <>
+                      <span className="spinner" /> Saving…
+                    </>
+                  ) : (
+                    "Save Profile"
+                  )}
+                </button>
+              </div>
+            </form>
+          </section>
+
+          {/* ---- Password card ---- */}
+          <section
+            className="glass-card-static animate-fadeIn"
+            style={styles.card2}
+          >
+            <h2 style={styles.cardTitle}>Change Password</h2>
+            <form onSubmit={handleSavePassword}>
+              <Message msg={pwMsg} />
+
+              <div className="input-group">
+                <label htmlFor="current-password" className="input-label">
+                  Current Password
+                </label>
                 <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFile}
-                  style={{ display: "none" }}
+                  id="current-password"
+                  type="password"
+                  className="input-field"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
                 />
               </div>
-            </div>
 
-            {/* Preset grid */}
-            <p className="input-label" style={{ marginTop: "24px" }}>
-              Preset avatars
-            </p>
-            <div style={styles.presetGrid}>
-              {PRESET_AVATARS.map((preset) => {
-                const selected = avatar === preset
-                return (
-                  <button
-                    type="button"
-                    key={preset}
-                    onClick={() => setAvatar(preset)}
-                    aria-label={`Select ${preset.split("/").pop().replace(".svg", "")} avatar`}
-                    aria-pressed={selected}
-                    style={{
-                      ...styles.presetBtn,
-                      ...(selected ? styles.presetSelected : {})
-                    }}
-                  >
-                    <Avatar src={preset} name="" size={56} />
-                  </button>
-                )
-              })}
-            </div>
+              <div className="input-group">
+                <label htmlFor="new-password" className="input-label">
+                  New Password
+                </label>
+                <input
+                  id="new-password"
+                  type="password"
+                  className="input-field"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  autoComplete="new-password"
+                />
+              </div>
 
-            {/* Display name */}
-            <div className="input-group" style={{ marginTop: "28px" }}>
-              <label htmlFor="profile-name" className="input-label">
-                Display Name
-              </label>
-              <input
-                id="profile-name"
-                type="text"
-                className="input-field"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                maxLength={255}
-                autoComplete="name"
-              />
-            </div>
+              <div className="input-group">
+                <label htmlFor="confirm-password" className="input-label">
+                  Confirm New Password
+                </label>
+                <input
+                  id="confirm-password"
+                  type="password"
+                  className="input-field"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  autoComplete="new-password"
+                />
+              </div>
 
-            {/* Email (read-only) */}
-            <div className="input-group">
-              <label htmlFor="profile-email" className="input-label">
-                Email
-              </label>
-              <input
-                id="profile-email"
-                type="email"
-                className="input-field"
-                value={user?.email || ""}
-                disabled
-                style={{ opacity: 0.6, cursor: "not-allowed" }}
-              />
-            </div>
-
-            <div style={styles.cardFooter}>
-              <button
-                id="save-profile-btn"
-                type="submit"
-                className="btn btn-primary"
-                disabled={profileSaving}
-              >
-                {profileSaving ? (
-                  <>
-                    <span className="spinner" /> Saving…
-                  </>
-                ) : (
-                  "Save Profile"
-                )}
-              </button>
-            </div>
-          </form>
-        </section>
-
-        {/* ---- Password card ---- */}
-        <section
-          className="glass-card-static animate-fadeIn"
-          style={styles.card}
-        >
-          <h2 style={styles.cardTitle}>Change Password</h2>
-          <form onSubmit={handleSavePassword}>
-            <Message msg={pwMsg} />
-
-            <div className="input-group">
-              <label htmlFor="current-password" className="input-label">
-                Current Password
-              </label>
-              <input
-                id="current-password"
-                type="password"
-                className="input-field"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-              />
-            </div>
-
-            <div className="input-group">
-              <label htmlFor="new-password" className="input-label">
-                New Password
-              </label>
-              <input
-                id="new-password"
-                type="password"
-                className="input-field"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                required
-                minLength={6}
-                autoComplete="new-password"
-              />
-            </div>
-
-            <div className="input-group">
-              <label htmlFor="confirm-password" className="input-label">
-                Confirm New Password
-              </label>
-              <input
-                id="confirm-password"
-                type="password"
-                className="input-field"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                minLength={6}
-                autoComplete="new-password"
-              />
-            </div>
-
-            <div style={styles.cardFooter}>
-              <button
-                id="save-password-btn"
-                type="submit"
-                className="btn btn-primary"
-                disabled={pwSaving}
-              >
-                {pwSaving ? (
-                  <>
-                    <span className="spinner" /> Updating…
-                  </>
-                ) : (
-                  "Update Password"
-                )}
-              </button>
-            </div>
-          </form>
-        </section>
+              <div style={styles.cardFooter}>
+                <button
+                  id="save-password-btn"
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={pwSaving}
+                >
+                  {pwSaving ? (
+                    <>
+                      <span className="spinner" /> Updating…
+                    </>
+                  ) : (
+                    "Update Password"
+                  )}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
       </main>
     </div>
   )
@@ -455,7 +519,8 @@ const styles = {
     letterSpacing: "-0.02em"
   },
   main: {
-    maxWidth: "640px",
+    maxWidth: "1440px",
+    width: "100%",
     paddingTop: "32px",
     paddingBottom: "64px"
   },
@@ -471,7 +536,13 @@ const styles = {
   },
   card: {
     padding: "28px",
-    marginBottom: "24px"
+    marginBottom: "24px",
+    width: "60%"
+  },
+  card2: {
+    padding: "28px",
+    marginBottom: "24px",
+    width: "40%"
   },
   cardTitle: {
     fontSize: "1.15rem",

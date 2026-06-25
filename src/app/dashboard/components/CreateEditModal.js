@@ -12,7 +12,6 @@ import {
   CORNER_DOT_STYLES,
   ERROR_CORRECTION_LEVELS,
   QR_SHAPES,
-  normalizeDestinationUrl,
   isValidDestinationUrl,
   evaluateContrast
 } from "@/lib/qrStyle"
@@ -77,6 +76,23 @@ const CORNER_STYLE_LABELS = {
   "extra-rounded": "Extra Rounded"
 }
 
+// The URL fields render a fixed, greyed-out "https://" prefix, so the input
+// holds only the host/path. Strip a scheme off a full URL for display (e.g. a
+// stored URL in edit mode, or one a user pastes); also trims whitespace.
+function stripHttpsPrefix(url) {
+  return String(url || "")
+    .trim()
+    .replace(/^https?:\/\//i, "")
+}
+
+// Inverse of the above: build the full URL to store. Re-attaches "https://" to
+// the host/path the user typed. Empty input stays empty (some fields, like the
+// logo URL, are optional).
+function toHttpsUrl(value) {
+  const host = stripHttpsPrefix(value)
+  return host ? `https://${host}` : ""
+}
+
 function QRCodeForm({
   onClose,
   onSave,
@@ -88,7 +104,7 @@ function QRCodeForm({
 
   const [title, setTitle] = useState(qrcode?.title || "")
   const [destinationUrl, setDestinationUrl] = useState(
-    qrcode?.destinationUrl || ""
+    stripHttpsPrefix(qrcode?.destinationUrl)
   )
   // Select value is a string ("" = Default Collection). New codes default to
   // the collection currently being viewed on the dashboard.
@@ -118,8 +134,9 @@ function QRCodeForm({
     let text = "https://example.com"
     if (qrcode && typeof window !== "undefined") {
       text = `${window.location.origin}/r/${qrcode.shortId}`
-    } else if (destinationUrl) {
-      text = destinationUrl
+    } else {
+      const url = toHttpsUrl(destinationUrl)
+      if (url) text = url
     }
 
     if (style.codeType === "qr") {
@@ -181,24 +198,22 @@ function QRCodeForm({
   const contrast = evaluateContrast(style)
   const blockSave = !isEdit && !contrast.scannable
 
-  // Prepend https:// when the user omits the scheme, so the field shows the
-  // URL we'll actually save (and passes the native url-input validation).
+  // The field shows a fixed "https://" prefix, so strip a scheme the user may
+  // have pasted to keep the visible value clean (no "https://https://…").
   function handleUrlBlur() {
-    const normalized = normalizeDestinationUrl(destinationUrl)
-    if (normalized !== destinationUrl) setDestinationUrl(normalized)
+    const cleaned = stripHttpsPrefix(destinationUrl)
+    if (cleaned !== destinationUrl) setDestinationUrl(cleaned)
     if (urlError) setUrlError("")
   }
 
   async function handleSubmit(e) {
     e.preventDefault()
 
-    // Autofill https:// and reject anything that isn't https (e.g. http://).
-    const normalized = normalizeDestinationUrl(destinationUrl)
-    if (normalized !== destinationUrl) setDestinationUrl(normalized)
-    if (!isValidDestinationUrl(normalized)) {
-      setUrlError(
-        "Enter a valid https:// URL. Insecure http:// links aren’t allowed."
-      )
+    // The "https://" scheme is shown as a fixed prefix on the field, so the
+    // value holds just the host/path — re-attach it to build the saved URL.
+    const fullUrl = toHttpsUrl(destinationUrl)
+    if (!isValidDestinationUrl(fullUrl)) {
+      setUrlError("Enter a valid URL.")
       return
     }
     setUrlError("")
@@ -214,7 +229,7 @@ function QRCodeForm({
       // style fields on edit.
       const payload = {
         title,
-        destinationUrl: normalized,
+        destinationUrl: fullUrl,
         styleConfig: style,
         collectionId: collectionId === "" ? null : Number(collectionId)
       }
@@ -507,6 +522,40 @@ function ContentTab({
         <label htmlFor="qr-destination-url" className="input-label">
           Destination URL
         </label>
+
+        {/* Fixed "https://" prefix sits inside the field; the input holds
+            only the host/path. */}
+        <div className="input-wrapper">
+          <span className="prefix">https://</span>
+          <input
+            id="qr-destination-url"
+            type="text" /* text, not url: the value omits the scheme */
+            className="input-field"
+            placeholder="qrflow.co.za"
+            value={destinationUrl}
+            onChange={(e) => setDestinationUrl(e.target.value)}
+            onBlur={onUrlBlur}
+            aria-invalid={urlError ? true : undefined}
+            required
+          />
+        </div>
+
+        {urlError ? (
+          <p style={{ ...styles.hint, color: "var(--danger, #e5484d)" }}>
+            {urlError}
+          </p>
+        ) : (
+          <p style={styles.hint}>Insecure http:// links are not allowed.</p>
+        )}
+      </div>
+
+      {/* <div
+        className="input-group"
+        style={{ marginBottom: showLogo ? undefined : 0 }}
+      >
+        <label htmlFor="qr-destination-url" className="input-label">
+          Destination URL
+        </label>
         <input
           id="qr-destination-url"
           type="url"
@@ -528,21 +577,24 @@ function ContentTab({
             aren’t allowed.
           </p>
         )}
-      </div>
+      </div> */}
 
       {showLogo && (
         <div className="input-group" style={{ marginBottom: 0 }}>
           <label htmlFor="qr-logo-url" className="input-label">
             Logo URL (optional)
           </label>
-          <input
-            id="qr-logo-url"
-            type="url"
-            className="input-field"
-            placeholder="https://example.com/logo.png"
-            value={logoUrl}
-            onChange={(e) => setLogoUrl(e.target.value)}
-          />
+          <div className="input-wrapper">
+            <span className="prefix">https://</span>
+            <input
+              id="qr-logo-url"
+              type="text" /* text, not url: the value omits the scheme */
+              className="input-field"
+              placeholder="example.com/logo.png"
+              value={stripHttpsPrefix(logoUrl)}
+              onChange={(e) => setLogoUrl(toHttpsUrl(e.target.value))}
+            />
+          </div>
           <p style={styles.hint}>
             Fine-tune logo size and spacing in the Logo tab.
           </p>
