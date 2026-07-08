@@ -721,7 +721,10 @@ select {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 330px;
+}
+
+a.truncate {
+  max-width: 330px !important;
 }
 
 /* ---- Responsive Container ---- */
