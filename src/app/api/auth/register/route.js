@@ -4,10 +4,15 @@
  * Create a new user account. Registration is invite-only — the caller must
  * supply the shared invite code (SIGNUP_INVITE_CODE).
  * Body: { email, password, name, inviteCode }
+ *
+ * Accounts created here always start on the default (Starter) package. Admins
+ * create client accounts on other packages from the admin dashboard.
  */
 
 import { hashPassword, setAuthCookie, verifyInviteCode } from '@/lib/auth';
 import { rateLimit, getClientIp } from '@/lib/rateLimit';
+import { validateNewAccount } from '@/lib/accounts';
+import { DEFAULT_PACKAGE } from '@/lib/packages';
 const { getUserByEmail, createUser } = require('@/lib/db');
 
 // Throttle per IP so the shared invite code can't be brute-forced. Every attempt
@@ -26,7 +31,7 @@ export async function POST(request) {
     }
 
     const body = await request.json();
-    const { email, password, name, inviteCode } = body;
+    const { inviteCode } = body;
 
     // ── Invite-only gate ────────────────────────
     // The site is restricted to our team for now: creating an account requires
@@ -45,26 +50,11 @@ export async function POST(request) {
     }
 
     // ── Validation ──────────────────────────────
-    if (!email || !password || !name) {
-      return Response.json(
-        { error: 'Email, password, and name are required' },
-        { status: 400 }
-      );
+    const fields = validateNewAccount(body);
+    if (fields.error) {
+      return Response.json({ error: fields.error }, { status: 400 });
     }
-
-    if (typeof email !== 'string' || !email.includes('@')) {
-      return Response.json(
-        { error: 'Invalid email address' },
-        { status: 400 }
-      );
-    }
-
-    if (password.length < 6) {
-      return Response.json(
-        { error: 'Password must be at least 6 characters' },
-        { status: 400 }
-      );
-    }
+    const { email, password, name } = fields;
 
     // ── Check for existing user ─────────────────
     const existing = await getUserByEmail(email);
@@ -77,7 +67,7 @@ export async function POST(request) {
 
     // ── Create user ─────────────────────────────
     const passwordHash = await hashPassword(password);
-    const user = await createUser(email, passwordHash, name);
+    const user = await createUser(email, passwordHash, name, DEFAULT_PACKAGE);
 
     // ── Set auth cookie ─────────────────────────
     await setAuthCookie(user.id);

@@ -56,6 +56,7 @@ async function initSchema() {
       password_hash VARCHAR(255) NOT NULL,
       name VARCHAR(255) NOT NULL,
       avatar MEDIUMTEXT NULL,
+      package VARCHAR(32) NOT NULL DEFAULT 'starter',
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
@@ -159,6 +160,18 @@ async function migrateUserColumns() {
   if (!columns.has('avatar')) {
     await pool.query('ALTER TABLE users ADD COLUMN avatar MEDIUMTEXT NULL');
   }
+
+  // Packages limit how many QR codes an account can create. Accounts that
+  // existed before packages were introduced are moved to Enterprise (unlimited)
+  // so none of them is suddenly over a limit. Adding the column with an
+  // 'enterprise' default fills every existing row in the same statement; the
+  // default is then switched to 'starter' for accounts created from now on.
+  if (!columns.has('package')) {
+    await pool.query(
+      "ALTER TABLE users ADD COLUMN package VARCHAR(32) NOT NULL DEFAULT 'enterprise'"
+    );
+    await pool.query("ALTER TABLE users ALTER COLUMN package SET DEFAULT 'starter'");
+  }
 }
 
 // Ensure the schema is set up exactly once. The shared promise means concurrent
@@ -213,14 +226,77 @@ async function getUserById(id) {
   return rows[0] || null;
 }
 
-/** Create a new user and return the created record. */
-async function createUser(email, passwordHash, name) {
+/**
+ * Create a new user and return the created record. `packageId` must already be
+ * validated by the caller (see lib/packages.js).
+ */
+async function createUser(email, passwordHash, name, packageId = 'starter') {
   await ensureSchema();
   const [result] = await pool.execute(
-    'INSERT INTO users (email, password_hash, name) VALUES (:email, :passwordHash, :name)',
-    { email, passwordHash, name }
+    'INSERT INTO users (email, password_hash, name, package) VALUES (:email, :passwordHash, :name, :packageId)',
+    { email, passwordHash, name, packageId }
   );
   return getUserById(result.insertId);
+}
+
+/** Change a user's package. Returns the updated record, or null if no such user. */
+async function updateUserPackage(userId, packageId) {
+  await ensureSchema();
+  await pool.execute(
+    'UPDATE users SET package = :packageId WHERE id = :userId',
+    { userId, packageId }
+  );
+  // Re-read rather than trusting affectedRows, which is 0 when the package
+  // didn't actually change.
+  return getUserById(userId);
+}
+
+// Account summary used by the admin dashboard: profile, package and QR code
+// usage. Uploaded avatar images (data URLs) are left out to keep the response
+// small; preset avatars are short URLs and are included.
+const ACCOUNT_SUMMARY_SQL = `
+  SELECT
+    u.id,
+    u.name,
+    u.email,
+    CASE WHEN u.avatar LIKE 'data:%' THEN NULL ELSE u.avatar END AS avatar,
+    u.package,
+    u.created_at AS createdAt,
+    COALESCE(s.codeCount, 0) AS codeCount,
+    COALESCE(s.scanCount, 0) AS scanCount
+  FROM users u
+  LEFT JOIN (
+    SELECT user_id, COUNT(*) AS codeCount, SUM(scan_count) AS scanCount
+    FROM qrcodes
+    GROUP BY user_id
+  ) s ON s.user_id = u.id`;
+
+function toAccountSummary(row) {
+  // COUNT/SUM come back as strings (BIGINT/DECIMAL) — coerce to numbers.
+  return {
+    ...row,
+    codeCount: Number(row.codeCount) || 0,
+    scanCount: Number(row.scanCount) || 0,
+  };
+}
+
+/** List every account with its package and usage, newest first. */
+async function getAllAccounts() {
+  await ensureSchema();
+  const [rows] = await pool.query(
+    `${ACCOUNT_SUMMARY_SQL} ORDER BY u.created_at DESC, u.id DESC`
+  );
+  return rows.map(toAccountSummary);
+}
+
+/** One account's package and usage summary, or null if not found. */
+async function getAccountById(id) {
+  await ensureSchema();
+  const [rows] = await pool.execute(
+    `${ACCOUNT_SUMMARY_SQL} WHERE u.id = :id LIMIT 1`,
+    { id }
+  );
+  return rows[0] ? toAccountSummary(rows[0]) : null;
 }
 
 /** Update a user's display name and avatar. Returns the updated record. */
@@ -295,30 +371,79 @@ async function getQRCodeByShortId(shortId) {
   return rows[0] || null;
 }
 
-/** Create a new QR code record. `styleConfig` (when provided) is a plain object stored as JSON. */
-async function createQRCode({ shortId, userId, collectionId, title, destinationUrl, foregroundColor, backgroundColor, logoUrl, dotStyle, cornerSquareStyle, cornerDotStyle, styleConfig }) {
+/**
+ * Create a new QR code record, unless the owner's package limit is reached.
+ * `styleConfig` (when provided) is a plain object stored as JSON.
+ *
+ * `getLimit(packageId)` returns the package's code limit (null = unlimited);
+ * it's passed in so this module stays free of package rules.
+ *
+ * The owner's row is locked while counting, so two simultaneous requests
+ * can't both slip in under the limit.
+ *
+ * Returns `{ ok: true, qrcode }`, or `{ ok: false, reason: 'limit', limit }`
+ * when the limit is reached, or `{ ok: false, reason: 'no_user' }`.
+ */
+async function createQRCodeWithinLimit(
+  { shortId, userId, collectionId, title, destinationUrl, foregroundColor, backgroundColor, logoUrl, dotStyle, cornerSquareStyle, cornerDotStyle, styleConfig },
+  getLimit
+) {
   await ensureSchema();
-  const [result] = await pool.execute(
-    `INSERT INTO qrcodes
-       (short_id, user_id, collection_id, title, destination_url, foreground_color, background_color, logo_url, dot_style, corner_square_style, corner_dot_style, style_config)
-     VALUES
-       (:shortId, :userId, :collectionId, :title, :destinationUrl, :foregroundColor, :backgroundColor, :logoUrl, :dotStyle, :cornerSquareStyle, :cornerDotStyle, :styleConfig)`,
-    {
-      shortId,
-      userId,
-      collectionId: collectionId ?? null,
-      title,
-      destinationUrl,
-      foregroundColor: foregroundColor || '#000000',
-      backgroundColor: backgroundColor || '#ffffff',
-      logoUrl: logoUrl || null,
-      dotStyle: dotStyle || 'square',
-      cornerSquareStyle: cornerSquareStyle || 'square',
-      cornerDotStyle: cornerDotStyle || 'square',
-      styleConfig: styleConfig != null ? JSON.stringify(styleConfig) : null,
+  const conn = await pool.getConnection();
+  let insertId;
+  try {
+    await conn.beginTransaction();
+
+    const [users] = await conn.execute(
+      'SELECT package FROM users WHERE id = :userId FOR UPDATE',
+      { userId }
+    );
+    if (!users[0]) {
+      await conn.rollback();
+      return { ok: false, reason: 'no_user' };
     }
-  );
-  return getQRCodeById(result.insertId, userId);
+
+    const limit = getLimit(users[0].package);
+    if (limit !== null) {
+      const [counts] = await conn.execute(
+        'SELECT COUNT(*) AS count FROM qrcodes WHERE user_id = :userId',
+        { userId }
+      );
+      if (Number(counts[0].count) >= limit) {
+        await conn.rollback();
+        return { ok: false, reason: 'limit', limit };
+      }
+    }
+
+    const [result] = await conn.execute(
+      `INSERT INTO qrcodes
+         (short_id, user_id, collection_id, title, destination_url, foreground_color, background_color, logo_url, dot_style, corner_square_style, corner_dot_style, style_config)
+       VALUES
+         (:shortId, :userId, :collectionId, :title, :destinationUrl, :foregroundColor, :backgroundColor, :logoUrl, :dotStyle, :cornerSquareStyle, :cornerDotStyle, :styleConfig)`,
+      {
+        shortId,
+        userId,
+        collectionId: collectionId ?? null,
+        title,
+        destinationUrl,
+        foregroundColor: foregroundColor || '#000000',
+        backgroundColor: backgroundColor || '#ffffff',
+        logoUrl: logoUrl || null,
+        dotStyle: dotStyle || 'square',
+        cornerSquareStyle: cornerSquareStyle || 'square',
+        cornerDotStyle: cornerDotStyle || 'square',
+        styleConfig: styleConfig != null ? JSON.stringify(styleConfig) : null,
+      }
+    );
+    await conn.commit();
+    insertId = result.insertId;
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+  return { ok: true, qrcode: await getQRCodeById(insertId, userId) };
 }
 
 /** Update an existing QR code. Returns the updated record or null if not found/not owned. */
@@ -504,12 +629,15 @@ module.exports = {
   getUserByEmail,
   getUserById,
   createUser,
+  updateUserPackage,
+  getAllAccounts,
+  getAccountById,
   updateUserProfile,
   updateUserPassword,
   getQRCodesByUserId,
   getQRCodeById,
   getQRCodeByShortId,
-  createQRCode,
+  createQRCodeWithinLimit,
   updateQRCode,
   deleteQRCode,
   incrementScanCount,

@@ -63,6 +63,20 @@ export function verifyInviteCode(provided) {
 }
 
 /**
+ * Is this email one of the admins listed in ADMIN_EMAILS (comma-separated,
+ * case-insensitive)? Admins can open the admin dashboard and manage every
+ * account's package. Fails closed: when ADMIN_EMAILS is unset, nobody is admin.
+ */
+export function isAdminEmail(email) {
+  if (typeof email !== 'string' || email.trim() === '') return false;
+  const admins = (process.env.ADMIN_EMAILS || '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  return admins.includes(email.trim().toLowerCase());
+}
+
+/**
  * Create a signed JWT for the given userId (HS256, 7-day expiry).
  */
 export async function createToken(userId) {

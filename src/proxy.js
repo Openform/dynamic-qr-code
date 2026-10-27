@@ -1,8 +1,11 @@
 /**
- * Proxy – protects /dashboard and /api/qrcodes routes.
+ * Proxy – protects /dashboard, /admin, /api/qrcodes and /api/admin routes.
  *
  * Public routes (/, /login, /register, /r/:shortId, /api/auth/*) are allowed
  * through without a valid token.
+ *
+ * This only checks that the visitor is signed in. Whether they're an admin is
+ * checked by the admin page and admin API routes themselves (lib/admin.js).
  */
 
 import { NextResponse } from 'next/server';
@@ -44,5 +47,5 @@ function denyAccess(request) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/api/qrcodes/:path*'],
+  matcher: ['/dashboard/:path*', '/api/qrcodes/:path*', '/admin/:path*', '/api/admin/:path*'],
 };

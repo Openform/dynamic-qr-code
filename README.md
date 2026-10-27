@@ -8,8 +8,32 @@ The app uses **MySQL/MariaDB** (via [`mysql2`](https://github.com/sidorares/node
 - `MYSQL_CONNECTION_LIMIT` — pool size (keep low on shared hosting; default 5)
 - `JWT_SECRET` — secret for signing auth tokens
 - `BASE_URL` — public URL used to build QR redirect links
+- `SIGNUP_INVITE_CODE` — shared code required on the public `/register` page
+- `ADMIN_EMAILS` — comma-separated emails of the accounts allowed into the admin dashboard
 
-Tables are created automatically on first run. You can also import [`schema.sql`](schema.sql) manually (e.g. via phpMyAdmin).
+Tables are created automatically on first run.
+
+## Packages & admin dashboard
+
+Every account is on a package that caps how many QR codes it can create
+(defined in [`src/lib/packages.js`](src/lib/packages.js)):
+
+| Package    | QR codes  |
+| ---------- | --------- |
+| Starter    | 5         |
+| Business   | 20        |
+| Extended   | 50        |
+| Enterprise | Unlimited |
+
+Admins (listed in `ADMIN_EMAILS`) see an **Admin** link on their dashboard that
+opens `/admin`. From there they can view every account and its usage, create
+client accounts on any package, and upgrade or downgrade a package. Accounts
+created through the public `/register` page start on Starter.
+
+Downgrading an account below its current number of codes keeps all its
+existing codes working; it just can't create new ones until it's back under the
+limit. When the `package` column is first added to an existing database, every
+account that already exists is set to Enterprise so no one loses access. You can also import [`schema.sql`](schema.sql) manually (e.g. via phpMyAdmin).
 
 ### Deploying on Hostinger (Business shared hosting)
 

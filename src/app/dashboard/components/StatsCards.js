@@ -1,8 +1,11 @@
 'use client';
 
-export default function StatsCards({ totalQRCodes = 0, totalScans = 0 }) {
+export default function StatsCards({ totalQRCodes = 0, totalScans = 0, plan = null }) {
   return (
     <div style={styles.row}>
+      {/* Package & usage */}
+      {plan && <PackageCard plan={plan} used={totalQRCodes} />}
+
       {/* Total QR Codes */}
       <div className="glass-card" style={styles.card}>
         <div style={styles.cardContent}>
@@ -32,7 +35,62 @@ export default function StatsCards({ totalQRCodes = 0, totalScans = 0 }) {
   );
 }
 
+/** The account's package, e.g. "Starter · 3 of 5 codes used", with a bar. */
+function PackageCard({ plan, used }) {
+  const unlimited = plan.limit === null || plan.limit === undefined;
+  const atLimit = !unlimited && used >= plan.limit;
+  const pct = unlimited ? 0 : Math.min(100, Math.round((used / plan.limit) * 100));
+
+  return (
+    <div className="glass-card" style={styles.card} id="package-card">
+      <div style={styles.cardContent}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={styles.cardLabel}>Package</p>
+          <p className="gradient-text" style={styles.cardValue}>
+            {plan.name}
+          </p>
+          <p style={{ ...styles.cardSub, color: atLimit ? 'var(--warning)' : styles.cardSub.color }}>
+            {unlimited
+              ? `${used} codes · unlimited`
+              : `${used} of ${plan.limit} codes used`}
+          </p>
+          {!unlimited && (
+            <div style={styles.bar} aria-hidden="true">
+              <div
+                style={{
+                  ...styles.barFill,
+                  width: `${pct}%`,
+                  background: atLimit ? 'var(--warning)' : 'var(--gradient-primary)',
+                }}
+              />
+            </div>
+          )}
+        </div>
+        <div style={styles.icon}>📦</div>
+      </div>
+    </div>
+  );
+}
+
 const styles = {
+  cardSub: {
+    fontSize: '0.82rem',
+    color: 'var(--text-secondary)',
+    marginTop: '4px',
+  },
+  bar: {
+    marginTop: '10px',
+    height: '4px',
+    width: '100%',
+    maxWidth: '180px',
+    borderRadius: '9999px',
+    background: 'rgba(255,255,255,0.08)',
+    overflow: 'hidden',
+  },
+  barFill: {
+    height: '100%',
+    borderRadius: '9999px',
+  },
   row: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
