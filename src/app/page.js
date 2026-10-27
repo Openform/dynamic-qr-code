@@ -41,7 +41,7 @@ export default function LandingPage() {
         <div className="container" style={styles.navInner}>
           <Link href="/" style={styles.logo}>
             <span className="gradient-text" style={styles.logoText}>
-              QR Flow
+              QR Go
             </span>
           </Link>
           <div style={styles.navLinks}>
@@ -183,7 +183,7 @@ export default function LandingPage() {
               Ready to Get <span className="gradient-text">Started</span>?
             </h2>
             <p style={{ ...styles.sectionSubtitle, marginBottom: "32px" }}>
-              Join thousands of businesses using QRFlow to create smarter QR
+              Join thousands of businesses using QR Go to create smarter QR
               codes.
             </p>
             <Link
@@ -205,10 +205,10 @@ export default function LandingPage() {
             className="gradient-text"
             style={{ fontWeight: 600, fontSize: "1.1rem" }}
           >
-            QRFlow
+            QR Go
           </span>
           <p style={{ color: "var(--text-tertiary)", fontSize: "0.85rem" }}>
-            © {new Date().getFullYear()} QRFlow. All rights reserved.
+            © {new Date().getFullYear()} QR Go. All rights reserved.
           </p>
         </div>
       </footer>

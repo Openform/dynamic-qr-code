@@ -531,7 +531,7 @@ function ContentTab({
             id="qr-destination-url"
             type="text" /* text, not url: the value omits the scheme */
             className="input-field"
-            placeholder="qrflow.co.za"
+            placeholder="qrgo.co.za"
             value={destinationUrl}
             onChange={(e) => setDestinationUrl(e.target.value)}
             onBlur={onUrlBlur}

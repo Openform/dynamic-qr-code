@@ -1,7 +1,7 @@
 import "./globals.css"
 
 export const metadata = {
-  title: "QR Flow — Dynamic QR Code Generator",
+  title: "QR Go — Dynamic QR Code Generator",
   description:
     "Create, manage, and track dynamic QR codes. Change destinations anytime without reprinting."
 }
