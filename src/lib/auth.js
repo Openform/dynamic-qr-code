@@ -2,24 +2,19 @@
  * Authentication helpers for the QR code generator.
  *
  * - Password hashing via bcryptjs
- * - JWT creation / verification via jose (HS256)
+ * - JWT creation / verification (lib/token.js)
  * - Session cookie management (Next.js 16 async cookies())
  */
 
 import bcrypt from 'bcryptjs';
-import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import { timingSafeEqual } from 'node:crypto';
+import { createToken, verifyToken } from './token';
+import { isActiveUser } from './db';
+
+export { getJwtSecret, createToken, verifyToken } from './token';
 
 const COOKIE_NAME = 'qr-auth-token';
-
-export function getJwtSecret() {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    throw new Error('JWT_SECRET environment variable is not set');
-  }
-  return new TextEncoder().encode(secret);
-}
 
 /**
  * Hash a plaintext password with bcrypt (salt rounds = 12).
@@ -77,31 +72,12 @@ export function isAdminEmail(email) {
 }
 
 /**
- * Create a signed JWT for the given userId (HS256, 7-day expiry).
- */
-export async function createToken(userId) {
-  return new SignJWT({ userId })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setIssuedAt()
-    .setExpirationTime('7d')
-    .sign(getJwtSecret());
-}
-
-/**
- * Verify and decode a JWT. Returns the payload or null on failure.
- */
-export async function verifyToken(token) {
-  try {
-    const { payload } = await jwtVerify(token, getJwtSecret());
-    return payload;
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Read the current session from the auth cookie.
  * Returns { userId } if authenticated, or null.
+ *
+ * The account is re-checked in the database on every call, so disabling or
+ * deleting an account signs it out straight away instead of when its 7-day
+ * token expires.
  */
 export async function getSession() {
   const cookieStore = await cookies();
@@ -110,6 +86,8 @@ export async function getSession() {
 
   const payload = await verifyToken(token);
   if (!payload?.userId) return null;
+
+  if (!(await isActiveUser(payload.userId))) return null;
 
   return { userId: payload.userId };
 }

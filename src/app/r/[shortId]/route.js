@@ -5,11 +5,19 @@
  * Looks up the QR code by shortId, increments the scan count,
  * and redirects (302) to the destination URL.
  *
+ * Codes that can't redirect send the visitor to /code-unavailable instead:
+ * paused (the owner's account is disabled), not found, or a lookup error.
+ * Paused scans aren't counted.
+ *
  * NOTE: In Next.js 16, `params` is a Promise and must be awaited.
  */
 
 import { NextResponse } from 'next/server';
 const { getQRCodeByShortId, incrementScanCount } = require('@/lib/db');
+
+function unavailable(request, reason) {
+  return NextResponse.redirect(new URL(`/code-unavailable?reason=${reason}`, request.url), 302);
+}
 
 export async function GET(request, { params }) {
   try {
@@ -17,8 +25,11 @@ export async function GET(request, { params }) {
 
     const qrcode = await getQRCodeByShortId(shortId);
     if (!qrcode) {
-      // QR code not found — redirect to home page
-      return NextResponse.redirect(new URL('/', request.url));
+      return unavailable(request, 'not-found');
+    }
+
+    if (qrcode.owner_disabled_at) {
+      return unavailable(request, 'inactive');
     }
 
     // Increment scan counter
@@ -33,6 +44,6 @@ export async function GET(request, { params }) {
     return NextResponse.redirect(new URL(destination), 302);
   } catch (error) {
     console.error('Redirect error:', error);
-    return NextResponse.redirect(new URL('/', request.url));
+    return unavailable(request, 'error');
   }
 }

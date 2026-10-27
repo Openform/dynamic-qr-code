@@ -31,6 +31,8 @@ export function toClientAccount(account) {
     email: account.email,
     avatar: account.avatar ?? null,
     package: account.package,
+    // When the account was disabled, or null while it's active.
+    disabledAt: account.disabledAt ?? null,
     codeCount: account.codeCount,
     scanCount: account.scanCount,
     createdAt: account.createdAt,

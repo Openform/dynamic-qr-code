@@ -4,7 +4,13 @@ import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import Avatar from "../../dashboard/components/Avatar"
 import CreateAccountModal from "./CreateAccountModal"
+import ConfirmActionModal from "./ConfirmActionModal"
 import { PACKAGES, getPackage, describeLimit } from "@/lib/packages"
+
+/** 1 → "1 QR code", 3 → "3 QR codes". */
+function codesLabel(count) {
+  return `${count} QR code${count === 1 ? "" : "s"}`
+}
 
 /** "2026-10-27 14:03:52" (DB string) → "27 Oct 2026". */
 function formatDate(value) {
@@ -110,6 +116,8 @@ export default function AdminDashboard({ currentAdminId }) {
   const [savingId, setSavingId] = useState(null)
   const [notice, setNotice] = useState(null)
   const [createOpen, setCreateOpen] = useState(false)
+  // { type: "disable" | "delete", account } while a confirmation is open.
+  const [pending, setPending] = useState(null)
 
   useEffect(() => {
     async function load() {
@@ -182,6 +190,76 @@ export default function AdminDashboard({ currentAdminId }) {
     }
   }
 
+  // ---- Disable / enable ----
+  async function setDisabled(account, disabled) {
+    const res = await fetch(`/api/admin/accounts/${account.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ disabled })
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(
+        data.error || `Could not ${disabled ? "disable" : "enable"} the account.`
+      )
+    }
+    setAccounts((prev) => prev.map((a) => (a.id === account.id ? data.account : a)))
+  }
+
+  // Called by the confirmation modal, which shows any error inline.
+  async function handleDisable(account) {
+    await setDisabled(account, true)
+    setPending(null)
+    setNotice({
+      type: "success",
+      text:
+        `Disabled ${account.name}. They've been signed out, and ` +
+        (account.codeCount > 0
+          ? `their ${codesLabel(account.codeCount)} now show an inactive page when scanned.`
+          : "can't sign in until you enable the account again.")
+    })
+  }
+
+  // Re-enabling only restores access, so it doesn't need a confirmation.
+  async function handleEnable(account) {
+    setSavingId(account.id)
+    setNotice(null)
+    try {
+      await setDisabled(account, false)
+      setNotice({
+        type: "success",
+        text:
+          `Enabled ${account.name}. They can sign in again` +
+          (account.codeCount > 0 ? ", and their QR codes are redirecting again." : ".")
+      })
+    } catch (err) {
+      setNotice({ type: "error", text: err.message })
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  // ---- Delete ----
+  // Called by the confirmation modal with the email the admin typed.
+  async function handleDelete(account, confirmEmail) {
+    const res = await fetch(`/api/admin/accounts/${account.id}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmEmail })
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.error || "Could not delete the account.")
+
+    setAccounts((prev) => prev.filter((a) => a.id !== account.id))
+    setPending(null)
+    setNotice({
+      type: "success",
+      text:
+        `Deleted ${account.name} (${account.email})` +
+        (data.deletedCodes > 0 ? ` and their ${codesLabel(data.deletedCodes)}.` : ".")
+    })
+  }
+
   // ---- Create account ----
   // Throws on failure so the modal can show the server's message inline.
   const handleCreate = useCallback(async (fields) => {
@@ -226,6 +304,7 @@ export default function AdminDashboard({ currentAdminId }) {
     ...p,
     count: accounts.filter((a) => getPackage(a.package).id === p.id).length
   })).filter((p) => p.count > 0)
+  const disabledCount = accounts.filter((a) => a.disabledAt).length
 
   if (loading) {
     return (
@@ -263,7 +342,8 @@ export default function AdminDashboard({ currentAdminId }) {
         <h1 style={styles.pageTitle}>Accounts</h1>
         <p style={styles.pageSubtitle}>
           Every QR Go account, its package and how many codes it&apos;s using.
-          Change a package to upgrade or downgrade a client.
+          Change a package to upgrade or downgrade a client, or disable an
+          account to pause its access and codes.
         </p>
 
         {loadError ? (
@@ -282,6 +362,11 @@ export default function AdminDashboard({ currentAdminId }) {
                 {packageBreakdown.length > 0 && (
                   <p style={styles.statSub}>
                     {packageBreakdown.map((p) => `${p.count} ${p.name}`).join(" · ")}
+                  </p>
+                )}
+                {disabledCount > 0 && (
+                  <p style={{ ...styles.statSub, color: "var(--error)" }}>
+                    {disabledCount} disabled
                   </p>
                 )}
               </div>
@@ -335,12 +420,15 @@ export default function AdminDashboard({ currentAdminId }) {
                       <th style={{ ...styles.th, width: "150px" }}>Codes used</th>
                       <th style={{ ...styles.th, width: "90px", textAlign: "right" }}>Scans</th>
                       <th style={{ ...styles.th, width: "120px" }}>Created</th>
+                      <th style={{ ...styles.th, width: "170px", textAlign: "right" }}>
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {visible.length === 0 ? (
                       <tr>
-                        <td colSpan={5} style={styles.emptyCell}>
+                        <td colSpan={6} style={styles.emptyCell}>
                           {query ? "No accounts match your search." : "No accounts yet."}
                         </td>
                       </tr>
@@ -359,10 +447,21 @@ export default function AdminDashboard({ currentAdminId }) {
                                   {account.isAdmin && account.id !== currentAdminId && (
                                     <span className="badge badge-purple">Admin</span>
                                   )}
+                                  {account.disabledAt && (
+                                    <span className="badge" style={styles.disabledBadge}>
+                                      Disabled
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="truncate" style={styles.accountEmail}>
                                   {account.email}
                                 </div>
+                                {account.disabledAt && (
+                                  <div style={styles.disabledNote}>
+                                    Disabled {formatDate(account.disabledAt)}
+                                    {account.codeCount > 0 && " · codes paused"}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </td>
@@ -394,6 +493,41 @@ export default function AdminDashboard({ currentAdminId }) {
                           <td style={{ ...styles.td, ...styles.muted, whiteSpace: "nowrap" }}>
                             {formatDate(account.createdAt)}
                           </td>
+                          <td style={{ ...styles.td, textAlign: "right" }}>
+                            {account.isAdmin || account.id === currentAdminId ? (
+                              <span style={styles.muted} title="Admin accounts can't be disabled or deleted">
+                                —
+                              </span>
+                            ) : account.disabledAt ? (
+                              <div style={styles.actions}>
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-sm"
+                                  disabled={savingId === account.id}
+                                  onClick={() => handleEnable(account)}
+                                >
+                                  {savingId === account.id ? <span className="spinner" /> : "Enable"}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-danger btn-sm"
+                                  disabled={savingId === account.id}
+                                  onClick={() => setPending({ type: "delete", account })}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                disabled={savingId === account.id}
+                                onClick={() => setPending({ type: "disable", account })}
+                              >
+                                Disable
+                              </button>
+                            )}
+                          </td>
                         </tr>
                       ))
                     )}
@@ -411,6 +545,59 @@ export default function AdminDashboard({ currentAdminId }) {
           onClose={() => setCreateOpen(false)}
           onSubmit={handleCreate}
         />
+      )}
+
+      {pending?.type === "disable" && (
+        <ConfirmActionModal
+          title={`Disable ${pending.account.name}?`}
+          confirmLabel="Disable account"
+          busyLabel="Disabling…"
+          danger
+          onConfirm={() => handleDisable(pending.account)}
+          onClose={() => setPending(null)}
+        >
+          <ul style={styles.consequences}>
+            <li>They&apos;ll be signed out straight away and won&apos;t be able to sign in.</li>
+            <li>
+              {pending.account.codeCount > 0
+                ? `Their ${codesLabel(pending.account.codeCount)} will stop redirecting. Anyone who scans one sees a page saying the code is inactive.`
+                : "They don't have any QR codes yet."}
+            </li>
+            <li>
+              Nothing is deleted. Enable the account again at any time to restore
+              everything.
+            </li>
+          </ul>
+        </ConfirmActionModal>
+      )}
+
+      {pending?.type === "delete" && (
+        <ConfirmActionModal
+          title={`Delete ${pending.account.name} permanently?`}
+          confirmLabel="Delete permanently"
+          busyLabel="Deleting…"
+          danger
+          requireText={pending.account.email}
+          onConfirm={(typed) => handleDelete(pending.account, typed)}
+          onClose={() => setPending(null)}
+        >
+          <ul style={styles.consequences}>
+            <li>
+              This removes the account
+              {pending.account.codeCount > 0
+                ? `, its ${codesLabel(pending.account.codeCount)} (${pending.account.scanCount} scans recorded)`
+                : ""}{" "}
+              and its collections.
+            </li>
+            {pending.account.codeCount > 0 && (
+              <li>Printed copies of their codes will show a &ldquo;QR code not found&rdquo; page.</li>
+            )}
+            <li style={{ color: "var(--error)" }}>
+              This can&apos;t be undone from the app. The only way back is restoring a
+              database backup.
+            </li>
+          </ul>
+        </ConfirmActionModal>
       )}
     </div>
   )
@@ -542,7 +729,7 @@ const styles = {
   },
   table: {
     width: "100%",
-    minWidth: "820px",
+    minWidth: "980px",
     borderCollapse: "collapse",
     fontSize: "0.92rem"
   },
@@ -620,5 +807,27 @@ const styles = {
     fontSize: "0.75rem",
     fontWeight: 600,
     marginTop: "4px"
+  },
+  disabledBadge: {
+    background: "rgba(239, 68, 68, 0.12)",
+    color: "var(--error)"
+  },
+  disabledNote: {
+    fontSize: "0.75rem",
+    color: "var(--error)",
+    marginTop: "2px",
+    whiteSpace: "nowrap"
+  },
+  actions: {
+    display: "inline-flex",
+    gap: "8px",
+    justifyContent: "flex-end"
+  },
+  consequences: {
+    paddingLeft: "20px",
+    listStyle: "disc",
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px"
   }
 }

@@ -57,6 +57,7 @@ async function initSchema() {
       name VARCHAR(255) NOT NULL,
       avatar MEDIUMTEXT NULL,
       package VARCHAR(32) NOT NULL DEFAULT 'starter',
+      disabled_at DATETIME NULL,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
@@ -172,6 +173,12 @@ async function migrateUserColumns() {
     );
     await pool.query("ALTER TABLE users ALTER COLUMN package SET DEFAULT 'starter'");
   }
+
+  // When an admin disabled the account; NULL means active. Existing accounts
+  // get NULL, so they all stay active.
+  if (!columns.has('disabled_at')) {
+    await pool.query('ALTER TABLE users ADD COLUMN disabled_at DATETIME NULL');
+  }
 }
 
 // Ensure the schema is set up exactly once. The shared promise means concurrent
@@ -251,6 +258,81 @@ async function updateUserPackage(userId, packageId) {
   return getUserById(userId);
 }
 
+/**
+ * Is this user allowed to use the app? False for disabled and deleted
+ * accounts. Checked on every signed-in request (see getSession), so it's a
+ * single primary-key lookup.
+ */
+async function isActiveUser(userId) {
+  await ensureSchema();
+  const [rows] = await pool.execute(
+    'SELECT disabled_at FROM users WHERE id = :userId LIMIT 1',
+    { userId }
+  );
+  return Boolean(rows[0]) && rows[0].disabled_at === null;
+}
+
+/**
+ * Disable or re-enable an account. A disabled account can't sign in and its QR
+ * codes show an "inactive" page instead of redirecting; nothing is deleted.
+ * Disabling an already-disabled account keeps its original disabled date.
+ * Returns the updated record, or null if no such user.
+ */
+async function setUserDisabled(userId, disabled) {
+  await ensureSchema();
+  if (disabled) {
+    await pool.execute(
+      'UPDATE users SET disabled_at = COALESCE(disabled_at, CURRENT_TIMESTAMP) WHERE id = :userId',
+      { userId }
+    );
+  } else {
+    await pool.execute('UPDATE users SET disabled_at = NULL WHERE id = :userId', { userId });
+  }
+  return getUserById(userId);
+}
+
+/**
+ * Permanently delete an account with all its QR codes and collections, in one
+ * transaction so it can't half-apply. Only a disabled account can be deleted:
+ * the row is locked first, so it can't be re-enabled mid-delete.
+ *
+ * Returns `{ ok: true, deletedCodes }`, or `{ ok: false, reason }` where
+ * reason is 'no_user' or 'not_disabled'.
+ */
+async function deleteAccount(userId) {
+  await ensureSchema();
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [users] = await conn.execute(
+      'SELECT disabled_at FROM users WHERE id = :userId FOR UPDATE',
+      { userId }
+    );
+    if (!users[0]) {
+      await conn.rollback();
+      return { ok: false, reason: 'no_user' };
+    }
+    if (users[0].disabled_at === null) {
+      await conn.rollback();
+      return { ok: false, reason: 'not_disabled' };
+    }
+
+    // Codes first: they reference both the user and the user's collections.
+    const [codes] = await conn.execute('DELETE FROM qrcodes WHERE user_id = :userId', { userId });
+    await conn.execute('DELETE FROM collections WHERE user_id = :userId', { userId });
+    await conn.execute('DELETE FROM users WHERE id = :userId', { userId });
+
+    await conn.commit();
+    return { ok: true, deletedCodes: codes.affectedRows };
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+}
+
 // Account summary used by the admin dashboard: profile, package and QR code
 // usage. Uploaded avatar images (data URLs) are left out to keep the response
 // small; preset avatars are short URLs and are included.
@@ -261,6 +343,7 @@ const ACCOUNT_SUMMARY_SQL = `
     u.email,
     CASE WHEN u.avatar LIKE 'data:%' THEN NULL ELSE u.avatar END AS avatar,
     u.package,
+    u.disabled_at AS disabledAt,
     u.created_at AS createdAt,
     COALESCE(s.codeCount, 0) AS codeCount,
     COALESCE(s.scanCount, 0) AS scanCount
@@ -361,11 +444,19 @@ async function getQRCodeById(id, userId) {
   return rows[0] || null;
 }
 
-/** Get a QR code by its short ID (used for public redirect lookup — no auth check). */
+/**
+ * Get a QR code by its short ID (used for public redirect lookup — no auth
+ * check). Includes `owner_disabled_at`, which is set when the owner's account
+ * is disabled and the code should show the inactive page instead.
+ */
 async function getQRCodeByShortId(shortId) {
   await ensureSchema();
   const [rows] = await pool.execute(
-    'SELECT * FROM qrcodes WHERE short_id = :shortId LIMIT 1',
+    `SELECT q.*, u.disabled_at AS owner_disabled_at
+     FROM qrcodes q
+     JOIN users u ON u.id = q.user_id
+     WHERE q.short_id = :shortId
+     LIMIT 1`,
     { shortId }
   );
   return rows[0] || null;
@@ -630,6 +721,9 @@ module.exports = {
   getUserById,
   createUser,
   updateUserPackage,
+  isActiveUser,
+  setUserDisabled,
+  deleteAccount,
   getAllAccounts,
   getAccountById,
   updateUserProfile,

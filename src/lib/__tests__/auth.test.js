@@ -4,7 +4,58 @@ vi.mock('next/headers', () => ({
   cookies: vi.fn(),
 }));
 
-import { verifyInviteCode, isAdminEmail } from '../auth';
+vi.mock('../db', () => ({
+  isActiveUser: vi.fn(),
+}));
+
+import { cookies } from 'next/headers';
+import { isActiveUser } from '../db';
+import { verifyInviteCode, isAdminEmail, getSession, createToken } from '../auth';
+
+describe('getSession', () => {
+  let originalSecret;
+
+  beforeEach(() => {
+    originalSecret = process.env.JWT_SECRET;
+    process.env.JWT_SECRET = 'test-secret-for-getSession';
+    vi.mocked(isActiveUser).mockReset();
+  });
+
+  afterEach(() => {
+    if (originalSecret === undefined) {
+      delete process.env.JWT_SECRET;
+    } else {
+      process.env.JWT_SECRET = originalSecret;
+    }
+  });
+
+  function useCookie(value) {
+    vi.mocked(cookies).mockResolvedValue({
+      get: () => (value === undefined ? undefined : { value }),
+    });
+  }
+
+  it('returns the user id for a valid token on an active account', async () => {
+    useCookie(await createToken(7));
+    vi.mocked(isActiveUser).mockResolvedValue(true);
+    expect(await getSession()).toEqual({ userId: 7 });
+    expect(isActiveUser).toHaveBeenCalledWith(7);
+  });
+
+  it('signs out a disabled or deleted account even with a valid token', async () => {
+    useCookie(await createToken(7));
+    vi.mocked(isActiveUser).mockResolvedValue(false);
+    expect(await getSession()).toBeNull();
+  });
+
+  it('returns null without a cookie or with a bad token, without touching the database', async () => {
+    useCookie(undefined);
+    expect(await getSession()).toBeNull();
+    useCookie('not-a-jwt');
+    expect(await getSession()).toBeNull();
+    expect(isActiveUser).not.toHaveBeenCalled();
+  });
+});
 
 describe('verifyInviteCode', () => {
   let originalCode;

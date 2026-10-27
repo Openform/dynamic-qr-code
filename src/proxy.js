@@ -4,13 +4,14 @@
  * Public routes (/, /login, /register, /r/:shortId, /api/auth/*) are allowed
  * through without a valid token.
  *
- * This only checks that the visitor is signed in. Whether they're an admin is
- * checked by the admin page and admin API routes themselves (lib/admin.js).
+ * This only checks that the visitor has a valid token. Whether their account is
+ * still active is checked by getSession() (lib/auth.js), and whether they're an
+ * admin by the admin page and admin API routes (lib/admin.js).
  */
 
 import { NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
-import { getJwtSecret } from './lib/auth.js';
+import { getJwtSecret } from './lib/token.js';
 
 const COOKIE_NAME = 'qr-auth-token';
 

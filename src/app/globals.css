@@ -320,6 +320,13 @@ select {
   box-shadow: none;
 }
 
+.btn-secondary:disabled,
+.btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 .btn-secondary {
   background: transparent;
   color: var(--text-primary);

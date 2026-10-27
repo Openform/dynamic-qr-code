@@ -35,6 +35,21 @@ existing codes working; it just can't create new ones until it's back under the
 limit. When the `package` column is first added to an existing database, every
 account that already exists is set to Enterprise so no one loses access. You can also import [`schema.sql`](schema.sql) manually (e.g. via phpMyAdmin).
 
+### Disabling and deleting accounts
+
+- **Disable** signs the account out straight away and blocks it from signing
+  in. Its QR codes stop redirecting: anyone who scans one sees a "This QR code
+  is inactive" page (`/code-unavailable`), and those scans aren't counted.
+  Nothing is deleted, and **Enable** restores everything.
+- **Delete** permanently removes the account with its QR codes and
+  collections. An account has to be disabled before it can be deleted, and the
+  admin must type the account's email to confirm. Deleted codes show a "QR code
+  not found" page. This can't be undone from the app, so keep database backups.
+- Admin accounts (those in `ADMIN_EMAILS`) can't be disabled or deleted.
+
+Disabling is stored in the `users.disabled_at` column (`NULL` = active), which
+is added automatically on first run. Existing accounts start as active.
+
 ### Deploying on Hostinger (Business shared hosting)
 
 1. **Databases → MySQL**: create a database and user, and assign the user to it.
