@@ -231,7 +231,7 @@ export default function SettingsPage() {
         <div className="container" style={styles.headerInner}>
           <Link href="/dashboard">
             <span className="gradient-text" style={styles.logo}>
-              QR Flow
+              QR Go
             </span>
           </Link>
           <Link href="/dashboard" className="btn btn-ghost btn-sm">

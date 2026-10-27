@@ -66,7 +66,7 @@ export default function RegisterPage() {
         <div style={styles.header}>
           <Link href="/">
             <span className="gradient-text" style={styles.logo}>
-              QR Flow
+              QR Go
             </span>
           </Link>
           <p style={styles.subtitle}>

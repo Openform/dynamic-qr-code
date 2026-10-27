@@ -273,7 +273,7 @@ export default function DashboardPage() {
           <div style={styles.headerLeft}>
             <Link href="/dashboard">
               <span className="gradient-text" style={styles.logo}>
-                QR Flow
+                QR Go
               </span>
             </Link>
           </div>
