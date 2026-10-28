@@ -82,17 +82,26 @@ chart and of each code's scan count.
 
 Locations come from a local copy of the free
 [DB-IP IP to City Lite](https://db-ip.com/db/lite.php) database, so no
-visitor IP is ever sent to a third party. Download it with:
+visitor IP is ever sent to a third party. The file is saved to
+`data/geoip/dbip-city-lite.mmdb` (~120 MB) and is not committed.
+
+**It's downloaded automatically on every build.** `npm run build` first runs
+a `prebuild` step that downloads the latest file if it's missing or more
+than 7 days old. That step never fails the build: if DB-IP can't be reached,
+it prints a warning and keeps the old file. If there's no file at all, scans
+are still recorded, with location "Unknown".
+
+DB-IP publishes a new file each month, so redeploying at least monthly keeps
+locations current. To update without a deploy (e.g. from a monthly
+**hPanel → Cron Jobs** entry, or over SSH), run this in the app's folder; the
+running app reloads the new file automatically:
 
 ```bash
 npm run geoip:update
 ```
 
-This saves `data/geoip/dbip-city-lite.mmdb` (~120 MB, not committed). DB-IP
-publishes a new file monthly; on Hostinger, add a monthly **hPanel → Cron Jobs**
-entry that runs `npm run geoip:update` in the app's folder. The running app
-reloads the file automatically. Without the file, scans are still recorded,
-with location "Unknown".
+Scans recorded while the file was missing stay "Unknown", because the IP
+address isn't kept to look up later.
 
 The data is licensed CC BY 4.0, which requires the "IP Geolocation by DB-IP"
 credit shown on the analytics page. Keep it if you change the page.
@@ -102,7 +111,7 @@ credit shown on the analytics page. Keep it if you change the page.
 1. **Databases → MySQL**: create a database and user, and assign the user to it.
 2. **Node.js app**: point it at this project and set the environment variables above (`MYSQL_HOST` is usually `localhost`).
 3. Build and start the app (`npm run build`, then `npm run start`). The schema is created on the first request, or import `schema.sql` beforehand.
-4. Run `npm run geoip:update` once, then schedule it monthly (see [Location data](#location-data-db-ip)).
+4. Nothing extra for scan locations: the build downloads the location database (see [Location data](#location-data-db-ip)). Check the build log for "Saved …/dbip-city-lite.mmdb" or "up to date".
 
 ## Getting Started
 
