@@ -8,14 +8,101 @@ The app uses **MySQL/MariaDB** (via [`mysql2`](https://github.com/sidorares/node
 - `MYSQL_CONNECTION_LIMIT` — pool size (keep low on shared hosting; default 5)
 - `JWT_SECRET` — secret for signing auth tokens
 - `BASE_URL` — public URL used to build QR redirect links
+- `SIGNUP_INVITE_CODE` — shared code required on the public `/register` page
+- `ADMIN_EMAILS` — comma-separated emails of the accounts allowed into the admin dashboard
+- `ANALYTICS_SECRET` — secret for the anonymous visitor IDs used to count unique scanners (falls back to `JWT_SECRET`)
+- `ANALYTICS_RETENTION_MONTHS` — how long detailed scan records are kept (default `24`; `0` keeps them forever)
 
-Tables are created automatically on first run. You can also import [`schema.sql`](schema.sql) manually (e.g. via phpMyAdmin).
+Tables are created automatically on first run.
+
+## Packages & admin dashboard
+
+Every account is on a package that caps how many QR codes it can create
+(defined in [`src/lib/packages.js`](src/lib/packages.js)):
+
+| Package    | QR codes  |
+| ---------- | --------- |
+| Starter    | 5         |
+| Business   | 20        |
+| Extended   | 50        |
+| Enterprise | Unlimited |
+
+Admins (listed in `ADMIN_EMAILS`) see an **Admin** link on their dashboard that
+opens `/admin`. From there they can view every account and its usage, create
+client accounts on any package, and upgrade or downgrade a package. Accounts
+created through the public `/register` page start on Starter.
+
+Downgrading an account below its current number of codes keeps all its
+existing codes working; it just can't create new ones until it's back under the
+limit. When the `package` column is first added to an existing database, every
+account that already exists is set to Enterprise so no one loses access. You can also import [`schema.sql`](schema.sql) manually (e.g. via phpMyAdmin).
+
+### Disabling and deleting accounts
+
+- **Disable** signs the account out straight away and blocks it from signing
+  in. Its QR codes stop redirecting: anyone who scans one sees a "This QR code
+  is inactive" page (`/code-unavailable`), and those scans aren't counted.
+  Nothing is deleted, and **Enable** restores everything.
+- **Delete** permanently removes the account with its QR codes and
+  collections. An account has to be disabled before it can be deleted, and the
+  admin must type the account's email to confirm. Deleted codes show a "QR code
+  not found" page. This can't be undone from the app, so keep database backups.
+- Admin accounts (those in `ADMIN_EMAILS`) can't be disabled or deleted.
+
+Disabling is stored in the `users.disabled_at` column (`NULL` = active), which
+is added automatically on first run. Existing accounts start as active.
+
+## Scan analytics
+
+Every scan of a code is recorded after the visitor has been redirected, so
+recording never slows a scan down. Each account sees its analytics at
+**Analytics** in the dashboard header (`/dashboard/analytics`), or for one code
+from the **📈 Analytics** link on its card. Admins see every account at
+**Platform analytics** on `/admin/analytics`.
+
+The dashboard shows scans and unique scanners over time (with the change vs.
+the previous period), countries and cities, device type, OS, browser or app,
+language, a day × hour grid of when people scan, top codes, recent scans, and
+for a single code the scans each destination URL got while it was live. Any
+range can be downloaded as CSV.
+
+What's stored per scan (`scan_events` table): time (UTC), country, region,
+city, device type, OS, browser, language, and an anonymous visitor ID (a keyed
+hash of IP + browser). **IP addresses are never stored.** Link-preview bots
+(WhatsApp, Slack, Facebook…) and crawlers are recorded but left out of every
+chart and of each code's scan count.
+
+- **Earlier scans:** scans from before analytics existed only count toward
+  totals; the dashboard says so.
+- **Retention:** rows older than `ANALYTICS_RETENTION_MONTHS` are deleted
+  automatically (checked once a day). Each code's total scan count is kept.
+- **Deleting** a code or account deletes its scan records too.
+
+### Location data (DB-IP)
+
+Locations come from a local copy of the free
+[DB-IP IP to City Lite](https://db-ip.com/db/lite.php) database, so no
+visitor IP is ever sent to a third party. Download it with:
+
+```bash
+npm run geoip:update
+```
+
+This saves `data/geoip/dbip-city-lite.mmdb` (~120 MB, not committed). DB-IP
+publishes a new file monthly; on Hostinger, add a monthly **hPanel → Cron Jobs**
+entry that runs `npm run geoip:update` in the app's folder. The running app
+reloads the file automatically. Without the file, scans are still recorded,
+with location "Unknown".
+
+The data is licensed CC BY 4.0, which requires the "IP Geolocation by DB-IP"
+credit shown on the analytics page. Keep it if you change the page.
 
 ### Deploying on Hostinger (Business shared hosting)
 
 1. **Databases → MySQL**: create a database and user, and assign the user to it.
 2. **Node.js app**: point it at this project and set the environment variables above (`MYSQL_HOST` is usually `localhost`).
 3. Build and start the app (`npm run build`, then `npm run start`). The schema is created on the first request, or import `schema.sql` beforehand.
+4. Run `npm run geoip:update` once, then schedule it monthly (see [Location data](#location-data-db-ip)).
 
 ## Getting Started
 

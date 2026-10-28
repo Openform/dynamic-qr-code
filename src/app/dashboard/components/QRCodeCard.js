@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo, useRef } from "react"
+import Link from "next/link"
 import QRCodeStyling from "qr-code-styling"
 import { normalizeStyle, buildQRStylingOptions } from "@/lib/qrStyle"
 import { renderBwipCanvas, downloadBwip } from "@/lib/barcode"
@@ -156,9 +157,19 @@ export default function QRCodeCard({
 
         {/* Meta row */}
         <div style={styles.metaRow}>
-          <span className="badge badge-cyan">
-            {qrcode.scanCount ?? 0} scans
-          </span>
+          <div style={styles.scansGroup}>
+            <span className="badge badge-cyan">
+              {qrcode.scanCount ?? 0} scans
+            </span>
+            <Link
+              id={`analytics-qr-${qrcode.id}`}
+              href={`/dashboard/analytics?code=${qrcode.id}`}
+              style={styles.analyticsLink}
+              title="See where, when and on what this code is scanned"
+            >
+              📈 Analytics
+            </Link>
+          </div>
           <span style={styles.date}>{formatDate(qrcode.createdAt)}</span>
         </div>
 
@@ -303,6 +314,15 @@ const styles = {
     alignItems: "center",
     justifyContent: "space-between",
     marginTop: "4px"
+  },
+  scansGroup: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px"
+  },
+  analyticsLink: {
+    fontSize: "0.8rem",
+    color: "var(--text-secondary)"
   },
   collectionRow: {
     display: "flex",

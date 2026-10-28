@@ -4,7 +4,8 @@
  * Return the current authenticated user's info.
  */
 
-import { getSession } from '@/lib/auth';
+import { getSession, isAdminEmail } from '@/lib/auth';
+import { getPackage } from '@/lib/packages';
 const { getUserById } = require('@/lib/db');
 
 export async function GET() {
@@ -25,11 +26,16 @@ export async function GET() {
       );
     }
 
+    const pkg = getPackage(user.package);
+
     return Response.json({
       id: user.id,
       email: user.email,
       name: user.name,
       avatar: user.avatar ?? null,
+      // { id, name, limit } — limit is null for unlimited packages.
+      package: { id: pkg.id, name: pkg.name, limit: pkg.limit },
+      isAdmin: isAdminEmail(user.email),
     });
   } catch (error) {
     console.error('Me error:', error);

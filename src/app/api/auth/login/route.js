@@ -72,6 +72,19 @@ export async function POST(request) {
       );
     }
 
+    // ── Disabled accounts ───────────────────────
+    // Only reported after the correct password, so it doesn't reveal to anyone
+    // else which accounts exist or are disabled.
+    if (user.disabled_at) {
+      return Response.json(
+        {
+          error: 'This account has been disabled. Please contact us to reactivate it.',
+          code: 'ACCOUNT_DISABLED',
+        },
+        { status: 403 }
+      );
+    }
+
     // ── Set auth cookie ─────────────────────────
     await setAuthCookie(user.id);
 

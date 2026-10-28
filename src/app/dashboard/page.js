@@ -69,8 +69,15 @@ export default function DashboardPage() {
     loadData()
   }, [])
 
+  // ---- Package limit ----
+  // `limit` is null on unlimited packages. The server enforces this too; the
+  // check here just stops the user filling in a code they can't save.
+  const codeLimit = user?.package?.limit ?? null
+  const atCodeLimit = codeLimit !== null && qrcodes.length >= codeLimit
+
   // ---- Handlers ----
   function handleCreate() {
+    if (atCodeLimit) return
     setEditingQR(null)
     setModalOpen(true)
   }
@@ -123,6 +130,10 @@ export default function DashboardPage() {
           const newQR = data.qrcode ?? data
           setQrcodes((prev) => [newQR, ...prev])
           setModalOpen(false)
+        } else {
+          // e.g. the package limit was reached from another tab or device.
+          const data = await res.json().catch(() => ({}))
+          alert(data.error || "Could not create the QR code. Please try again.")
         }
       }
     },
@@ -279,6 +290,22 @@ export default function DashboardPage() {
           </div>
           <div style={styles.headerRight}>
             <Link
+              href="/dashboard/analytics"
+              id="analytics-link"
+              className="btn btn-ghost btn-sm"
+            >
+              Analytics
+            </Link>
+            {user?.isAdmin && (
+              <Link
+                href="/admin"
+                id="admin-link"
+                className="btn btn-ghost btn-sm"
+              >
+                Admin
+              </Link>
+            )}
+            <Link
               href="/dashboard/settings"
               id="profile-settings-link"
               style={styles.profileLink}
@@ -305,8 +332,30 @@ export default function DashboardPage() {
       >
         {/* Stats */}
         <div className="animate-fadeIn">
-          <StatsCards totalQRCodes={qrcodes.length} totalScans={totalScans} />
+          <StatsCards
+            totalQRCodes={qrcodes.length}
+            totalScans={totalScans}
+            plan={user?.package}
+          />
         </div>
+
+        {atCodeLimit && (
+          <div
+            id="package-limit-notice"
+            role="status"
+            style={styles.limitNotice}
+            className="animate-fadeIn"
+          >
+            <span>⚠</span>
+            <span>
+              {qrcodes.length > codeLimit
+                ? `You have ${qrcodes.length} QR codes, more than the ${codeLimit} your ${user.package.name} package allows. Your existing codes keep working.`
+                : `You've used all ${codeLimit} QR codes on your ${user.package.name} package.`}{" "}
+              To create more, delete codes you no longer need or contact us to
+              upgrade your package.
+            </span>
+          </div>
+        )}
 
         {/* Collections */}
         <CollectionsBar
@@ -339,6 +388,8 @@ export default function DashboardPage() {
             id="create-qr-btn"
             className="btn btn-primary"
             onClick={handleCreate}
+            disabled={atCodeLimit}
+            title={atCodeLimit ? "Package limit reached" : undefined}
           >
             + Create New QR Code
           </button>
@@ -363,7 +414,11 @@ export default function DashboardPage() {
                   : "Get started by creating a dynamic QR code that you can update anytime."}
             </p>
             {!search && (
-              <button className="btn btn-primary" onClick={handleCreate}>
+              <button
+                className="btn btn-primary"
+                onClick={handleCreate}
+                disabled={atCodeLimit}
+              >
                 + Create QR Code
               </button>
             )}
@@ -486,6 +541,18 @@ const styles = {
     transform: "translateY(-50%)",
     fontSize: "0.9rem",
     pointerEvents: "none"
+  },
+  limitNotice: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    padding: "12px 16px",
+    marginBottom: "24px",
+    borderRadius: "var(--radius-md)",
+    fontSize: "0.9rem",
+    background: "rgba(245,158,11,0.1)",
+    border: "1px solid rgba(245,158,11,0.25)",
+    color: "var(--warning)"
   },
   emptyState: {
     textAlign: "center",

@@ -1,13 +1,17 @@
 /**
- * Proxy – protects /dashboard and /api/qrcodes routes.
+ * Proxy – protects /dashboard, /admin, /api/qrcodes, /api/analytics and /api/admin routes.
  *
  * Public routes (/, /login, /register, /r/:shortId, /api/auth/*) are allowed
  * through without a valid token.
+ *
+ * This only checks that the visitor has a valid token. Whether their account is
+ * still active is checked by getSession() (lib/auth.js), and whether they're an
+ * admin by the admin page and admin API routes (lib/admin.js).
  */
 
 import { NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
-import { getJwtSecret } from './lib/auth.js';
+import { getJwtSecret } from './lib/token.js';
 
 const COOKIE_NAME = 'qr-auth-token';
 
@@ -44,5 +48,5 @@ function denyAccess(request) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/api/qrcodes/:path*'],
+  matcher: ['/dashboard/:path*', '/api/qrcodes/:path*', '/api/analytics/:path*', '/admin/:path*', '/api/admin/:path*'],
 };

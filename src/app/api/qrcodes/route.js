@@ -12,8 +12,9 @@ import {
   isValidDestinationUrl,
   evaluateContrast,
 } from '@/lib/qrStyle';
+import { getPackage } from '@/lib/packages';
 
-const { getQRCodesByUserId, createQRCode, getCollectionById } = require('@/lib/db');
+const { getQRCodesByUserId, createQRCodeWithinLimit, getCollectionById } = require('@/lib/db');
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 
@@ -173,17 +174,35 @@ export async function POST(request) {
           cornerDotStyle,
         };
 
-    const qrcode = await createQRCode({
-      shortId,
-      userId: session.userId,
-      collectionId: resolvedCollectionId,
-      title,
-      destinationUrl: normalizedUrl,
-      ...legacy,
-      styleConfig: sanitizedStyle,
-    });
+    // The package limit is checked inside the insert transaction so it can't
+    // be raced past by sending several requests at once.
+    const created = await createQRCodeWithinLimit(
+      {
+        shortId,
+        userId: session.userId,
+        collectionId: resolvedCollectionId,
+        title,
+        destinationUrl: normalizedUrl,
+        ...legacy,
+        styleConfig: sanitizedStyle,
+      },
+      (packageId) => getPackage(packageId).limit
+    );
 
-    return Response.json({ qrcode: toClientQRCode(qrcode) }, { status: 201 });
+    if (!created.ok) {
+      if (created.reason === 'no_user') {
+        return Response.json({ error: 'Authentication required' }, { status: 401 });
+      }
+      return Response.json(
+        {
+          error: `You've reached your package limit of ${created.limit} QR codes. Delete a code or contact us to upgrade your package.`,
+          code: 'PACKAGE_LIMIT_REACHED',
+        },
+        { status: 403 }
+      );
+    }
+
+    return Response.json({ qrcode: toClientQRCode(created.qrcode) }, { status: 201 });
   } catch (error) {
     console.error('POST /api/qrcodes error:', error);
     return Response.json(
