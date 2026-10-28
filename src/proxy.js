@@ -1,5 +1,5 @@
 /**
- * Proxy – protects /dashboard, /admin, /api/qrcodes and /api/admin routes.
+ * Proxy – protects /dashboard, /admin, /api/qrcodes, /api/analytics and /api/admin routes.
  *
  * Public routes (/, /login, /register, /r/:shortId, /api/auth/*) are allowed
  * through without a valid token.
@@ -48,5 +48,5 @@ function denyAccess(request) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/api/qrcodes/:path*', '/admin/:path*', '/api/admin/:path*'],
+  matcher: ['/dashboard/:path*', '/api/qrcodes/:path*', '/api/analytics/:path*', '/admin/:path*', '/api/admin/:path*'],
 };

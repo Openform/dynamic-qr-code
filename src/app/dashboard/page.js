@@ -289,6 +289,13 @@ export default function DashboardPage() {
             </Link>
           </div>
           <div style={styles.headerRight}>
+            <Link
+              href="/dashboard/analytics"
+              id="analytics-link"
+              className="btn btn-ghost btn-sm"
+            >
+              Analytics
+            </Link>
             {user?.isAdmin && (
               <Link
                 href="/admin"

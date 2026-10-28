@@ -107,6 +107,50 @@ async function initSchema() {
 
   // The UNIQUE constraint on short_id already provides idx_qrcodes_short_id,
   // and the foreign key reuses idx_qrcodes_user_id — no extra indexes needed.
+
+  // One row per scan, for the analytics dashboard. Times are UTC. The scanner's
+  // IP is never stored: only its location and a keyed hash for counting unique
+  // scanners (see lib/visitor.js). user_id is copied from the code so
+  // account-wide queries don't need a join. Rows go when their code does
+  // (ON DELETE CASCADE), and rows older than the retention period are pruned
+  // (lib/scanRecorder.js); qrcodes.scan_count keeps the all-time total.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS scan_events (
+      id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      qrcode_id INT UNSIGNED NOT NULL,
+      user_id INT UNSIGNED NOT NULL,
+      scanned_at DATETIME NOT NULL,
+      country_code CHAR(2) NULL,
+      region VARCHAR(100) NULL,
+      city VARCHAR(100) NULL,
+      device_type VARCHAR(16) NULL,
+      os VARCHAR(32) NULL,
+      browser VARCHAR(32) NULL,
+      language VARCHAR(8) NULL,
+      visitor_hash CHAR(16) NULL,
+      is_bot TINYINT(1) NOT NULL DEFAULT 0,
+      INDEX idx_scan_events_code_time (qrcode_id, scanned_at),
+      INDEX idx_scan_events_user_time (user_id, scanned_at),
+      INDEX idx_scan_events_time (scanned_at),
+      CONSTRAINT fk_scan_events_qrcode FOREIGN KEY (qrcode_id)
+        REFERENCES qrcodes(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  // Each destination a code has pointed to and when it started (UTC), so the
+  // dashboard can show scans per destination. Codes created before this table
+  // existed have no rows until their destination is first changed.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS qrcode_destinations (
+      id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      qrcode_id INT UNSIGNED NOT NULL,
+      destination_url VARCHAR(2048) NOT NULL,
+      started_at DATETIME NOT NULL,
+      INDEX idx_qrcode_destinations_code (qrcode_id, started_at),
+      CONSTRAINT fk_qrcode_destinations_qrcode FOREIGN KEY (qrcode_id)
+        REFERENCES qrcodes(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
 }
 
 /**
@@ -526,6 +570,11 @@ async function createQRCodeWithinLimit(
         styleConfig: styleConfig != null ? JSON.stringify(styleConfig) : null,
       }
     );
+    await conn.execute(
+      `INSERT INTO qrcode_destinations (qrcode_id, destination_url, started_at)
+       VALUES (:qrcodeId, :destinationUrl, UTC_TIMESTAMP())`,
+      { qrcodeId: result.insertId, destinationUrl }
+    );
     await conn.commit();
     insertId = result.insertId;
   } catch (err) {
@@ -577,7 +626,35 @@ async function updateQRCode(id, userId, { title, destinationUrl, foregroundColor
     }
   );
 
+  if (destinationUrl != null && destinationUrl !== existing.destination_url) {
+    await recordDestinationChange(existing, destinationUrl);
+  }
+
   return getQRCodeById(id, userId);
+}
+
+/**
+ * Add a destination history row when a code's destination changes. A code
+ * created before history was kept gets a row for its old destination first,
+ * dated from when the code was created.
+ */
+async function recordDestinationChange(existing, newUrl) {
+  const [rows] = await pool.execute(
+    'SELECT COUNT(*) AS count FROM qrcode_destinations WHERE qrcode_id = :qrcodeId',
+    { qrcodeId: existing.id }
+  );
+  if (Number(rows[0].count) === 0) {
+    await pool.execute(
+      `INSERT INTO qrcode_destinations (qrcode_id, destination_url, started_at)
+       VALUES (:qrcodeId, :destinationUrl, :startedAt)`,
+      { qrcodeId: existing.id, destinationUrl: existing.destination_url, startedAt: existing.created_at }
+    );
+  }
+  await pool.execute(
+    `INSERT INTO qrcode_destinations (qrcode_id, destination_url, started_at)
+     VALUES (:qrcodeId, :destinationUrl, UTC_TIMESTAMP())`,
+    { qrcodeId: existing.id, destinationUrl: newUrl }
+  );
 }
 
 /** Delete a QR code. Returns true if a row was deleted, false otherwise. */
@@ -590,13 +667,59 @@ async function deleteQRCode(id, userId) {
   return result.affectedRows > 0;
 }
 
-/** Increment the scan count for a QR code (by short ID). */
-async function incrementScanCount(shortId) {
+/**
+ * Record one scan: add 1 to the code's all-time total (unless it's a bot)
+ * and store the scan's details for analytics. The total is updated first, so
+ * it stays right even if storing the details fails.
+ */
+async function recordScan({
+  qrcodeId, userId, countryCode, region, city, deviceType, os, browser, language, visitorHash, isBot,
+}) {
   await ensureSchema();
+  if (!isBot) {
+    await pool.execute(
+      'UPDATE qrcodes SET scan_count = scan_count + 1 WHERE id = :qrcodeId',
+      { qrcodeId }
+    );
+  }
   await pool.execute(
-    'UPDATE qrcodes SET scan_count = scan_count + 1 WHERE short_id = :shortId',
-    { shortId }
+    `INSERT INTO scan_events
+       (qrcode_id, user_id, scanned_at, country_code, region, city, device_type, os, browser, language, visitor_hash, is_bot)
+     VALUES
+       (:qrcodeId, :userId, UTC_TIMESTAMP(), :countryCode, :region, :city, :deviceType, :os, :browser, :language, :visitorHash, :isBot)`,
+    {
+      qrcodeId,
+      userId,
+      countryCode: countryCode ?? null,
+      region: region ?? null,
+      city: city ?? null,
+      deviceType: deviceType ?? null,
+      os: os ?? null,
+      browser: browser ?? null,
+      language: language ?? null,
+      visitorHash: visitorHash ?? null,
+      isBot: isBot ? 1 : 0,
+    }
   );
+}
+
+/**
+ * Delete scan rows older than `cutoff` ("YYYY-MM-DD HH:MM:SS", UTC) in small
+ * batches, so a large first prune can't lock the table for long. Codes' totals
+ * in scan_count are untouched. Returns the number of rows deleted.
+ */
+async function pruneScanEvents(cutoff, batchSize = 5000) {
+  await ensureSchema();
+  const limit = Math.max(1, Math.floor(batchSize));
+  let deleted = 0;
+  for (;;) {
+    const [result] = await pool.execute(
+      `DELETE FROM scan_events WHERE scanned_at < :cutoff ORDER BY scanned_at LIMIT ${limit}`,
+      { cutoff }
+    );
+    deleted += result.affectedRows;
+    if (result.affectedRows < limit) return deleted;
+  }
 }
 
 // ──────────────────────────────────────────────
@@ -717,6 +840,7 @@ async function getUserStats(userId) {
 
 module.exports = {
   pool,
+  ensureSchema,
   getUserByEmail,
   getUserById,
   createUser,
@@ -734,7 +858,8 @@ module.exports = {
   createQRCodeWithinLimit,
   updateQRCode,
   deleteQRCode,
-  incrementScanCount,
+  recordScan,
+  pruneScanEvents,
   getUserStats,
   getCollectionsByUserId,
   getCollectionById,

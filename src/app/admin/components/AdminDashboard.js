@@ -332,9 +332,14 @@ export default function AdminDashboard({ currentAdminId }) {
               Admin
             </span>
           </div>
-          <Link href="/dashboard" className="btn btn-ghost btn-sm">
-            ← Back to Dashboard
-          </Link>
+          <div style={styles.headerLeft}>
+            <Link href="/admin/analytics" id="admin-analytics-link" className="btn btn-ghost btn-sm">
+              Platform analytics
+            </Link>
+            <Link href="/dashboard" className="btn btn-ghost btn-sm">
+              ← Back to Dashboard
+            </Link>
+          </div>
         </div>
       </header>
 
