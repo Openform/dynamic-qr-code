@@ -2,12 +2,20 @@
 /**
  * Download the latest DB-IP "IP to City Lite" database for scan locations.
  *
- *   npm run geoip:update
+ *   npm run geoip:update        always download the latest file
+ *   npm run build               runs this first with --if-stale --no-fail
+ *                               (the "prebuild" script), so every deploy has it
+ *
+ * Options:
+ *   --if-stale  skip the download when the file is less than 7 days old
+ *   --no-fail   on any error, print a warning and exit successfully, so a
+ *               deploy never fails because DB-IP can't be reached. The app
+ *               then keeps the old file, or records locations as "Unknown"
+ *               if there's none, until the next successful download.
  *
  * Saves to data/geoip/dbip-city-lite.mmdb (or GEOIP_DB_PATH). DB-IP publishes
- * a new file each month; run this monthly, e.g. from an hPanel cron job. The
- * new file is checked before it replaces the old one, and the running app
- * reloads it automatically.
+ * a new file each month. The new file is checked before it replaces the old
+ * one, and a running app reloads it automatically.
  *
  * Licence: CC BY 4.0 (https://db-ip.com/db/lite.php). The analytics page
  * shows the required "IP Geolocation by DB-IP" credit.
@@ -21,6 +29,15 @@ import { pipeline } from 'node:stream/promises';
 import { createGunzip } from 'node:zlib';
 import maxmind from 'maxmind';
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+const MAX_AGE_DAYS = 7;
+// Give up on a stuck download rather than hang the build (~60 MB compressed).
+const DOWNLOAD_TIMEOUT_MS = 3 * 60 * 1000;
+
+const args = new Set(process.argv.slice(2));
+const ifStale = args.has('--if-stale');
+const noFail = args.has('--no-fail');
+
 const target = process.env.GEOIP_DB_PATH || path.join(process.cwd(), 'data', 'geoip', 'dbip-city-lite.mmdb');
 const temp = `${target}.download`;
 
@@ -30,9 +47,19 @@ function candidateMonths(now = new Date()) {
   return [now.toISOString().slice(0, 7), lastMonth.toISOString().slice(0, 7)];
 }
 
+/** Age of the current file in days, or null if there isn't one. */
+async function fileAgeDays(file) {
+  try {
+    const { mtimeMs } = await stat(file);
+    return (Date.now() - mtimeMs) / DAY_MS;
+  } catch {
+    return null;
+  }
+}
+
 async function download(month) {
   const url = `https://download.db-ip.com/free/dbip-city-lite-${month}.mmdb.gz`;
-  const res = await fetch(url);
+  const res = await fetch(url, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
   if (res.status === 404) return null;
   if (!res.ok || !res.body) throw new Error(`Download failed (HTTP ${res.status}): ${url}`);
   console.log(`Downloading ${url}`);
@@ -48,6 +75,14 @@ async function check(file) {
 }
 
 async function main() {
+  if (ifStale) {
+    const age = await fileAgeDays(target);
+    if (age !== null && age < MAX_AGE_DAYS) {
+      console.log(`GeoIP database is up to date (${Math.floor(age)} days old), skipping download: ${target}`);
+      return;
+    }
+  }
+
   await mkdir(path.dirname(target), { recursive: true });
   try {
     let url = null;
@@ -66,7 +101,18 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error.message);
-  process.exit(1);
+main().catch(async (error) => {
+  const message = error.name === 'TimeoutError' ? 'download timed out' : error.message;
+  if (!noFail) {
+    console.error(message);
+    process.exitCode = 1;
+    return;
+  }
+  const hasFile = (await fileAgeDays(target)) !== null;
+  console.warn(
+    `Warning: could not update the GeoIP database (${message}). ` +
+      (hasFile
+        ? 'Keeping the existing file.'
+        : 'Scan locations will show as "Unknown" until it is downloaded (npm run geoip:update).')
+  );
 });
