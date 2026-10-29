@@ -2,6 +2,7 @@ import Link from "next/link"
 import HeroQR from "./components/HeroQR"
 import SiteHeader from "./components/SiteHeader"
 import SiteFooter from "./components/SiteFooter"
+import FeatureIcon from "./components/FeatureIcon"
 
 export default function LandingPage() {
   return (
@@ -86,7 +87,7 @@ export default function LandingPage() {
             <div className="grid-responsive" style={{ marginTop: "48px" }}>
               {/* Feature Card 1 */}
               <div className="glass-card" style={styles.featureCard}>
-                <div style={styles.featureIcon}>🔗</div>
+                <FeatureIcon name="link" />
                 <h3 style={styles.featureTitle}>Dynamic Links</h3>
                 <p style={styles.featureDesc}>
                   Update your QR code destinations anytime. No need to reprint
@@ -96,7 +97,7 @@ export default function LandingPage() {
 
               {/* Feature Card 2 */}
               <div className="glass-card" style={styles.featureCard}>
-                <div style={styles.featureIcon}>📊</div>
+                <FeatureIcon name="analytics" />
                 <h3 style={styles.featureTitle}>Real-time Analytics</h3>
                 <p style={styles.featureDesc}>
                   Track every scan with detailed analytics. Know when, where,
@@ -106,7 +107,7 @@ export default function LandingPage() {
 
               {/* Feature Card 3 */}
               <div className="glass-card" style={styles.featureCard}>
-                <div style={styles.featureIcon}>⚡</div>
+                <FeatureIcon name="dashboard" />
                 <h3 style={styles.featureTitle}>Easy Management</h3>
                 <p style={styles.featureDesc}>
                   Create, edit, and organize all your QR codes from a single
@@ -257,10 +258,6 @@ const styles = {
   featureCard: {
     padding: "32px",
     textAlign: "center"
-  },
-  featureIcon: {
-    fontSize: "2.5rem",
-    marginBottom: "20px"
   },
   featureTitle: {
     fontSize: "1.2rem",
