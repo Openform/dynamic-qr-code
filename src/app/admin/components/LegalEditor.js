@@ -18,6 +18,7 @@ import {
   normalizeLinkInput,
   continueList
 } from "@/lib/markdownEditing"
+import { useScrollSync } from "./useScrollSync"
 import styles from "./LegalEditor.module.css"
 
 /** Toolbar buttons, in groups. */
@@ -83,7 +84,9 @@ export default function LegalEditor({ initialPages }) {
   const [activeSlug, setActiveSlug] = useState(order[0])
   const [savingSlug, setSavingSlug] = useState(null)
   const [notice, setNotice] = useState(null)
+  const [syncScroll, setSyncScroll] = useState(true)
   const textareaRef = useRef(null)
+  const previewRef = useRef(null)
   const pendingSelection = useRef(null)
   const inBrowser = useInBrowser()
 
@@ -96,6 +99,14 @@ export default function LegalEditor({ initialPages }) {
   const saving = savingSlug !== null
   const canSave = (dirty || page.isDefault) && !tooLong && !isEmpty && Boolean(draft.lastUpdated) && !saving
   const previewContent = useDeferredValue(draft.content)
+
+  useScrollSync(textareaRef, previewRef, { enabled: syncScroll, content: previewContent })
+
+  // Start each page at the top when switching between them.
+  useLayoutEffect(() => {
+    if (textareaRef.current) textareaRef.current.scrollTop = 0
+    if (previewRef.current) previewRef.current.scrollTop = 0
+  }, [activeSlug])
 
   // Warn before closing the tab or reloading with unsaved changes.
   useEffect(() => {
@@ -413,10 +424,21 @@ export default function LegalEditor({ initialPages }) {
           <section className={`glass-card-static ${styles.panel}`} aria-label="Preview">
             <div className={styles.panelHeader}>
               <span className={styles.panelLabel}>Preview</span>
-              <span className={styles.panelHint}>How the page will look</span>
+              <label
+                className={`qr-toggle ${styles.syncToggle}`}
+                title="Scroll the editor and preview together, so both show the same part of the page"
+              >
+                <input
+                  type="checkbox"
+                  checked={syncScroll}
+                  onChange={(event) => setSyncScroll(event.target.checked)}
+                />
+                Scroll together
+              </label>
             </div>
             {/* Links are shown but don't navigate away from unsaved work. */}
             <div
+              ref={previewRef}
               className={styles.preview}
               onClickCapture={(event) => {
                 if (event.target.closest("a")) event.preventDefault()

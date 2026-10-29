@@ -39,9 +39,12 @@ export function isSafeHref(href) {
 
 /**
  * Parse text into blocks:
- *   { type: 'heading', level: 2 | 3, id, children: Inline[] }
- *   { type: 'paragraph', lines: Inline[][] }
- *   { type: 'list', ordered, start, items: Inline[][][] }   (each item is lines)
+ *   { type: 'heading', line, level: 2 | 3, id, children: Inline[] }
+ *   { type: 'paragraph', line, lines: Inline[][] }
+ *   { type: 'list', line, ordered, start, items: Inline[][][] }   (each item is lines)
+ *
+ * `line` is the 0-based line of the text the block starts on, which the admin
+ * editor uses to keep its preview scrolled to the same place.
  */
 export function parseMarkdown(text) {
   const source = typeof text === 'string' ? text.replace(/\r\n?/g, '\n') : '';
@@ -49,7 +52,9 @@ export function parseMarkdown(text) {
   const usedIds = new Map();
   let current = null; // the paragraph or list still being added to
 
-  for (const line of source.split('\n')) {
+  const sourceLines = source.split('\n');
+  for (let lineNumber = 0; lineNumber < sourceLines.length; lineNumber += 1) {
+    const line = sourceLines[lineNumber];
     if (!line.trim()) {
       current = null;
       continue;
@@ -60,6 +65,7 @@ export function parseMarkdown(text) {
       const children = parseInline(heading[2]);
       blocks.push({
         type: 'heading',
+        line: lineNumber,
         // "#" and "##" are both section headings: the page title is the only h1.
         level: heading[1].length === 3 ? 3 : 2,
         id: uniqueId(slugify(plainText(children)), usedIds),
@@ -77,6 +83,7 @@ export function parseMarkdown(text) {
       if (current?.type !== 'list' || current.ordered !== ordered) {
         current = {
           type: 'list',
+          line: lineNumber,
           ordered,
           start: ordered ? Number(numbered[1]) : 1,
           items: [],
@@ -94,7 +101,7 @@ export function parseMarkdown(text) {
     }
 
     if (current?.type !== 'paragraph') {
-      current = { type: 'paragraph', lines: [] };
+      current = { type: 'paragraph', line: lineNumber, lines: [] };
       blocks.push(current);
     }
     current.lines.push(parseInline(line.trim()));

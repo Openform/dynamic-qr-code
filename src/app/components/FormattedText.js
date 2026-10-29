@@ -7,23 +7,26 @@ import styles from "./FormattedText.module.css"
  * Render text written with the formatting in lib/markdown.js (headings,
  * bold, italic, lists, links). Everything is built as React elements, never
  * raw HTML. Used by the legal pages and the admin editor's preview.
+ *
+ * `sourceLines` marks each block with the line of text it came from
+ * (data-line), so the admin editor can scroll its preview to match.
  */
-export default function FormattedText({ content }) {
+export default function FormattedText({ content, sourceLines = false }) {
   const blocks = parseMarkdown(content)
   return (
     <div className={styles.prose}>
       {blocks.map((block, index) => (
-        <Block key={index} block={block} />
+        <Block key={index} block={block} dataLine={sourceLines ? block.line : undefined} />
       ))}
     </div>
   )
 }
 
-function Block({ block }) {
+function Block({ block, dataLine }) {
   if (block.type === "heading") {
     const Heading = block.level === 3 ? "h3" : "h2"
     return (
-      <Heading id={block.id}>
+      <Heading id={block.id} data-line={dataLine}>
         <Inline nodes={block.children} />
       </Heading>
     )
@@ -32,7 +35,10 @@ function Block({ block }) {
   if (block.type === "list") {
     const List = block.ordered ? "ol" : "ul"
     return (
-      <List start={block.ordered && block.start !== 1 ? block.start : undefined}>
+      <List
+        start={block.ordered && block.start !== 1 ? block.start : undefined}
+        data-line={dataLine}
+      >
         {block.items.map((lines, index) => (
           <li key={index}>
             <Lines lines={lines} />
@@ -43,7 +49,7 @@ function Block({ block }) {
   }
 
   return (
-    <p>
+    <p data-line={dataLine}>
       <Lines lines={block.lines} />
     </p>
   )

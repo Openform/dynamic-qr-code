@@ -201,9 +201,17 @@
   padding-left: 4px;
 }
 
-.panelHint {
+/* Beats the global .qr-toggle spacing, which is meant for forms. */
+.panelHeader .syncToggle {
+  margin-bottom: 0;
+  gap: 8px;
   font-size: 0.8rem;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
+}
+
+.panelHeader .syncToggle input {
+  width: 15px;
+  height: 15px;
 }
 
 .toolbar {
@@ -272,6 +280,8 @@
 }
 
 .preview {
+  /* Blocks' offsetTop is measured from here for the scroll sync. */
+  position: relative;
   height: var(--panel-height);
   overflow-y: auto;
   padding: 28px 32px;

@@ -53,8 +53,18 @@ describe('parseInline', () => {
 describe('parseMarkdown', () => {
   it('splits paragraphs on blank lines and keeps line breaks within them', () => {
     expect(parseMarkdown('one\ntwo\n\nthree')).toEqual([
-      { type: 'paragraph', lines: [[text('one')], [text('two')]] },
-      { type: 'paragraph', lines: [[text('three')]] },
+      { type: 'paragraph', line: 0, lines: [[text('one')], [text('two')]] },
+      { type: 'paragraph', line: 3, lines: [[text('three')]] },
+    ]);
+  });
+
+  it('records the line each block starts on', () => {
+    const text = 'Intro\n\n## Heading\n- a\n- b\n\n\nEnd';
+    expect(parseMarkdown(text).map((b) => [b.type, b.line])).toEqual([
+      ['paragraph', 0],
+      ['heading', 2],
+      ['list', 3],
+      ['paragraph', 7],
     ]);
   });
 
