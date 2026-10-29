@@ -167,6 +167,27 @@ async function initSchema() {
         REFERENCES users(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
+
+  // Requests from the "Request an invite" form on the public pages, listed at
+  // /admin/invites. package is the plan they're interested in (NULL = not
+  // sure). handled_at / handled_by record who marked it done, and when; NULL
+  // means it's still open. Times are UTC.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS invite_requests (
+      id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      email VARCHAR(255) NOT NULL,
+      company VARCHAR(255) NULL,
+      phone VARCHAR(40) NULL,
+      package VARCHAR(32) NULL,
+      created_at DATETIME NOT NULL,
+      handled_at DATETIME NULL,
+      handled_by INT UNSIGNED NULL,
+      INDEX idx_invite_requests_created_at (created_at),
+      CONSTRAINT fk_invite_requests_user FOREIGN KEY (handled_by)
+        REFERENCES users(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
 }
 
 /**
@@ -892,6 +913,81 @@ async function saveLegalPage(slug, { content, lastUpdated }, userId) {
   return getLegalPage(slug);
 }
 
+// ──────────────────────────────────────────────
+// Invite requests
+// ──────────────────────────────────────────────
+
+// has_account flags requests from someone who already has an account (emails
+// compare case-insensitively under this collation).
+const INVITE_REQUEST_SELECT = `
+  SELECT ir.id, ir.name, ir.email, ir.company, ir.phone, ir.package,
+         ir.created_at, ir.handled_at, hb.name AS handled_by_name,
+         EXISTS (SELECT 1 FROM users u WHERE u.email = ir.email) AS has_account
+    FROM invite_requests ir
+    LEFT JOIN users hb ON hb.id = ir.handled_by`;
+
+/** Save a request from the public form (fields already validated). Returns the saved row. */
+async function createInviteRequest({ name, email, company, phone, package: packageId }) {
+  await ensureSchema();
+  const [result] = await pool.execute(
+    `INSERT INTO invite_requests (name, email, company, phone, package, created_at)
+     VALUES (:name, :email, :company, :phone, :packageId, UTC_TIMESTAMP())`,
+    { name, email, company, phone, packageId }
+  );
+  return getInviteRequestById(result.insertId);
+}
+
+/** One request, or null. */
+async function getInviteRequestById(id) {
+  await ensureSchema();
+  const [rows] = await pool.execute(`${INVITE_REQUEST_SELECT} WHERE ir.id = :id LIMIT 1`, { id });
+  return rows[0] || null;
+}
+
+/** Every request, newest first. */
+async function getInviteRequests() {
+  await ensureSchema();
+  const [rows] = await pool.query(`${INVITE_REQUEST_SELECT} ORDER BY ir.created_at DESC, ir.id DESC`);
+  return rows;
+}
+
+/** How many requests haven't been marked done yet. */
+async function countOpenInviteRequests() {
+  await ensureSchema();
+  const [rows] = await pool.query(
+    'SELECT COUNT(*) AS count FROM invite_requests WHERE handled_at IS NULL'
+  );
+  return Number(rows[0]?.count) || 0;
+}
+
+/**
+ * Mark a request done (by userId) or reopen it. Returns the updated row, or
+ * null if there's no such request.
+ */
+async function setInviteRequestHandled(id, handled, userId) {
+  await ensureSchema();
+  if (handled) {
+    await pool.execute(
+      `UPDATE invite_requests SET handled_at = UTC_TIMESTAMP(), handled_by = :userId
+        WHERE id = :id AND handled_at IS NULL`,
+      { id, userId }
+    );
+  } else {
+    await pool.execute(
+      'UPDATE invite_requests SET handled_at = NULL, handled_by = NULL WHERE id = :id',
+      { id }
+    );
+  }
+  return getInviteRequestById(id);
+}
+
+/** Permanently delete a request. Returns true if one was deleted. */
+async function deleteInviteRequest(id) {
+  await ensureSchema();
+  const [result] = await pool.execute('DELETE FROM invite_requests WHERE id = :id', { id });
+  return result.affectedRows > 0;
+}
+
 module.exports = {
   pool,
   ensureSchema,
@@ -922,4 +1018,10 @@ module.exports = {
   deleteCollection,
   getLegalPage,
   saveLegalPage,
+  createInviteRequest,
+  getInviteRequestById,
+  getInviteRequests,
+  countOpenInviteRequests,
+  setInviteRequestHandled,
+  deleteInviteRequest,
 };

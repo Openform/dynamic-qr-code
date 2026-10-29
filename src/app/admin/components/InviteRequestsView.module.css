@@ -1,0 +1,190 @@
+/* Invite requests (/admin/invites). */
+
+.page {
+  position: relative;
+  min-height: 100vh;
+}
+
+/* ---- Header (matches the admin dashboard) ---- */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  backdrop-filter: blur(16px); /* standard only: see .glass-card in globals.css */
+  background: rgba(10, 10, 26, 0.85);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.headerInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+  gap: 12px;
+}
+
+.headerGroup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo {
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.adminBadge {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+}
+
+/* ---- Page ---- */
+.main {
+  padding-top: 32px;
+  padding-bottom: 64px;
+  max-width: 920px;
+}
+
+.pageTitle {
+  font-size: 1.8rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.pageSubtitle {
+  color: var(--text-secondary);
+  margin-top: 6px;
+  margin-bottom: 24px;
+  max-width: 640px;
+}
+
+.tabs {
+  display: inline-flex;
+  min-width: 260px;
+  margin-bottom: 20px;
+}
+
+.empty {
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+/* ---- Request cards ---- */
+.list {
+  display: grid;
+  gap: 14px;
+}
+
+.card {
+  display: grid;
+  gap: 12px;
+  padding: 20px 22px;
+}
+
+.cardDone {
+  opacity: 0.75;
+}
+
+.cardTop {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+.who {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  min-width: 0;
+}
+
+.name {
+  font-size: 1.1rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.company {
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.received {
+  color: var(--text-tertiary);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.contact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+}
+
+.contactLink {
+  color: var(--cyan);
+  font-size: 0.92rem;
+  overflow-wrap: anywhere;
+}
+
+.contactLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag {
+  font-size: 0.75rem;
+}
+
+.tagPlain {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+}
+
+.flagSoon {
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--warning);
+}
+
+.flagOverdue {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--error);
+}
+
+.cardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.doneNote {
+  color: var(--text-tertiary);
+  font-size: 0.85rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.deleteButton:hover {
+  color: var(--error);
+}

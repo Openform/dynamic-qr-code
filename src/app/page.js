@@ -2,14 +2,14 @@ import Link from "next/link"
 import HeroQR from "./components/HeroQR"
 import SiteHeader from "./components/SiteHeader"
 import SiteFooter from "./components/SiteFooter"
-import CtaLink from "./components/CtaLink"
+import InviteRequestButton from "./components/InviteRequest"
 import RevealObserver from "./components/landing/RevealObserver"
 import SpotlightGrid from "./components/landing/SpotlightGrid"
 import DestinationHistory from "./components/landing/DestinationHistory"
 import ScansChart from "./components/landing/ScansChart"
 import StyleMorph from "./components/landing/StyleMorph"
-import { PACKAGES, DEFAULT_PACKAGE, getPackage, describeLimit } from "@/lib/packages"
-import { getSignupCta } from "@/lib/signup"
+import { PACKAGES, describeLimit } from "@/lib/packages"
+import { REPLY_PROMISE } from "@/lib/inviteRequests"
 import styles from "./page.module.css"
 
 const USE_CASES = [
@@ -86,9 +86,6 @@ function Check() {
 }
 
 export default function LandingPage() {
-  const cta = getSignupCta()
-  const startingPlan = getPackage(DEFAULT_PACKAGE).name
-
   return (
     <div className={styles.page}>
       <RevealObserver />
@@ -113,16 +110,18 @@ export default function LandingPage() {
                 styled to match your brand, with a live view of every scan.
               </p>
               <div className={`${styles.heroCtas} ${styles.enter}`} style={{ "--d": "500ms" }}>
-                <CtaLink cta={cta} className={`btn btn-primary ${styles.bigBtn}`} id="hero-signup" />
+                <InviteRequestButton
+                  className={`btn btn-primary ${styles.bigBtn}`}
+                  id="hero-signup"
+                  openOnHash
+                />
                 <Link href="/login" className={styles.arrowLink} id="hero-signin">
                   Sign in <ArrowRight />
                 </Link>
               </div>
-              {cta.external && (
-                <p className={`${styles.heroNote} ${styles.enter}`} style={{ "--d": "600ms" }}>
-                  Already have an invite code? <Link href="/register">Create your account</Link>
-                </p>
-              )}
+              <p className={`${styles.heroNote} ${styles.enter}`} style={{ "--d": "600ms" }}>
+                Already have an invite code? <Link href="/register">Create your account</Link>
+              </p>
             </div>
 
             <div className={`${styles.heroVisual} ${styles.enterVisual}`}>
@@ -337,8 +336,10 @@ export default function LandingPage() {
             </ul>
 
             <div data-reveal className={`${styles.plansCta} ${styles.reveal}`}>
-              <CtaLink cta={cta} className={`btn btn-primary ${styles.bigBtn}`} id="plans-signup" />
-              <p className={styles.plansNote}>New accounts start on {startingPlan}.</p>
+              <InviteRequestButton className={`btn btn-primary ${styles.bigBtn}`} id="plans-signup" />
+              <p className={styles.plansNote}>
+                Tell us which plan suits you when you request an invite.
+              </p>
             </div>
           </div>
         </section>
@@ -351,13 +352,11 @@ export default function LandingPage() {
                 <div className={styles.ctaGlow} aria-hidden="true" />
                 <h2 className={styles.h2}>Ready when your next print run is</h2>
                 <p className={styles.sectionLead}>
-                  {cta.external
-                    ? "Sign-up is by invite. Request one, or sign in if you already have an account."
-                    : "Create your account, or sign in if you already have one."}
+                  Request an invite and we&apos;ll get back to you {REPLY_PROMISE}, or sign in if
+                  you already have an account.
                 </p>
                 <div className={styles.ctaButtons}>
-                  <CtaLink
-                    cta={cta}
+                  <InviteRequestButton
                     className={`btn btn-primary ${styles.bigBtn}`}
                     id="cta-get-started"
                   />

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
 import { getAdminUser } from "@/lib/admin"
+import { countOpenInviteRequests } from "@/lib/db"
 import AdminDashboard from "./components/AdminDashboard"
 
 export const metadata = {
@@ -15,5 +16,6 @@ export default async function AdminPage() {
   const admin = await getAdminUser()
   if (!admin) redirect("/dashboard")
 
-  return <AdminDashboard currentAdminId={admin.id} />
+  const openInviteCount = await countOpenInviteRequests()
+  return <AdminDashboard currentAdminId={admin.id} openInviteCount={openInviteCount} />
 }

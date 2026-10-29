@@ -108,7 +108,7 @@ function Usage({ account }) {
   )
 }
 
-export default function AdminDashboard({ currentAdminId }) {
+export default function AdminDashboard({ currentAdminId, openInviteCount = 0 }) {
   const [accounts, setAccounts] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState("")
@@ -333,6 +333,21 @@ export default function AdminDashboard({ currentAdminId }) {
             </span>
           </div>
           <div style={styles.headerLeft}>
+            <Link
+              href="/admin/invites"
+              id="admin-invites-link"
+              className="btn btn-ghost btn-sm"
+              aria-label={
+                openInviteCount > 0 ? `Invite requests, ${openInviteCount} open` : undefined
+              }
+            >
+              Invite requests
+              {openInviteCount > 0 && (
+                <span style={styles.countBadge} aria-hidden="true">
+                  {openInviteCount}
+                </span>
+              )}
+            </Link>
             <Link href="/admin/legal" id="admin-legal-link" className="btn btn-ghost btn-sm">
               Legal pages
             </Link>
@@ -654,6 +669,18 @@ const styles = {
     textTransform: "uppercase",
     letterSpacing: "0.08em",
     fontSize: "0.7rem"
+  },
+  countBadge: {
+    minWidth: "20px",
+    height: "20px",
+    padding: "0 6px",
+    borderRadius: "999px",
+    background: "var(--gradient-primary)",
+    color: "var(--text-inverse)",
+    fontSize: "0.72rem",
+    fontWeight: 700,
+    lineHeight: "20px",
+    textAlign: "center"
   },
   main: {
     paddingTop: "32px",

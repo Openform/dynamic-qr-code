@@ -1,12 +1,9 @@
 import Link from "next/link"
-import { getSignupCta } from "@/lib/signup"
-import CtaLink from "./CtaLink"
+import InviteRequestButton from "./InviteRequest"
 import styles from "./SiteHeader.module.css"
 
 /** Top bar for the public pages (landing, legal). */
 export default function SiteHeader() {
-  const cta = getSignupCta()
-
   return (
     <header className={styles.header}>
       <div className={styles.inner}>
@@ -30,8 +27,7 @@ export default function SiteHeader() {
           <Link href="/login" className={styles.signIn} id="nav-signin">
             Sign in
           </Link>
-          <CtaLink
-            cta={cta}
+          <InviteRequestButton
             className={`btn btn-primary btn-sm ${styles.cta}`}
             id="nav-signup"
           />

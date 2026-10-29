@@ -176,6 +176,12 @@ export default function RegisterPage() {
             Sign in
           </Link>
         </p>
+        <p style={{ ...styles.footerText, marginTop: "8px" }}>
+          No invite code yet?{" "}
+          <Link href="/#request-invite" style={styles.link} id="register-request-invite">
+            Request an invite
+          </Link>
+        </p>
       </div>
     </div>
   )

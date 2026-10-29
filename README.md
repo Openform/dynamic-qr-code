@@ -9,7 +9,7 @@ The app uses **MySQL/MariaDB** (via [`mysql2`](https://github.com/sidorares/node
 - `JWT_SECRET` — secret for signing auth tokens
 - `BASE_URL` — public URL used to build QR redirect links
 - `SIGNUP_INVITE_CODE` — shared code required on the public `/register` page
-- `INVITE_REQUEST_URL` — optional `mailto:` or `https://` link where visitors can ask for an invite; when set, the landing page's main button becomes "Request an invite", otherwise it's "Create an account" (to `/register`). Read at build time, so rebuild after changing it
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` — the mailbox that sends the team an email for each [invite request](#invite-requests). Optional `SMTP_FROM` (sender, default `QR Go <SMTP_USER>`) and `INVITE_ALERT_EMAILS` (comma-separated recipients, default `ADMIN_EMAILS`)
 - `ADMIN_EMAILS` — comma-separated emails of the accounts allowed into the admin dashboard
 - `ANALYTICS_SECRET` — secret for the anonymous visitor IDs used to count unique scanners (falls back to `JWT_SECRET`)
 - `ANALYTICS_RETENTION_MONTHS` — how long detailed scan records are kept (default `24`; `0` keeps them forever)
@@ -52,6 +52,31 @@ account that already exists is set to Enterprise so no one loses access. You can
 
 Disabling is stored in the `users.disabled_at` column (`NULL` = active), which
 is added automatically on first run. Existing accounts start as active.
+
+### Invite requests
+
+Sign-up is invite-only, so the website's main button is **Request an
+invite**. It opens a form asking for name, email, and optionally company,
+phone and the plan they're interested in, and promises a reply within 24
+hours. Linking to `/#request-invite` opens the form on the landing page (the
+`/register` page does this for visitors without a code).
+
+Each request is saved in the `invite_requests` table (created automatically on
+first run) and listed at **Invite requests** in the admin header
+(`/admin/invites`), with a count of open ones. Open requests are listed oldest
+first and flagged when they're close to, or past, 24 hours old. Reply (the
+**Reply by email** button opens your mail app), then **Mark done**. Spam can be
+deleted.
+
+The team also gets an email for each request, sent through the mailbox in the
+`SMTP_*` settings, to `INVITE_ALERT_EMAILS` (or `ADMIN_EMAILS`). Replying to
+it goes straight to the person who asked. On Hostinger, create a mailbox in
+**hPanel → Emails** and use `SMTP_HOST=smtp.hostinger.com`, `SMTP_PORT=465`,
+and that mailbox's address and password. Until these are set, requests are
+still saved, and the server log notes that no email was sent.
+
+Each IP address can send 5 requests an hour, and requests from simple spam bots
+(caught by a hidden field) are dropped.
 
 ### Legal pages
 
