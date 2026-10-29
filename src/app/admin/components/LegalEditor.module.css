@@ -1,0 +1,386 @@
+/* Legal page editor (/admin/legal). */
+
+.page {
+  position: relative;
+  min-height: 100vh;
+}
+
+/* ---- Header (matches the admin dashboard) ---- */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  background: rgba(10, 10, 26, 0.85);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.headerInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+  gap: 12px;
+}
+
+.headerGroup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo {
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.adminBadge {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+}
+
+/* ---- Page ---- */
+.main {
+  padding-top: 32px;
+  padding-bottom: 64px;
+  --panel-height: clamp(360px, 62vh, 720px);
+}
+
+.pageTitle {
+  font-size: 1.8rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.pageSubtitle {
+  color: var(--text-secondary);
+  margin-top: 6px;
+  margin-bottom: 28px;
+  max-width: 640px;
+}
+
+/* ---- Notice ---- */
+.notice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  margin-bottom: 20px;
+}
+
+.noticeSuccess {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: var(--success);
+}
+
+.noticeError {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: var(--error);
+}
+
+.noticeText {
+  flex: 1;
+}
+
+.noticeLink {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.noticeClose {
+  color: inherit;
+  opacity: 0.7;
+  font-size: 0.9rem;
+  padding: 2px 6px;
+}
+
+/* ---- Tabs and status ---- */
+.tabsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin-bottom: 16px;
+}
+
+.tabs {
+  flex: 0 1 420px;
+}
+
+.dirtyDot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 8px;
+  border-radius: 50%;
+  background: var(--warning);
+  vertical-align: middle;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  color: var(--text-tertiary);
+  font-size: 0.85rem;
+}
+
+.viewLink {
+  color: var(--cyan);
+  font-weight: 500;
+}
+
+.viewLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ---- Editor and preview ---- */
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+}
+
+@media (min-width: 1024px) {
+  .workspace {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  /* clip, not hidden, so the toolbar can stick (hidden breaks sticky) */
+  overflow: clip;
+  min-width: 0;
+}
+
+.panel:focus-within {
+  border-color: rgba(0, 212, 255, 0.35);
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 52px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+/* Typing near the bottom of the text box scrolls the page; keep the
+   toolbar in view under the site header while that happens. */
+.toolbarHeader {
+  position: sticky;
+  top: 64px;
+  z-index: 2;
+  background: #131322;
+}
+
+.panelLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  padding-left: 4px;
+}
+
+.panelHint {
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.toolGroup {
+  display: flex;
+  gap: 2px;
+}
+
+.toolGroup + .toolGroup {
+  padding-left: 6px;
+  margin-left: 2px;
+  border-left: 1px solid var(--glass-border);
+}
+
+.toolButton {
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.toolButton:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.toolButton:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 1px;
+}
+
+.toolBold {
+  font-weight: 700;
+}
+
+.toolItalic {
+  font-style: italic;
+}
+
+.textarea {
+  display: block;
+  width: 100%;
+  height: var(--panel-height);
+  padding: 18px 20px;
+  resize: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  line-height: 1.7;
+  tab-size: 2;
+}
+
+.fieldError {
+  padding: 10px 20px;
+  border-top: 1px solid rgba(239, 68, 68, 0.25);
+  color: var(--error);
+  font-size: 0.85rem;
+}
+
+.preview {
+  height: var(--panel-height);
+  overflow-y: auto;
+  padding: 28px 32px;
+}
+
+@media (max-width: 640px) {
+  .preview {
+    padding: 20px;
+  }
+}
+
+/* ---- Date and save ---- */
+.actions {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  margin-top: 20px;
+}
+
+.dateField {
+  flex: 0 1 420px;
+}
+
+.dateInput {
+  max-width: 220px;
+  color-scheme: dark;
+}
+
+.dateHint {
+  margin-top: 8px;
+  color: var(--text-tertiary);
+  font-size: 0.82rem;
+}
+
+.inlineButton {
+  color: var(--cyan);
+  font-size: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 0;
+}
+
+.actionButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+/* ---- Formatting guide ---- */
+.guide {
+  margin-top: 32px;
+}
+
+.guideSummary {
+  padding: 16px 20px;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.guideBody {
+  padding: 0 20px 20px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.guideTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.guideTable th,
+.guideTable td {
+  text-align: left;
+  padding: 8px 12px 8px 0;
+  border-bottom: 1px solid var(--glass-border);
+  vertical-align: top;
+}
+
+.guideTable th {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.guideTable code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+  color: var(--cyan);
+  background: rgba(0, 212, 255, 0.08);
+  padding: 2px 6px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.guideTable strong {
+  color: var(--text-primary);
+}
+
+.guideTips {
+  list-style: disc;
+  padding-left: 1.25rem;
+  margin-top: 16px;
+}
+
+.guideTips li + li {
+  margin-top: 6px;
+}
