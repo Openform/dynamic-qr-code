@@ -79,6 +79,12 @@ saved, and the server log notes that no email was sent. If Resend rejects an
 email (for example, an unverified domain), the error is in the server log and
 the request is still saved.
 
+The **Email alerts** panel at the top of `/admin/invites` shows whether the
+running app has `RESEND_API_KEY` (and where alerts go). **Send test email**
+sends one straight away and shows Resend's answer, including its error message
+if the key or domain is wrong. After adding or changing the key, restart or
+redeploy the app so it picks the key up.
+
 Each IP address can send 5 requests an hour, and requests from simple spam bots
 (caught by a hidden field) are dropped.
 

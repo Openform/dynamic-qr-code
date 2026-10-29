@@ -7,7 +7,8 @@ const Resend = vi.fn(function Resend(apiKey) {
 });
 vi.mock('resend', () => ({ Resend }));
 
-const { getAlertSettings, buildInviteAlert, sendInviteAlert } = await import('../inviteAlert.js');
+const { getAlertSettings, getAlertStatus, describeSendError, buildInviteAlert, sendInviteAlert, sendTestAlert } =
+  await import('../inviteAlert.js');
 
 const RESEND = { RESEND_API_KEY: 're_test_123' };
 
@@ -44,6 +45,36 @@ describe('getAlertSettings', () => {
   });
 });
 
+describe('getAlertStatus', () => {
+  it('says alerts are off without the API key', () => {
+    expect(getAlertStatus({})).toEqual({ configured: false });
+  });
+
+  it('shows the sender and recipients, never the API key', () => {
+    const status = getAlertStatus(RESEND);
+    expect(status).toEqual({
+      configured: true,
+      from: 'QR Go <mail@qrgo.openform.co.za>',
+      to: ['kenton@openform.co.za'],
+    });
+    expect(JSON.stringify(status)).not.toContain('re_test_123');
+  });
+});
+
+describe('describeSendError', () => {
+  it("passes on Resend's own message", () => {
+    expect(
+      describeSendError({ name: 'validation_error', statusCode: 403, message: 'The domain is not verified.' })
+    ).toBe('The domain is not verified. (validation_error)');
+  });
+
+  it('explains when Resend could not be reached at all', () => {
+    expect(
+      describeSendError({ name: 'application_error', statusCode: null, message: 'Unable to fetch data.' })
+    ).toContain("couldn't reach Resend");
+  });
+});
+
 describe('buildInviteAlert', () => {
   it('lists the details and links to the admin page', () => {
     const { subject, text } = buildInviteAlert(request, { baseUrl: 'https://qrgo.test/' });
@@ -73,6 +104,7 @@ describe('sendInviteAlert', () => {
     delete process.env.INVITE_ALERT_EMAILS;
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'log').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -121,5 +153,60 @@ describe('sendInviteAlert', () => {
 
     await expect(sendInviteAlert(request)).resolves.toBe(false);
     expect(console.error).toHaveBeenCalled();
+  });
+});
+
+describe('sendTestAlert', () => {
+  const saved = { ...process.env };
+  const admin = { name: 'Kenton', email: 'kenton@openform.co.za' };
+
+  beforeEach(() => {
+    send.mockReset();
+    delete process.env.INVITE_ALERT_FROM;
+    delete process.env.INVITE_ALERT_EMAILS;
+  });
+
+  afterEach(() => {
+    process.env = { ...saved };
+  });
+
+  it('says the API key is missing without trying to send', async () => {
+    delete process.env.RESEND_API_KEY;
+    const result = await sendTestAlert(admin);
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('RESEND_API_KEY');
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('sends a test email to the alert recipients and returns the Resend id', async () => {
+    Object.assign(process.env, RESEND);
+    send.mockResolvedValue({ data: { id: 'email_test' }, error: null });
+
+    await expect(sendTestAlert(admin)).resolves.toEqual({
+      ok: true,
+      id: 'email_test',
+      to: ['kenton@openform.co.za'],
+    });
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        from: 'QR Go <mail@qrgo.openform.co.za>',
+        to: ['kenton@openform.co.za'],
+        text: expect.stringContaining('sent by Kenton'),
+      }),
+      expect.anything()
+    );
+  });
+
+  it("returns Resend's error so the admin can see it", async () => {
+    Object.assign(process.env, RESEND);
+    send.mockResolvedValue({
+      data: null,
+      error: { name: 'validation_error', message: 'The domain is not verified.', statusCode: 403 },
+    });
+
+    await expect(sendTestAlert(admin)).resolves.toEqual({
+      ok: false,
+      error: 'The domain is not verified. (validation_error)',
+    });
   });
 });
