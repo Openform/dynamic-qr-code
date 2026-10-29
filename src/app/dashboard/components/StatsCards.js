@@ -1,5 +1,7 @@
 'use client';
 
+import { PackageIcon, QrCodeIcon, ScanIcon } from './icons';
+
 export default function StatsCards({ totalQRCodes = 0, totalScans = 0, plan = null }) {
   return (
     <div style={styles.row}>
@@ -15,7 +17,9 @@ export default function StatsCards({ totalQRCodes = 0, totalScans = 0, plan = nu
               {totalQRCodes}
             </p>
           </div>
-          <div style={styles.icon}>📊</div>
+          <div style={styles.icon}>
+            <QrCodeIcon size={26} strokeWidth={1.75} />
+          </div>
         </div>
       </div>
 
@@ -28,7 +32,9 @@ export default function StatsCards({ totalQRCodes = 0, totalScans = 0, plan = nu
               {totalScans}
             </p>
           </div>
-          <div style={styles.icon}>📱</div>
+          <div style={styles.icon}>
+            <ScanIcon size={26} strokeWidth={1.75} />
+          </div>
         </div>
       </div>
     </div>
@@ -66,7 +72,9 @@ function PackageCard({ plan, used }) {
             </div>
           )}
         </div>
-        <div style={styles.icon}>📦</div>
+        <div style={styles.icon}>
+          <PackageIcon size={26} strokeWidth={1.75} />
+        </div>
       </div>
     </div>
   );
@@ -118,7 +126,15 @@ const styles = {
     letterSpacing: '-0.02em',
   },
   icon: {
-    fontSize: '2.4rem',
-    opacity: 0.9,
+    flex: 'none',
+    width: '52px',
+    height: '52px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: '14px',
+    background: 'rgba(0, 212, 255, 0.08)',
+    border: '1px solid rgba(0, 212, 255, 0.18)',
+    color: 'var(--cyan)',
   },
 };

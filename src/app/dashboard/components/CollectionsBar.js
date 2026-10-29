@@ -12,6 +12,8 @@
  *   countFor(key)    — returns the number of codes for a pill key
  *   onSelect(key), onNew(), onRename(collection), onDelete(collection)
  */
+
+import { PencilIcon, TrashIcon } from "./icons"
 export default function CollectionsBar({
   collections = [],
   activeCollection,
@@ -44,7 +46,7 @@ export default function CollectionsBar({
                 onClick={() => onRename(activeCustom)}
                 title={`Rename "${activeCustom.name}"`}
               >
-                ✏️ Rename
+                <PencilIcon size={14} /> Rename
               </button>
               <button
                 type="button"
@@ -52,7 +54,7 @@ export default function CollectionsBar({
                 onClick={() => onDelete(activeCustom)}
                 title={`Delete "${activeCustom.name}"`}
               >
-                🗑️ Delete
+                <TrashIcon size={14} /> Delete
               </button>
             </>
           )}

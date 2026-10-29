@@ -17,6 +17,7 @@ import {
 } from "@/lib/qrStyle"
 import { renderBwipCanvas } from "@/lib/barcode"
 import footerStyles from "./CreateEditModal.module.css"
+import { TrashIcon } from "./icons"
 
 export default function CreateEditModal({
   isOpen,
@@ -483,7 +484,9 @@ function QRCodeForm({
                       <span className="spinner" /> Deleting…
                     </>
                   ) : (
-                    "🗑️ Delete"
+                    <>
+                      <TrashIcon size={16} /> Delete
+                    </>
                   )}
                 </button>
               )}

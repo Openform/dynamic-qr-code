@@ -6,23 +6,14 @@ import QRCodeStyling from "qr-code-styling"
 import { normalizeStyle, buildQRStylingOptions } from "@/lib/qrStyle"
 import { renderBwipCanvas, downloadBwip } from "@/lib/barcode"
 import cardStyles from "./QRCodeCard.module.css"
-
-function PencilIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-      <path d="m15 5 4 4" />
-    </svg>
-  )
-}
+import {
+  PencilIcon,
+  CopyIcon,
+  CheckIcon,
+  DownloadIcon,
+  ChartIcon,
+  FolderIcon
+} from "./icons"
 
 export default function QRCodeCard({
   qrcode,
@@ -182,7 +173,13 @@ export default function QRCodeCard({
             style={styles.iconButton}
             aria-label="Copy redirect URL"
           >
-            {copied ? <span className="copy-feedback">✓ Copied</span> : "📋"}
+            {copied ? (
+              <span className="copy-feedback" style={styles.withIcon}>
+                <CheckIcon size={14} /> Copied
+              </span>
+            ) : (
+              <CopyIcon size={15} />
+            )}
           </button>
           <div style={styles.downloadWrap} ref={menuRef}>
             <button
@@ -196,7 +193,7 @@ export default function QRCodeCard({
               aria-haspopup="menu"
               aria-expanded={menuOpen}
             >
-              ⬇️
+              <DownloadIcon size={15} />
             </button>
             {menuOpen && (
               <div className="qr-download-menu" style={styles.downloadMenu} role="menu">
@@ -231,7 +228,7 @@ export default function QRCodeCard({
               style={styles.analyticsLink}
               title="See where, when and on what this code is scanned"
             >
-              📈 Analytics
+              <ChartIcon size={14} /> Analytics
             </Link>
           </div>
           <span style={styles.date}>{formatDate(qrcode.createdAt)}</span>
@@ -244,7 +241,7 @@ export default function QRCodeCard({
               htmlFor={`collection-${qrcode.id}`}
               style={styles.collectionLabel}
             >
-              🗂️ Collection
+              <FolderIcon size={14} /> Collection
             </label>
             <select
               id={`collection-${qrcode.id}`}
@@ -353,8 +350,16 @@ const styles = {
     gap: "10px"
   },
   analyticsLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "5px",
     fontSize: "0.8rem",
     color: "var(--text-secondary)"
+  },
+  withIcon: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "4px"
   },
   collectionRow: {
     display: "flex",
@@ -363,6 +368,9 @@ const styles = {
     marginTop: "4px"
   },
   collectionLabel: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "5px",
     fontSize: "0.75rem",
     color: "var(--text-tertiary)",
     whiteSpace: "nowrap"
