@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { PauseIcon, QuestionIcon, AlertIcon } from "@/app/components/icons"
 
 /**
  * Shown to someone who scans a QR code that can't redirect (see /r/[shortId]):
@@ -17,21 +18,21 @@ export const metadata = {
 
 const MESSAGES = {
   inactive: {
-    icon: "⏸",
+    icon: PauseIcon,
     title: "This QR code is inactive",
     body:
       "The owner of this QR code has paused it, so it isn't linking anywhere right now. " +
       "If you were expecting a page here, please contact the business that shared it."
   },
   "not-found": {
-    icon: "?",
+    icon: QuestionIcon,
     title: "QR code not found",
     body:
       "This QR code doesn't exist or has been removed. " +
       "Please check with the business that shared it."
   },
   error: {
-    icon: "!",
+    icon: AlertIcon,
     title: "This QR code can't be opened right now",
     body: "Something went wrong on our side. Please try scanning it again in a moment."
   }
@@ -40,6 +41,7 @@ const MESSAGES = {
 export default async function CodeUnavailablePage({ searchParams }) {
   const { reason } = await searchParams
   const message = MESSAGES[reason] ?? MESSAGES["not-found"]
+  const Icon = message.icon
 
   return (
     <div style={styles.page}>
@@ -54,7 +56,7 @@ export default async function CodeUnavailablePage({ searchParams }) {
 
       <main className="animate-slideUp" style={styles.card}>
         <div style={styles.icon} aria-hidden="true">
-          {message.icon}
+          <Icon size={28} strokeWidth={2.25} />
         </div>
         <h1 style={styles.title}>{message.title}</h1>
         <p style={styles.body}>{message.body}</p>
@@ -103,8 +105,6 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: "1.6rem",
-    fontWeight: 700,
     color: "var(--cyan)",
     background: "rgba(0, 212, 255, 0.1)",
     border: "1px solid rgba(0, 212, 255, 0.25)"

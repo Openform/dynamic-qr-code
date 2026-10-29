@@ -7,6 +7,7 @@ import CreateEditModal from "./components/CreateEditModal"
 import CollectionsBar from "./components/CollectionsBar"
 import CollectionModal from "./components/CollectionModal"
 import Avatar from "./components/Avatar"
+import { SearchIcon, InboxIcon } from "@/app/components/icons"
 import Link from "next/link"
 
 export default function DashboardPage() {
@@ -87,6 +88,7 @@ export default function DashboardPage() {
     setModalOpen(true)
   }
 
+  // Delete is on the edit screen, so the screen closes once the code is gone.
   async function handleDelete(qr) {
     if (!confirm(`Delete "${qr.title}"? This cannot be undone.`)) return
 
@@ -95,9 +97,14 @@ export default function DashboardPage() {
       if (res.ok) {
         setQrcodes((prev) => prev.filter((q) => q.id !== qr.id))
         setTotalScans((prev) => prev - (qr.scanCount ?? 0))
+        setModalOpen(false)
+        return
       }
+      const data = await res.json().catch(() => ({}))
+      alert(data.error || "Could not delete the QR code. Please try again.")
     } catch (error) {
       console.error("Failed to delete QR code:", error)
+      alert("Could not delete the QR code. Check your connection and try again.")
     }
   }
 
@@ -373,7 +380,9 @@ export default function DashboardPage() {
         {/* Action Bar */}
         <div style={styles.actionBar} className="animate-fadeIn">
           <div style={styles.searchWrap}>
-            <span style={styles.searchIcon}>🔍</span>
+            <span style={styles.searchIcon} aria-hidden="true">
+              <SearchIcon size={16} />
+            </span>
             <input
               id="search-qrcodes"
               type="text"
@@ -398,7 +407,9 @@ export default function DashboardPage() {
         {/* QR Codes Grid */}
         {filteredQRCodes.length === 0 && !loading ? (
           <div style={styles.emptyState} className="animate-fadeIn">
-            <div style={{ fontSize: "3rem", marginBottom: "16px" }}>📭</div>
+            <div style={styles.emptyIcon}>
+              <InboxIcon size={44} strokeWidth={1.5} />
+            </div>
             <h3 style={{ fontWeight: 600, marginBottom: "8px" }}>
               {search
                 ? "No QR codes found"
@@ -431,7 +442,6 @@ export default function DashboardPage() {
                 qrcode={qr}
                 collections={collections}
                 onEdit={handleEdit}
-                onDelete={handleDelete}
                 onAssignCollection={handleAssignCollection}
               />
             ))}
@@ -444,6 +454,7 @@ export default function DashboardPage() {
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         onSave={handleSave}
+        onDelete={handleDelete}
         qrcode={editingQR}
         collections={collections}
         defaultCollectionId={newCodeCollectionId}
@@ -539,8 +550,15 @@ const styles = {
     left: "14px",
     top: "50%",
     transform: "translateY(-50%)",
-    fontSize: "0.9rem",
+    display: "flex",
+    color: "var(--text-tertiary)",
     pointerEvents: "none"
+  },
+  emptyIcon: {
+    display: "flex",
+    justifyContent: "center",
+    color: "var(--text-tertiary)",
+    marginBottom: "16px"
   },
   limitNotice: {
     display: "flex",

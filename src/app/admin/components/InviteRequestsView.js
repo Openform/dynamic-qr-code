@@ -155,7 +155,81 @@ function RequestCard({ request, now, busy, onSetHandled, onDelete }) {
   )
 }
 
-export default function InviteRequestsView({ initialRequests }) {
+/** Whether new requests are emailed to the team, with a button to test it. */
+function EmailAlertsPanel({ status }) {
+  const [sending, setSending] = useState(false)
+  const [result, setResult] = useState(null)
+
+  async function sendTest() {
+    setSending(true)
+    setResult(null)
+    try {
+      const res = await fetch("/api/admin/invite-alert/test", { method: "POST" })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || "Could not send the test email.")
+      setResult({
+        ok: true,
+        text: `Resend accepted the test email to ${data.to.join(", ")}. It should arrive within a minute. If it doesn't, check spam.`
+      })
+    } catch (err) {
+      setResult({
+        ok: false,
+        text:
+          err instanceof TypeError
+            ? "Couldn't reach QR Go. Check your connection and try again."
+            : `The test email wasn't sent: ${err.message}`
+      })
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <section className={`glass-card-static ${styles.alerts}`} aria-labelledby="email-alerts-title">
+      <div className={styles.alertsTop}>
+        <div className={styles.alertsBody}>
+          <h2 id="email-alerts-title" className={styles.alertsTitle}>
+            Email alerts
+            <span
+              className={`badge ${styles.tag} ${status.configured ? "badge-success" : styles.flagOverdue}`}
+            >
+              {status.configured ? "On" : "Off"}
+            </span>
+          </h2>
+          {status.configured ? (
+            <p className={styles.alertsText}>
+              Each new request is emailed to <strong>{status.to.join(", ")}</strong> from{" "}
+              <strong>{status.from}</strong>, through Resend.
+            </p>
+          ) : (
+            <p className={styles.alertsText}>
+              No emails are being sent: the server doesn&apos;t have <code>RESEND_API_KEY</code>.
+              Add it to the app&apos;s environment variables, then restart or redeploy the app.
+              Requests are still saved here.
+            </p>
+          )}
+        </div>
+        {status.configured && (
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={sendTest}
+            disabled={sending}
+          >
+            {sending ? "Sending…" : "Send test email"}
+          </button>
+        )}
+      </div>
+      {result && (
+        <p role="status" className={result.ok ? styles.alertsOk : styles.alertsError}>
+          <span aria-hidden="true">{result.ok ? "✓" : "⚠"}</span> {result.text}
+        </p>
+      )}
+    </section>
+  )
+}
+
+export default function InviteRequestsView({ initialRequests, alertStatus }) {
   const [requests, setRequests] = useState(initialRequests)
   const [view, setView] = useState("open")
   const [busyId, setBusyId] = useState(null)
@@ -227,6 +301,8 @@ export default function InviteRequestsView({ initialRequests }) {
           People who asked for an invite on the website. They were told they&apos;d hear
           back {REPLY_PROMISE}. Reply, then mark the request done.
         </p>
+
+        <EmailAlertsPanel status={alertStatus} />
 
         <div className={`qr-tabs ${styles.tabs}`} role="group" aria-label="Show requests">
           <button

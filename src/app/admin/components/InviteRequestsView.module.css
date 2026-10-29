@@ -61,6 +61,61 @@
   max-width: 640px;
 }
 
+/* ---- Email alerts panel ---- */
+.alerts {
+  display: grid;
+  gap: 12px;
+  padding: 18px 22px;
+  margin-bottom: 24px;
+}
+
+.alertsTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+}
+
+.alertsBody {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.alertsTitle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.alertsText {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  overflow-wrap: anywhere;
+}
+
+.alertsText strong {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.alertsOk,
+.alertsError {
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.alertsOk {
+  color: var(--success);
+}
+
+.alertsError {
+  color: var(--error);
+}
+
 .tabs {
   display: inline-flex;
   min-width: 260px;

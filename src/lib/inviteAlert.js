@@ -78,6 +78,44 @@ function getClient(apiKey) {
   return cached.client;
 }
 
+const NOT_SET_UP =
+  "RESEND_API_KEY isn't set on the server. Add it to the app's environment variables, then restart or redeploy the app.";
+
+/** What the admin page shows about alerts. Never includes the API key. */
+export function getAlertStatus(env = process.env) {
+  const settings = getAlertSettings(env);
+  if (!settings) return { configured: false };
+  return { configured: true, from: settings.from, to: settings.to };
+}
+
+/** Resend's own message, or a plain explanation when Resend couldn't be reached. */
+export function describeSendError(error) {
+  // The SDK answers like this when the request got no response at all.
+  if (error?.name === 'application_error' && error.statusCode == null) {
+    return "The server couldn't reach Resend (api.resend.com). Check that the host allows outgoing HTTPS requests.";
+  }
+  const message = error?.message || String(error);
+  return error?.name ? `${message} (${error.name})` : message;
+}
+
+/**
+ * Send one email through Resend. Never throws. Returns { ok: true, id }, or
+ * { ok: false, error } with a message an admin can act on.
+ */
+async function deliver(settings, { subject, text, replyTo }) {
+  try {
+    const { data, error } = await getClient(settings.apiKey).emails.send(
+      { from: settings.from, to: settings.to, replyTo, subject, text },
+      { signal: AbortSignal.timeout(SEND_TIMEOUT_MS) }
+    );
+    // Resend reports problems (bad key, unverified domain...) as a returned error.
+    if (error) return { ok: false, error: describeSendError(error) };
+    return { ok: true, id: data?.id ?? null };
+  } catch (error) {
+    return { ok: false, error: describeSendError(error) };
+  }
+}
+
 let warnedNotSetUp = false;
 
 /**
@@ -88,9 +126,7 @@ export async function sendInviteAlert(request) {
   const settings = getAlertSettings();
   if (!settings) {
     if (!warnedNotSetUp) {
-      console.warn(
-        'Invite request saved, but no alert email was sent: set RESEND_API_KEY to turn alerts on (see README).'
-      );
+      console.warn(`Invite request saved, but no alert email was sent: ${NOT_SET_UP}`);
       warnedNotSetUp = true;
     }
     return false;
@@ -98,25 +134,37 @@ export async function sendInviteAlert(request) {
 
   try {
     const { subject, text } = buildInviteAlert(request, { baseUrl: process.env.BASE_URL });
-    const { error } = await getClient(settings.apiKey).emails.send(
-      {
-        from: settings.from,
-        to: settings.to,
-        // Replying to the alert goes straight to the person who asked.
-        replyTo: request.email,
-        subject,
-        text,
-      },
-      { signal: AbortSignal.timeout(SEND_TIMEOUT_MS) }
-    );
-    // Resend reports problems (bad key, unverified domain...) as a returned error.
-    if (error) {
-      console.error('Could not send the invite request alert email:', error);
+    // Replying to the alert goes straight to the person who asked.
+    const result = await deliver(settings, { subject, text, replyTo: request.email });
+    if (!result.ok) {
+      console.error('Could not send the invite request alert email:', result.error);
       return false;
     }
+    console.log(`Invite request alert emailed to ${settings.to.join(', ')} (Resend id ${result.id}).`);
     return true;
   } catch (error) {
     console.error('Could not send the invite request alert email:', error);
     return false;
   }
+}
+
+/**
+ * Send a test alert straight away, for the "Send test email" button on the
+ * admin page. Returns { ok: true, id, to } or { ok: false, error }.
+ */
+export async function sendTestAlert(admin = {}) {
+  const settings = getAlertSettings();
+  if (!settings) return { ok: false, error: NOT_SET_UP };
+
+  const text = [
+    `This is a test email from QR Go, sent by ${admin.name || admin.email || 'an admin'} from the Invite requests page.`,
+    '',
+    `New invite requests will be emailed to ${settings.to.join(', ')} from ${settings.from}.`,
+  ].join('\n');
+  const result = await deliver(settings, {
+    subject: 'QR Go test email: invite alerts are working',
+    text,
+    replyTo: admin.email || undefined,
+  });
+  return result.ok ? { ...result, to: settings.to } : result;
 }

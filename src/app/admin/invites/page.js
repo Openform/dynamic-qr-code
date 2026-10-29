@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { getAdminUser } from "@/lib/admin"
 import { toClientInviteRequest } from "@/lib/inviteRequests"
 import { getInviteRequests } from "@/lib/db"
+import { getAlertStatus } from "@/lib/inviteAlert"
 import InviteRequestsView from "../components/InviteRequestsView"
 
 export const metadata = {
@@ -18,5 +19,10 @@ export default async function AdminInvitesPage() {
   if (!admin) redirect("/dashboard")
 
   const rows = await getInviteRequests()
-  return <InviteRequestsView initialRequests={rows.map(toClientInviteRequest)} />
+  return (
+    <InviteRequestsView
+      initialRequests={rows.map(toClientInviteRequest)}
+      alertStatus={getAlertStatus()}
+    />
+  )
 }

@@ -2,7 +2,8 @@
 
 import { useState } from "react"
 import styles from "../analytics.module.css"
-import { countryName, deviceLabel, flag, formatDateTime, placeLabel, timeAgo } from "./format"
+import { countryName, deviceLabel, formatDateTime, placeLabel, timeAgo } from "./format"
+import CountryFlag from "./CountryFlag"
 
 /** The latest scans in the period: where, on what, and when. */
 export default function RecentScans({ recent, showCode, now, initial = 8 }) {
@@ -22,7 +23,7 @@ export default function RecentScans({ recent, showCode, now, initial = 8 }) {
           {visible.map((scan, i) => (
             <li key={`${scan.scannedAt}-${i}`} className={styles.listRow}>
               <span aria-hidden="true" style={{ fontSize: "1.1rem" }}>
-                {flag(scan.countryCode)}
+                <CountryFlag code={scan.countryCode} />
               </span>
               <div className={styles.listMain}>
                 <span className={styles.ellipsis} style={{ color: "var(--text-primary)" }}>

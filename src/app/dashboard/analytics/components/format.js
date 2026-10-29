@@ -23,9 +23,12 @@ export function percentOf(part, total) {
   return Math.round((part / total) * 100)
 }
 
-/** Flag emoji for an ISO country code ("ZA" → 🇿🇦), or a globe when unknown. */
+/**
+ * Flag emoji for an ISO country code ("ZA" → 🇿🇦), or "" when unknown.
+ * CountryFlag shows a globe icon in that case.
+ */
 export function flag(code) {
-  if (!code || !/^[A-Z]{2}$/.test(code)) return "🌐"
+  if (!code || !/^[A-Z]{2}$/.test(code)) return ""
   return String.fromCodePoint(...[...code].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65))
 }
 
