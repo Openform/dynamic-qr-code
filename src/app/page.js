@@ -1,5 +1,7 @@
 import Link from "next/link"
 import HeroQR from "./components/HeroQR"
+import SiteHeader from "./components/SiteHeader"
+import SiteFooter from "./components/SiteFooter"
 
 export default function LandingPage() {
   return (
@@ -36,25 +38,7 @@ export default function LandingPage() {
         }}
       />
 
-      {/* ---- Navigation ---- */}
-      <nav style={styles.nav}>
-        <div className="container" style={styles.navInner}>
-          <Link href="/" style={styles.logo}>
-            <span className="gradient-text" style={styles.logoText}>
-              QR Go
-            </span>
-          </Link>
-          <div style={styles.navLinks}>
-            <Link
-              href="/login"
-              className="btn btn-primary btn-sm"
-              id="nav-signin"
-            >
-              Sign In
-            </Link>
-          </div>
-        </div>
-      </nav>
+      <SiteHeader />
 
       {/* ---- Hero Section ---- */}
       <main>
@@ -198,56 +182,12 @@ export default function LandingPage() {
         </section>
       </main>
 
-      {/* ---- Footer ---- */}
-      <footer style={styles.footer}>
-        <div className="container" style={styles.footerInner}>
-          <span
-            className="gradient-text"
-            style={{ fontWeight: 600, fontSize: "1.1rem" }}
-          >
-            QR Go
-          </span>
-          <p style={{ color: "var(--text-tertiary)", fontSize: "0.85rem" }}>
-            © {new Date().getFullYear()} QR Go. All rights reserved.
-          </p>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }
 
 const styles = {
-  /* Nav */
-  nav: {
-    position: "sticky",
-    top: 0,
-    zIndex: 100,
-    backdropFilter: "blur(16px)",
-    WebkitBackdropFilter: "blur(16px)",
-    background: "rgba(10, 10, 26, 0.8)",
-    borderBottom: "1px solid rgba(255,255,255,0.06)"
-  },
-  navInner: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    height: "64px"
-  },
-  logo: {
-    display: "flex",
-    alignItems: "center"
-  },
-  logoText: {
-    fontSize: "1.5rem",
-    fontWeight: 700,
-    letterSpacing: "-0.02em"
-  },
-  navLinks: {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px"
-  },
-
   /* Hero */
   hero: {
     paddingTop: "80px",
@@ -367,18 +307,5 @@ const styles = {
     color: "var(--text-secondary)",
     fontSize: "0.95rem",
     lineHeight: 1.7
-  },
-
-  /* Footer */
-  footer: {
-    borderTop: "1px solid rgba(255,255,255,0.06)",
-    padding: "24px 0"
-  },
-  footerInner: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    flexWrap: "wrap",
-    gap: "12px"
   }
 }
