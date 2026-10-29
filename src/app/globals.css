@@ -256,12 +256,15 @@ select {
   background-clip: text;
 }
 
-/* ---- Utility: Glass Card ---- */
+/* ---- Utility: Glass Card ----
+   Write only the standard backdrop-filter, never alongside
+   -webkit-backdrop-filter: the CSS build keeps just the last of the pair, and
+   Chrome ignores the -webkit- one, so the blur vanished. The build adds the
+   -webkit- version itself for browsers that need it. */
 .glass-card {
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
   border-radius: var(--radius-lg);
   transition: all var(--transition-base);
 }
@@ -278,7 +281,6 @@ select {
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
   border-radius: var(--radius-lg);
 }
 
@@ -425,7 +427,6 @@ select {
   justify-content: center;
   background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   animation: fadeIn 0.2s ease;
   padding: var(--space-md);
 }
@@ -932,7 +933,6 @@ a.truncate {
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-xl);
   backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
   box-shadow: var(--shadow-lg);
   animation:
     qr-card-float 7s ease-in-out infinite,
