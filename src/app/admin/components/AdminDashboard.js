@@ -333,6 +333,9 @@ export default function AdminDashboard({ currentAdminId }) {
             </span>
           </div>
           <div style={styles.headerLeft}>
+            <Link href="/admin/legal" id="admin-legal-link" className="btn btn-ghost btn-sm">
+              Legal pages
+            </Link>
             <Link href="/admin/analytics" id="admin-analytics-link" className="btn btn-ghost btn-sm">
               Platform analytics
             </Link>
@@ -629,12 +632,17 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    height: "64px",
+    // Wraps onto two rows on phones instead of overflowing.
+    flexWrap: "wrap",
+    minHeight: "64px",
+    paddingTop: "10px",
+    paddingBottom: "10px",
     gap: "12px"
   },
   headerLeft: {
     display: "flex",
     alignItems: "center",
+    flexWrap: "wrap",
     gap: "12px"
   },
   logo: {

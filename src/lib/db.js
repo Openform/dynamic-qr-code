@@ -151,6 +151,22 @@ async function initSchema() {
         REFERENCES qrcodes(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
+
+  // Text of the legal pages (slug 'privacy' or 'terms'), edited from
+  // /admin/legal. No row means the page still shows its placeholder text
+  // (lib/legalDefaults.js). last_updated is the date shown on the page;
+  // updated_at (UTC) and updated_by record the last save.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS legal_pages (
+      slug VARCHAR(32) NOT NULL PRIMARY KEY,
+      content MEDIUMTEXT NOT NULL,
+      last_updated DATE NOT NULL,
+      updated_at DATETIME NOT NULL,
+      updated_by INT UNSIGNED NULL,
+      CONSTRAINT fk_legal_pages_user FOREIGN KEY (updated_by)
+        REFERENCES users(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
 }
 
 /**
@@ -838,6 +854,44 @@ async function getUserStats(userId) {
   };
 }
 
+// ──────────────────────────────────────────────
+// Legal pages
+// ──────────────────────────────────────────────
+
+/**
+ * The saved text of a legal page, with the name of whoever last saved it
+ * (null once that account is gone). Returns null if it has never been saved.
+ */
+async function getLegalPage(slug) {
+  await ensureSchema();
+  const [rows] = await pool.execute(
+    `SELECT lp.slug, lp.content, lp.last_updated, lp.updated_at,
+            u.name AS updated_by_name
+       FROM legal_pages lp
+       LEFT JOIN users u ON u.id = lp.updated_by
+      WHERE lp.slug = :slug
+      LIMIT 1`,
+    { slug }
+  );
+  return rows[0] || null;
+}
+
+/** Create or replace a legal page's text. Returns the saved row. */
+async function saveLegalPage(slug, { content, lastUpdated }, userId) {
+  await ensureSchema();
+  await pool.execute(
+    `INSERT INTO legal_pages (slug, content, last_updated, updated_at, updated_by)
+     VALUES (:slug, :content, :lastUpdated, UTC_TIMESTAMP(), :userId)
+     ON DUPLICATE KEY UPDATE
+       content = :content,
+       last_updated = :lastUpdated,
+       updated_at = UTC_TIMESTAMP(),
+       updated_by = :userId`,
+    { slug, content, lastUpdated, userId }
+  );
+  return getLegalPage(slug);
+}
+
 module.exports = {
   pool,
   ensureSchema,
@@ -866,4 +920,6 @@ module.exports = {
   createCollection,
   updateCollection,
   deleteCollection,
+  getLegalPage,
+  saveLegalPage,
 };

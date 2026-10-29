@@ -52,6 +52,21 @@ account that already exists is set to Enterprise so no one loses access. You can
 Disabling is stored in the `users.disabled_at` column (`NULL` = active), which
 is added automatically on first run. Existing accounts start as active.
 
+### Legal pages
+
+Admins edit the Privacy Policy (`/privacy`) and Terms & Conditions (`/terms`)
+at **Legal pages** in the admin header (`/admin/legal`). The editor has a
+formatting toolbar (headings, bold, italic, lists, links), a live preview and
+the "Last updated" date shown on the page. Changes go live as soon as they're
+saved.
+
+The text uses a small set of Markdown formatting (see
+[`src/lib/markdown.js`](src/lib/markdown.js)). It's never treated as HTML, and
+only web, email, phone and on-site links are allowed. Saved text is stored in
+the `legal_pages` table, created automatically on first run; until a page is
+saved it shows the placeholder text in
+[`src/lib/legalDefaults.js`](src/lib/legalDefaults.js).
+
 ## Scan analytics
 
 Every scan of a code is recorded after the visitor has been redirected, so
