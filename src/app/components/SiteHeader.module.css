@@ -1,0 +1,107 @@
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  /* Only the standard property: the CSS build keeps just one of the pair and
+     adds any prefix itself. */
+  backdrop-filter: blur(16px);
+  background: rgba(10, 10, 26, 0.8);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+  height: 68px;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
+.logo {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.nav {
+  display: flex;
+  gap: 28px;
+  margin-right: auto;
+}
+
+.navLink,
+.signIn {
+  position: relative;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  transition: color var(--transition-fast);
+}
+
+.navLink:hover,
+.navLink:focus-visible,
+.signIn:hover,
+.signIn:focus-visible {
+  color: var(--text-primary);
+}
+
+/* Underline that grows from the left on hover */
+.navLink::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -6px;
+  height: 1px;
+  background: var(--gradient-primary);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.3s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.navLink:hover::after,
+.navLink:focus-visible::after {
+  transform: scaleX(1);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.signIn {
+  padding: 10px 0;
+}
+
+@media (max-width: 860px) {
+  .nav {
+    display: none;
+  }
+
+  .actions {
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .inner {
+    padding: 0 16px;
+    height: 60px;
+  }
+}
+
+/* The hero has the same button straight underneath, so phones keep the bar
+   to the logo and Sign in. */
+@media (max-width: 520px) {
+  .cta {
+    display: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navLink::after {
+    transition: none;
+  }
+}

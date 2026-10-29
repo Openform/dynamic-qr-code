@@ -1,142 +1,884 @@
+/* ============================================
+   Landing page
+   ============================================ */
+
 .page {
-  --background: #fafafa;
-  --foreground: #fff;
-
-  --text-primary: #000;
-  --text-secondary: #666;
-
-  --button-primary-hover: #383838;
-  --button-secondary-hover: #f2f2f2;
-  --button-secondary-border: #ebebeb;
-
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-geist-sans);
-  background-color: var(--background);
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --tile-bg: #10102a;
+  --line: rgba(255, 255, 255, 0.07);
+  position: relative;
+  /* clip, not hidden: hidden would stop the header from sticking */
+  overflow-x: clip;
 }
 
-.main {
-  display: flex;
-  flex: 1;
+.wrap {
   width: 100%;
-  max-width: 800px;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: space-between;
-  background-color: var(--foreground);
-  padding: 120px 60px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
 }
 
-.intro {
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.section {
+  position: relative;
+  padding: 112px 0;
+  scroll-margin-top: 68px;
+}
+
+.h2 {
+  font-size: clamp(2rem, 4vw, 3.25rem);
+  font-weight: 700;
+  line-height: 1.06;
+  letter-spacing: -0.03em;
+}
+
+.sectionHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px 64px;
+  margin-bottom: 56px;
+}
+
+.sectionHead .h2 {
+  flex: 1 1 520px;
+}
+
+.sectionLead {
+  flex: 0 1 400px;
+  color: var(--text-secondary);
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+
+.centerHead {
+  max-width: 780px;
+  margin: 0 auto 56px;
+  text-align: center;
+}
+
+.centerHead .sectionLead {
+  margin-top: 16px;
+}
+
+/* ---- Scroll reveal (see RevealObserver) ---- */
+.reveal {
+  transition:
+    opacity 0.9s var(--ease-out),
+    transform 0.9s var(--ease-out);
+  transition-delay: var(--d, 0ms);
+}
+
+:global(html[data-reveal]) .reveal:not([data-shown]) {
+  opacity: 0;
+  transform: translateY(28px);
+}
+
+/* ---- Buttons and links ---- */
+.bigBtn {
+  padding: 16px 32px;
+  font-size: 1rem;
+}
+
+.arrowLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  color: var(--text-primary);
+  font-weight: 500;
+  transition: color var(--transition-fast);
+}
+
+.arrowLink svg {
+  transition: transform 0.3s var(--ease-out);
+}
+
+.arrowLink:hover,
+.arrowLink:focus-visible {
+  color: var(--cyan);
+}
+
+.arrowLink:hover svg,
+.arrowLink:focus-visible svg {
+  transform: translateX(4px);
+}
+
+/* ============================================
+   Hero
+   ============================================ */
+.hero {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: calc(100dvh - 68px);
+  padding: 88px 0 112px;
+}
+
+/* Dotted grid and two slow-drifting colour glows behind the hero */
+.heroBackdrop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.09) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: radial-gradient(ellipse 75% 70% at 65% 40%, #000 15%, transparent 72%);
+  -webkit-mask-image: radial-gradient(ellipse 75% 70% at 65% 40%, #000 15%, transparent 72%);
+}
+
+.heroBackdrop::before,
+.heroBackdrop::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.32;
+}
+
+.heroBackdrop::before {
+  width: 520px;
+  height: 520px;
+  top: -220px;
+  right: -120px;
+  background: var(--cyan);
+  animation: drift 18s ease-in-out infinite alternate;
+}
+
+.heroBackdrop::after {
+  width: 420px;
+  height: 420px;
+  bottom: -160px;
+  left: -160px;
+  background: var(--purple);
+  animation: drift 22s ease-in-out infinite alternate-reverse;
+}
+
+@keyframes drift {
+  to {
+    transform: translate(-60px, 50px) scale(1.12);
+  }
+}
+
+.heroInner {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 72px 48px;
+}
+
+.heroText {
+  flex: 1 1 520px;
+  max-width: 640px;
+  min-width: 0;
+}
+
+.heroTitle {
+  margin: 0 0 24px;
+  font-size: clamp(2.6rem, 6vw, 4.75rem);
+  font-weight: 700;
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+}
+
+.titleLine {
+  display: block;
+}
+
+/* Gradient that slowly flows through the key words */
+.shimmer {
+  background: linear-gradient(90deg, #00d4ff, #7c3aed, #f472b6, #7c3aed, #00d4ff);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: flow 7s linear infinite;
+}
+
+@keyframes flow {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.heroLead {
+  max-width: 520px;
+  margin-bottom: 40px;
+  color: var(--text-secondary);
+  font-size: 1.15rem;
+  line-height: 1.65;
+}
+
+.heroCtas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 28px;
+}
+
+.heroNote {
+  margin-top: 24px;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.heroNote a {
+  color: var(--cyan);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.heroVisual {
+  position: relative;
+  flex: 0 1 auto;
+  display: flex;
+  justify-content: center;
+  margin-inline: auto;
+  padding: 28px 30px;
+}
+
+.heroGlow {
+  position: absolute;
+  inset: -40px;
+  background: radial-gradient(closest-side, rgba(0, 212, 255, 0.16), rgba(124, 58, 237, 0.08) 60%, transparent);
+  pointer-events: none;
+  animation: breathe 6s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  50% {
+    opacity: 0.55;
+    transform: scale(0.94);
+  }
+}
+
+/* Entrance on load: each piece rises out of a soft blur, one after another */
+.enter {
+  animation: rise 0.9s var(--ease-out) both;
+  animation-delay: var(--d, 0ms);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+.enterVisual {
+  animation: pop-in 1.2s var(--ease-out) 0.35s both;
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(32px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ============================================
+   Use-case marquee
+   ============================================ */
+.marquee {
+  border-block: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.marqueeInner {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  padding-block: 22px;
+}
+
+.marqueeLabel {
+  flex: none;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.marqueeViewport {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+
+/* Two copies of the list side by side; sliding by half loops seamlessly. */
+.marqueeTrack {
+  display: flex;
+  width: max-content;
+  animation: marquee 42s linear infinite;
+}
+
+.marqueeViewport:hover .marqueeTrack {
+  animation-play-state: paused;
+}
+
+.marqueeItem {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  padding-right: 28px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.marqueeItem::after {
+  content: "";
+  width: 5px;
+  height: 5px;
+  background: var(--cyan);
+  opacity: 0.7;
+  transform: rotate(45deg);
+}
+
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* ============================================
+   Features (bento)
+   ============================================ */
+.bento {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.tile {
+  position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  text-align: left;
   gap: 24px;
+  min-width: 0;
+  padding: 32px;
+  background: var(--tile-bg);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  overflow: hidden;
 }
 
-.intro h1 {
-  max-width: 320px;
-  font-size: 40px;
-  font-weight: 600;
-  line-height: 48px;
-  letter-spacing: -2.4px;
-  text-wrap: balance;
-  color: var(--text-primary);
+.tileWide {
+  grid-column: span 2;
 }
 
-.intro p {
-  max-width: 440px;
-  font-size: 18px;
-  line-height: 32px;
-  text-wrap: balance;
+.tile h3 {
+  margin-bottom: 8px;
+  font-size: 1.45rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.tile p {
+  max-width: 460px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* Pointer spotlight: a soft glow plus a lit edge (positions from SpotlightGrid) */
+.tile::before,
+.tile::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.tile::before {
+  z-index: -1;
+  background: radial-gradient(
+    440px circle at var(--mx, 50%) var(--my, -20%),
+    rgba(0, 212, 255, 0.08),
+    transparent 45%
+  );
+}
+
+.tile::after {
+  padding: 1px;
+  background: radial-gradient(
+    320px circle at var(--mx, 50%) var(--my, -20%),
+    rgba(0, 212, 255, 0.6),
+    rgba(124, 58, 237, 0.35) 40%,
+    transparent 70%
+  );
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  -webkit-mask-composite: xor;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .bento:hover .tile::before,
+  .bento:hover .tile::after {
+    opacity: 1;
+  }
+}
+
+/* Location bars grow in when the tile is revealed */
+.bars {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  font-size: 0.9rem;
+}
+
+.barLabel {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.barLabel span:last-child {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.barTrack {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.barFill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--cyan), #7c9cff);
+  transform-origin: left;
+}
+
+:global(html[data-reveal]) .barFill {
+  transform: scaleX(0);
+}
+
+:global(html[data-reveal] [data-shown]) .barFill {
+  transform: scaleX(1);
+  transition: transform 1.2s var(--ease-out) var(--bar-delay, 0ms);
+}
+
+/* Chips (devices, collections) pop in one by one */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.chip {
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.chipActive {
+  border-color: rgba(0, 212, 255, 0.45);
+  color: #7fe7ff;
+}
+
+:global(html[data-reveal]) .chip {
+  opacity: 0;
+  transform: scale(0.85);
+}
+
+:global(html[data-reveal] [data-shown]) .chip {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 0.5s var(--ease-out),
+    transform 0.5s var(--ease-out);
+  transition-delay: calc(var(--i, 0) * 90ms + 400ms);
+}
+
+/* Checklist with ticks that draw themselves */
+.checks {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: #c3cbd9;
+}
+
+.checks li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.checks svg {
+  flex: none;
+  color: var(--cyan);
+}
+
+:global(html[data-reveal]) .checks path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+:global(html[data-reveal] [data-shown]) .checks path {
+  animation: draw 0.5s ease forwards;
+  animation-delay: calc(var(--i, 0) * 150ms + 600ms);
+}
+
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ============================================
+   How it works
+   ============================================ */
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 32px;
+  margin-top: 48px;
+}
+
+.step {
+  --step-delay: calc(var(--i) * 0.45s);
+  transition:
+    opacity 0.8s var(--ease-out),
+    transform 0.8s var(--ease-out);
+  transition-delay: var(--step-delay);
+}
+
+:global(html[data-reveal]) .steps:not([data-shown]) .step {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+/* A track across the top of each step that fills in sequence */
+.stepTrack {
+  display: block;
+  height: 2px;
+  margin-bottom: 24px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.stepFill {
+  display: block;
+  height: 100%;
+  background: var(--gradient-primary);
+  transform-origin: left;
+}
+
+:global(html[data-reveal]) .stepFill {
+  transform: scaleX(0);
+}
+
+:global(html[data-reveal] [data-shown]) .stepFill {
+  transform: scaleX(1);
+  transition: transform 0.9s cubic-bezier(0.65, 0, 0.35, 1) calc(var(--step-delay) + 0.2s);
+}
+
+.stepNum {
+  font-family: ui-monospace, SFMono-Regular, Menlo, "Cascadia Code", monospace;
+  font-size: 0.875rem;
+  color: var(--cyan);
+}
+
+.step h3 {
+  margin: 14px 0 10px;
+  font-size: 1.45rem;
+  font-weight: 650;
+}
+
+.step p {
+  color: var(--text-secondary);
+  line-height: 1.65;
+}
+
+/* ============================================
+   Plans
+   ============================================ */
+.plansSection {
+  border-top: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 60%);
+}
+
+.plans {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.planCard {
+  height: 100%;
+  padding: 32px 28px;
+  background: var(--tile-bg);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  transition:
+    transform 0.35s var(--ease-out),
+    border-color 0.35s ease,
+    box-shadow 0.35s ease;
+}
+
+.planCard:hover {
+  transform: translateY(-6px);
+  border-color: rgba(0, 212, 255, 0.4);
+  box-shadow: 0 24px 50px -24px rgba(0, 212, 255, 0.45);
+}
+
+.planName {
+  font-size: 1.15rem;
+  font-weight: 650;
+}
+
+.planNumber {
+  display: block;
+  margin: 28px 0 6px;
+  font-size: 3.5rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  transition: color 0.35s ease;
+}
+
+.planCard:hover .planNumber {
+  color: var(--cyan);
+}
+
+.planUnit {
   color: var(--text-secondary);
 }
 
-.intro a {
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.ctas {
+.plansCta {
   display: flex;
-  flex-direction: row;
-  width: 100%;
-  max-width: 440px;
-  gap: 16px;
-  font-size: 14px;
-}
-
-.ctas a {
-  display: flex;
-  justify-content: center;
+  flex-direction: column;
   align-items: center;
-  height: 40px;
-  padding: 0 16px;
-  border-radius: 128px;
-  border: 1px solid transparent;
-  transition: 0.2s;
-  cursor: pointer;
-  width: fit-content;
-  font-weight: 500;
+  gap: 16px;
+  margin-top: 48px;
+  text-align: center;
 }
 
-a.primary {
-  background: var(--text-primary);
-  color: var(--background);
-  gap: 8px;
+.plansNote {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
 }
 
-a.secondary {
-  border-color: var(--button-secondary-border);
+/* ============================================
+   Final call to action
+   ============================================ */
+@property --cta-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
 }
 
-/* Enable hover only on non-touch devices */
-@media (hover: hover) and (pointer: fine) {
-  a.primary:hover {
-    background: var(--button-primary-hover);
-    border-color: transparent;
-  }
-
-  a.secondary:hover {
-    background: var(--button-secondary-hover);
-    border-color: transparent;
-  }
+/* A gradient edge that slowly travels around the panel */
+.ctaFrame {
+  padding: 1.5px;
+  border-radius: 28px;
+  background: conic-gradient(
+    from var(--cta-angle),
+    rgba(0, 212, 255, 0.8),
+    rgba(124, 58, 237, 0.35),
+    rgba(244, 114, 182, 0.8),
+    rgba(124, 58, 237, 0.35),
+    rgba(0, 212, 255, 0.8)
+  );
+  animation: spin-edge 9s linear infinite;
 }
 
-@media (max-width: 600px) {
-  .main {
-    padding: 48px 24px;
-  }
-
-  .intro {
-    gap: 16px;
-  }
-
-  .intro h1 {
-    font-size: 32px;
-    line-height: 40px;
-    letter-spacing: -1.92px;
+@keyframes spin-edge {
+  to {
+    --cta-angle: 360deg;
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  .logo {
-    filter: invert();
+.ctaInner {
+  position: relative;
+  overflow: hidden;
+  padding: 88px 32px;
+  border-radius: 26.5px;
+  background: #0e0e26;
+  text-align: center;
+}
+
+.ctaGlow {
+  position: absolute;
+  width: 520px;
+  height: 520px;
+  left: 50%;
+  top: 50%;
+  margin: -260px 0 0 -260px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(124, 58, 237, 0.22), transparent);
+  pointer-events: none;
+  animation: orbit 14s ease-in-out infinite alternate;
+}
+
+@keyframes orbit {
+  from {
+    transform: translate(-30%, -10%);
+  }
+  to {
+    transform: translate(30%, 10%);
+  }
+}
+
+.ctaInner > :not(.ctaGlow) {
+  position: relative;
+}
+
+.ctaInner .sectionLead {
+  max-width: 520px;
+  margin: 16px auto 36px;
+}
+
+.ctaButtons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 16px 28px;
+}
+
+/* ============================================
+   Smaller screens
+   ============================================ */
+@media (max-width: 1000px) {
+  .bento {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .page {
-    --background: #000;
-    --foreground: #000;
+  .tileWide {
+    grid-column: 1 / -1;
+  }
 
-    --text-primary: #ededed;
-    --text-secondary: #999;
+  .plans {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 
-    --button-primary-hover: #ccc;
-    --button-secondary-hover: #1a1a1a;
-    --button-secondary-border: #1a1a1a;
+@media (max-width: 760px) {
+  .section {
+    padding: 80px 0;
+  }
+
+  .hero {
+    min-height: 0;
+    padding: 56px 0 80px;
+  }
+
+  .marqueeInner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .marqueeViewport {
+    width: 100%;
+  }
+
+  .steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 680px) {
+  .bento {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tile {
+    padding: 24px;
+  }
+}
+
+@media (max-width: 640px) {
+  .wrap {
+    padding: 0 16px;
+  }
+
+  .ctaInner {
+    padding: 64px 20px;
+  }
+}
+
+@media (max-width: 520px) {
+  .plans {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The hero card and its floating labels need ~380px; shrink it on small phones. */
+@media (max-width: 420px) {
+  .heroVisual {
+    zoom: 0.86;
+  }
+}
+
+/* ============================================
+   Reduced motion: everything shown, nothing moving
+   ============================================ */
+@media (prefers-reduced-motion: reduce) {
+  .heroBackdrop::before,
+  .heroBackdrop::after,
+  .shimmer,
+  .heroGlow,
+  .enter,
+  .enterVisual,
+  .ctaFrame,
+  .ctaGlow {
+    animation: none;
+  }
+
+  .marqueeTrack {
+    flex-wrap: wrap;
+    row-gap: 8px;
+    width: auto;
+    animation: none;
+  }
+
+  .marqueeItem[aria-hidden="true"] {
+    display: none;
+  }
+
+  .marqueeViewport {
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
+
+  .planCard,
+  .arrowLink svg {
+    transition: none;
   }
 }

@@ -1,0 +1,122 @@
+.chart {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Room for the end-point pulse, which reaches past the last point. */
+.svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.unique {
+  stroke-dasharray: 0.02 0.015;
+}
+
+.pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pulse 2s ease-out infinite;
+}
+
+@keyframes pulse {
+  from {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  to {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.keyScans {
+  width: 16px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--cyan);
+}
+
+.keyUnique {
+  width: 16px;
+  border-top: 2px dashed #a78bfa;
+}
+
+/* ---- Draw-in when the tile is revealed ----
+   Only once RevealObserver is running (html[data-reveal]); otherwise the
+   chart is simply shown complete. */
+:global(html[data-reveal]) .line:not(.unique) {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+:global(html[data-reveal]) .area,
+:global(html[data-reveal]) .dot,
+:global(html[data-reveal]) .pulse {
+  opacity: 0;
+}
+
+:global(html[data-reveal]) .unique {
+  clip-path: inset(0 100% 0 0);
+}
+
+:global(html[data-reveal] [data-shown]) .line:not(.unique) {
+  animation: draw 1.6s cubic-bezier(0.4, 0, 0.2, 1) 0.2s forwards;
+}
+
+:global(html[data-reveal] [data-shown]) .unique {
+  animation: wipe 1.6s cubic-bezier(0.4, 0, 0.2, 1) 0.35s forwards;
+}
+
+:global(html[data-reveal] [data-shown]) .area {
+  animation: fade 1s ease 1s forwards;
+}
+
+:global(html[data-reveal] [data-shown]) .dot {
+  animation: fade 0.3s ease 1.7s forwards;
+}
+
+:global(html[data-reveal] [data-shown]) .pulse {
+  animation: pulse 2s ease-out 1.8s infinite;
+}
+
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes wipe {
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes fade {
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse {
+    display: none;
+  }
+}

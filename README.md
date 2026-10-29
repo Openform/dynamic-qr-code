@@ -9,6 +9,7 @@ The app uses **MySQL/MariaDB** (via [`mysql2`](https://github.com/sidorares/node
 - `JWT_SECRET` — secret for signing auth tokens
 - `BASE_URL` — public URL used to build QR redirect links
 - `SIGNUP_INVITE_CODE` — shared code required on the public `/register` page
+- `INVITE_REQUEST_URL` — optional `mailto:` or `https://` link where visitors can ask for an invite; when set, the landing page's main button becomes "Request an invite", otherwise it's "Create an account" (to `/register`). Read at build time, so rebuild after changing it
 - `ADMIN_EMAILS` — comma-separated emails of the accounts allowed into the admin dashboard
 - `ANALYTICS_SECRET` — secret for the anonymous visitor IDs used to count unique scanners (falls back to `JWT_SECRET`)
 - `ANALYTICS_RETENTION_MONTHS` — how long detailed scan records are kept (default `24`; `0` keeps them forever)

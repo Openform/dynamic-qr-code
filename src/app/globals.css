@@ -1146,6 +1146,66 @@ a.truncate {
   }
 }
 
+/* Ripple around the code each time its link changes */
+.qr-reroute-ring {
+  position: absolute;
+  inset: -14px;
+  border: 2px solid rgba(0, 212, 255, 0.7);
+  border-radius: 18px;
+  pointer-events: none;
+  animation: qr-reroute-ring 1.1s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes qr-reroute-ring {
+  from {
+    opacity: 0.9;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.12);
+  }
+}
+
+/* "Link changed · same code" toast under the card */
+.qr-change-toast {
+  position: absolute;
+  bottom: -22px;
+  left: -26px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  background: rgba(15, 15, 35, 0.85);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  white-space: nowrap;
+  animation: qr-toast 3.6s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.qr-change-toast svg {
+  color: var(--success);
+  flex: none;
+}
+
+@keyframes qr-toast {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+  10%,
+  80% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-4px) scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .qr-hero-card,
   .qr-bracket,
