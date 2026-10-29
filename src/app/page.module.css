@@ -215,29 +215,10 @@
 
 .heroLead {
   max-width: 520px;
-  margin-bottom: 40px;
+  margin-bottom: 0;
   color: var(--text-secondary);
   font-size: 1.15rem;
   line-height: 1.65;
-}
-
-.heroCtas {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 16px 28px;
-}
-
-.heroNote {
-  margin-top: 24px;
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-}
-
-.heroNote a {
-  color: var(--cyan);
-  text-decoration: underline;
-  text-underline-offset: 3px;
 }
 
 .heroVisual {

@@ -92,14 +92,6 @@
   }
 }
 
-/* The hero has the same button straight underneath, so phones keep the bar
-   to the logo and Sign in. */
-@media (max-width: 520px) {
-  .cta {
-    display: none !important;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .navLink::after {
     transition: none;

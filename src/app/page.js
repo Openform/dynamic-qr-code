@@ -109,19 +109,6 @@ export default function LandingPage() {
                 QR Go makes codes you can point somewhere new after they&apos;re printed,
                 styled to match your brand, with a live view of every scan.
               </p>
-              <div className={`${styles.heroCtas} ${styles.enter}`} style={{ "--d": "500ms" }}>
-                <InviteRequestButton
-                  className={`btn btn-primary ${styles.bigBtn}`}
-                  id="hero-signup"
-                  openOnHash
-                />
-                <Link href="/login" className={styles.arrowLink} id="hero-signin">
-                  Sign in <ArrowRight />
-                </Link>
-              </div>
-              <p className={`${styles.heroNote} ${styles.enter}`} style={{ "--d": "600ms" }}>
-                Already have an invite code? <Link href="/register">Create your account</Link>
-              </p>
             </div>
 
             <div className={`${styles.heroVisual} ${styles.enterVisual}`}>
@@ -359,6 +346,7 @@ export default function LandingPage() {
                   <InviteRequestButton
                     className={`btn btn-primary ${styles.bigBtn}`}
                     id="cta-get-started"
+                    openOnHash
                   />
                   <Link href="/login" className={styles.arrowLink}>
                     Sign in <ArrowRight />
