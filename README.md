@@ -56,7 +56,7 @@ is added automatically on first run. Existing accounts start as active.
 
 Admins edit the Privacy Policy (`/privacy`) and Terms & Conditions (`/terms`)
 at **Legal pages** in the admin header (`/admin/legal`). The editor has a
-formatting toolbar (headings, bold, italic, lists, links), a live preview and
+formatting toolbar (headings, bold, italic, lists, links, tables), a live preview and
 the "Last updated" date shown on the page. Changes go live as soon as they're
 saved.
 

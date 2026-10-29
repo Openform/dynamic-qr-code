@@ -259,6 +259,72 @@
   font-style: italic;
 }
 
+.toolButtonOpen {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* ---- Table size picker ---- */
+.tableTool {
+  position: relative;
+}
+
+.tablePicker {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 5;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  background: #17172b;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+}
+
+.tableGrid {
+  display: grid;
+  grid-template-columns: repeat(6, 20px);
+  gap: 4px;
+}
+
+.tableSquare {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.03);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.tableSquareOn {
+  border-color: rgba(0, 212, 255, 0.65);
+  background: rgba(0, 212, 255, 0.16);
+}
+
+/* The header row of the chosen size is a shade stronger. */
+.tableSquareOn.tableSquareHeader {
+  background: rgba(0, 212, 255, 0.4);
+}
+
+.tableSquare:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 1px;
+}
+
+.tablePickerSize {
+  margin-top: 10px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.tablePickerHint {
+  margin-top: 2px;
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+
 .textarea {
   display: block;
   width: 100%;
@@ -381,6 +447,14 @@
   white-space: nowrap;
 }
 
+/* A few lines of example text, shown as typed. */
+.guideTable .guideCodeLines {
+  display: inline-block;
+  white-space: pre;
+  line-height: 1.6;
+  padding: 6px 10px;
+}
+
 .guideTable strong {
   color: var(--text-primary);
 }
@@ -393,4 +467,9 @@
 
 .guideTips li + li {
   margin-top: 6px;
+}
+
+.guideTips code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--cyan);
 }
