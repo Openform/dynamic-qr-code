@@ -1,53 +1,38 @@
 import Link from "next/link"
+import InviteRequestButton from "./InviteRequest"
+import styles from "./SiteHeader.module.css"
 
 /** Top bar for the public pages (landing, legal). */
 export default function SiteHeader() {
   return (
-    <nav style={styles.nav}>
-      <div className="container" style={styles.navInner}>
-        <Link href="/" style={styles.logo}>
-          <span className="gradient-text" style={styles.logoText}>
-            QR Go
-          </span>
+    <header className={styles.header}>
+      <div className={styles.inner}>
+        <Link href="/" className={`gradient-text ${styles.logo}`}>
+          QR Go
         </Link>
-        <div style={styles.navLinks}>
-          <Link href="/login" className="btn btn-primary btn-sm" id="nav-signin">
-            Sign In
+
+        <nav aria-label="Main" className={styles.nav}>
+          <Link href="/#features" className={styles.navLink}>
+            Features
           </Link>
+          <Link href="/#how-it-works" className={styles.navLink}>
+            How it works
+          </Link>
+          <Link href="/#plans" className={styles.navLink}>
+            Plans
+          </Link>
+        </nav>
+
+        <div className={styles.actions}>
+          <Link href="/login" className={styles.signIn} id="nav-signin">
+            Sign in
+          </Link>
+          <InviteRequestButton
+            className={`btn btn-primary btn-sm ${styles.cta}`}
+            id="nav-signup"
+          />
         </div>
       </div>
-    </nav>
+    </header>
   )
-}
-
-const styles = {
-  nav: {
-    position: "sticky",
-    top: 0,
-    zIndex: 100,
-    backdropFilter: "blur(16px)",
-    WebkitBackdropFilter: "blur(16px)",
-    background: "rgba(10, 10, 26, 0.8)",
-    borderBottom: "1px solid rgba(255,255,255,0.06)"
-  },
-  navInner: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    height: "64px"
-  },
-  logo: {
-    display: "flex",
-    alignItems: "center"
-  },
-  logoText: {
-    fontSize: "1.5rem",
-    fontWeight: 700,
-    letterSpacing: "-0.02em"
-  },
-  navLinks: {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px"
-  }
 }

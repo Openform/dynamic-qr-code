@@ -1,0 +1,133 @@
+.table {
+  --row-h: 52px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  overflow: hidden;
+  font-size: 0.875rem;
+  background: rgba(10, 10, 26, 0.5);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px 64px;
+  align-items: center;
+  gap: 12px;
+  height: var(--row-h);
+  padding: 0 18px;
+  color: var(--text-primary);
+}
+
+.head {
+  height: 40px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* Three rows tall; rows are stacked by translateY and slide when they move. */
+.rows {
+  position: relative;
+  height: calc(var(--row-h) * 3);
+  overflow: hidden;
+}
+
+.rows .row {
+  position: absolute;
+  inset: 0 0 auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  transition: transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.entering {
+  animation:
+    row-in 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both,
+    row-flash 2.2s ease-out both;
+}
+
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes row-flash {
+  from {
+    background-color: rgba(0, 212, 255, 0.14);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+.url {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, "Cascadia Code", monospace;
+  font-size: 0.8rem;
+}
+
+.when {
+  color: var(--text-secondary);
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.liveDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: live-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes live-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (max-width: 480px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr) 70px 52px;
+    gap: 8px;
+    padding: 0 12px;
+  }
+
+  /* Not enough room for the whole link: keep the part that changes. */
+  .domain {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rows .row,
+  .entering,
+  .liveDot {
+    animation: none;
+    transition: none;
+  }
+}

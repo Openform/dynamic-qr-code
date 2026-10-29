@@ -1,120 +1,31 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
+import { N, STRUCT, buildData } from "./landing/qrMatrix"
+import { usePrefersReducedMotion } from "./landing/hooks"
 
 /**
  * Animated "living" QR code for the landing hero.
  *
  * It tells the product story in one visual:
- *   1. The matrix assembles in a diagonal ripple   -> "Generate"
- *   2. A laser line sweeps across it on a loop      -> "Scan"
- *   3. The data modules periodically regenerate and -> "Dynamic / evolves with you"
- *      the routing label swaps to a new destination -> "Change destinations anytime"
- *   4. A floating pill ticks live scans             -> "Real-time analytics"
- *
- * The three finder patterns + timing + alignment stay fixed (like a real QR),
- * so only the data field animates — which reads as authentic, not noisy.
+ *   1. The matrix assembles in a diagonal ripple    -> "Generate"
+ *   2. A laser line sweeps across it on a loop       -> "Scan"
+ *   3. The routing label swaps to a new destination, -> "Change the link,
+ *      while the pattern itself never changes            keep the code"
+ *   4. A floating pill ticks live scans              -> "Real-time analytics"
  */
 
-const N = 25 // module grid (QR "version 2" size)
-
 const DESTINATIONS = [
-  "qr.openform.co.za/menu",
-  "qr.openform.co.za/sale",
-  "qr.openform.co.za/drop",
-  "qr.openform.co.za/email"
+  "yoursite.com/menu",
+  "yoursite.com/specials",
+  "yoursite.com/events",
+  "yoursite.com/feedback"
 ]
 
-/* Tiny deterministic PRNG so the first paint matches on server + client. */
-function mulberry32(seed) {
-  let a = seed >>> 0
-  return function () {
-    a = (a + 0x6d2b79f5) | 0
-    let t = Math.imul(a ^ (a >>> 15), 1 | a)
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
+// The printed code: one fixed pattern, like a real dynamic QR code.
+const DATA = buildData(1)
 
-/* Build the fixed structural layer once: finders, separators, timing, alignment. */
-function buildStructure() {
-  const reserved = Array.from({ length: N }, () => Array(N).fill(false))
-  const structOn = Array.from({ length: N }, () => Array(N).fill(false))
-
-  const placeFinder = (R, C) => {
-    for (let i = -1; i <= 7; i++) {
-      for (let j = -1; j <= 7; j++) {
-        const r = R + i
-        const c = C + j
-        if (r < 0 || c < 0 || r >= N || c >= N) continue
-        reserved[r][c] = true // includes the 1-module separator ring
-        if (i >= 0 && i <= 6 && j >= 0 && j <= 6) {
-          const edge = i === 0 || i === 6 || j === 0 || j === 6
-          const center = i >= 2 && i <= 4 && j >= 2 && j <= 4
-          structOn[r][c] = edge || center
-        }
-      }
-    }
-  }
-
-  placeFinder(0, 0)
-  placeFinder(0, N - 7)
-  placeFinder(N - 7, 0)
-
-  // Timing patterns (alternating) along row 6 / col 6, between the finders.
-  for (let i = 8; i < N - 8; i++) {
-    if (!reserved[6][i]) {
-      reserved[6][i] = true
-      structOn[6][i] = i % 2 === 0
-    }
-    if (!reserved[i][6]) {
-      reserved[i][6] = true
-      structOn[i][6] = i % 2 === 0
-    }
-  }
-
-  // Alignment pattern (5x5) near the bottom-right, like a real version-2 code.
-  const a = N - 7
-  for (let i = -2; i <= 2; i++) {
-    for (let j = -2; j <= 2; j++) {
-      const r = a + i
-      const c = a + j
-      if (r < 0 || c < 0 || r >= N || c >= N) continue
-      reserved[r][c] = true
-      const ring = Math.max(Math.abs(i), Math.abs(j))
-      structOn[r][c] = ring === 2 || ring === 0
-    }
-  }
-
-  return { reserved, structOn }
-}
-
-const STRUCT = buildStructure()
-
-/* Randomise just the data modules for a given seed. */
-function buildData(seed) {
-  const rand = mulberry32((seed * 2654435761) >>> 0)
-  const m = Array.from({ length: N }, () => Array(N).fill(false))
-  for (let r = 0; r < N; r++) {
-    for (let c = 0; c < N; c++) {
-      if (STRUCT.reserved[r][c]) continue
-      m[r][c] = rand() > 0.5
-    }
-  }
-  return m
-}
-
-function usePrefersReducedMotion() {
-  const [reduce, setReduce] = useState(false)
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)")
-    const update = () => setReduce(mq.matches)
-    update()
-    mq.addEventListener("change", update)
-    return () => mq.removeEventListener("change", update)
-  }, [])
-  return reduce
-}
+const REROUTE_EVERY_MS = 3800
 
 /* Live-scan counter — isolated so its tick doesn't re-render the matrix. */
 function ScanPill({ reduce }) {
@@ -161,11 +72,9 @@ function ScanPill({ reduce }) {
 
 export default function HeroQR() {
   const [armed, setArmed] = useState(false)
-  const [seed, setSeed] = useState(1)
-  const [urlIndex, setUrlIndex] = useState(0)
+  // How many times the link has changed since the page loaded.
+  const [reroutes, setReroutes] = useState(0)
   const reduce = usePrefersReducedMotion()
-
-  const data = useMemo(() => buildData(seed), [seed])
 
   // Trigger the assemble ripple just after hydration.
   useEffect(() => {
@@ -173,21 +82,20 @@ export default function HeroQR() {
     return () => cancelAnimationFrame(id)
   }, [])
 
-  // Regenerate the data field + reroute on a loop (skipped if reduced motion).
+  // Point the code somewhere new on a loop (skipped if reduced motion).
   useEffect(() => {
-    if (reduce) return // assembled, but no looping regeneration
-    const id = setInterval(() => {
-      setSeed((s) => s + 1)
-      setUrlIndex((i) => (i + 1) % DESTINATIONS.length)
-    }, 3800)
+    if (reduce) return
+    const id = setInterval(() => setReroutes((n) => n + 1), REROUTE_EVERY_MS)
     return () => clearInterval(id)
   }, [reduce])
+
+  const urlIndex = reroutes % DESTINATIONS.length
 
   const rects = []
   for (let r = 0; r < N; r++) {
     for (let c = 0; c < N; c++) {
       const reserved = STRUCT.reserved[r][c]
-      const on = reserved ? STRUCT.structOn[r][c] : data[r][c]
+      const on = reserved ? STRUCT.structOn[r][c] : DATA[r][c]
       let opacity
       if (!armed) opacity = 0.06
       else if (reserved) opacity = on ? 1 : 0
@@ -223,7 +131,7 @@ export default function HeroQR() {
           height={248}
           viewBox={`0 0 ${N} ${N}`}
           role="img"
-          aria-label="Dynamic QR code that re-routes to new destinations"
+          aria-label="Dynamic QR code whose link changes while the code stays the same"
         >
           <defs>
             <linearGradient
@@ -288,6 +196,11 @@ export default function HeroQR() {
         <span className="qr-bracket qr-bracket-tr" />
         <span className="qr-bracket qr-bracket-bl" />
         <span className="qr-bracket qr-bracket-br" />
+
+        {/* A ripple each time the link changes. Keyed so it replays. */}
+        {reroutes > 0 && (
+          <span key={reroutes} className="qr-reroute-ring" aria-hidden="true" />
+        )}
       </div>
 
       <div className="qr-route">
@@ -299,6 +212,28 @@ export default function HeroQR() {
           </span>
         </span>
       </div>
+
+      {reroutes > 0 && (
+        <div
+          key={reroutes}
+          className="qr-change-toast glass-card-static"
+          aria-hidden="true"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M5 12l5 5L20 7" />
+          </svg>
+          Link changed · same code
+        </div>
+      )}
     </div>
   )
 }

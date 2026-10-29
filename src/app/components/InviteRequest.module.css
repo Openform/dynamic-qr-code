@@ -1,0 +1,253 @@
+/* "Request an invite" popup (InviteRequest.js). */
+
+.dialog {
+  width: min(560px, calc(100% - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  box-shadow:
+    0 40px 100px rgba(0, 0, 0, 0.55),
+    0 0 60px rgba(124, 58, 237, 0.12);
+  color-scheme: dark;
+}
+
+.dialog[open] {
+  animation: dialog-in 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.dialog::backdrop {
+  background: rgba(4, 4, 14, 0.7);
+  backdrop-filter: blur(8px);
+  animation: backdrop-in 0.25s ease both;
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.panel {
+  position: relative;
+  padding: 36px 32px 28px;
+}
+
+/* Brand gradient along the top edge */
+.panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: var(--gradient-primary);
+}
+
+.close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+}
+
+.title {
+  padding-right: 40px;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.intro {
+  margin-top: 8px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.promise {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--cyan);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.promise svg {
+  position: relative;
+  top: 1px;
+}
+
+.strong {
+  color: var(--text-primary);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* ---- Form ---- */
+.form {
+  margin-top: 24px;
+}
+
+.grid {
+  display: grid;
+  gap: 0 16px;
+}
+
+@media (min-width: 560px) {
+  .grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.field {
+  margin-bottom: 18px;
+}
+
+.optional {
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+
+.trap {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.error {
+  margin-bottom: 18px;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 6px;
+  padding-top: 20px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.privacy {
+  flex: 1 1 220px;
+  color: var(--text-tertiary);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.privacy a {
+  color: var(--text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.privacy a:hover {
+  color: var(--text-primary);
+}
+
+.submit {
+  flex: none;
+  min-width: 160px;
+}
+
+/* ---- Sent ---- */
+.success {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 12px 0 4px;
+  text-align: center;
+}
+
+.success .title {
+  margin-top: 12px;
+  padding-right: 0;
+}
+
+.success .intro {
+  max-width: 380px;
+}
+
+.successIcon {
+  display: grid;
+  place-items: center;
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  color: var(--success);
+  background: rgba(16, 185, 129, 0.12);
+  box-shadow: 0 0 0 8px rgba(16, 185, 129, 0.06);
+  animation: icon-pop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+}
+
+.successIcon path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: tick-draw 0.45s 0.2s ease forwards;
+}
+
+@keyframes icon-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes tick-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.doneButton {
+  min-width: 140px;
+  margin-top: 20px;
+}
+
+@media (max-width: 479px) {
+  .panel {
+    padding: 32px 20px 24px;
+  }
+
+  .submit {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog[open],
+  .dialog::backdrop,
+  .successIcon,
+  .successIcon path {
+    animation: none;
+  }
+
+  .successIcon path {
+    stroke-dashoffset: 0;
+  }
+}
