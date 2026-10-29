@@ -5,12 +5,29 @@ import Link from "next/link"
 import QRCodeStyling from "qr-code-styling"
 import { normalizeStyle, buildQRStylingOptions } from "@/lib/qrStyle"
 import { renderBwipCanvas, downloadBwip } from "@/lib/barcode"
+import cardStyles from "./QRCodeCard.module.css"
+
+function PencilIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+      <path d="m15 5 4 4" />
+    </svg>
+  )
+}
 
 export default function QRCodeCard({
   qrcode,
   collections = [],
   onEdit,
-  onDelete,
   onAssignCollection
 }) {
   const [copied, setCopied] = useState(false)
@@ -120,11 +137,21 @@ export default function QRCodeCard({
 
   return (
     <div className="glass-card animate-fadeIn" style={styles.card}>
-      {/* Small code on the left, its name and destination on the right */}
+      {/* Small code on the left (click it to edit), name and destination on the right */}
       <div style={styles.header}>
-        <div style={styles.previewWrap}>
-          <div ref={qrRef} style={styles.previewImg} />
-        </div>
+        <button
+          id={`edit-qr-${qrcode.id}`}
+          type="button"
+          className={cardStyles.codeButton}
+          onClick={() => onEdit(qrcode)}
+          aria-label={`Edit ${qrcode.title}`}
+          title="Edit"
+        >
+          <span ref={qrRef} style={styles.previewImg} />
+          <span className={cardStyles.editBadge} aria-hidden="true">
+            <PencilIcon />
+          </span>
+        </button>
         <div style={styles.headerText}>
           <h3 style={styles.title} title={qrcode.title}>
             {qrcode.title}
@@ -144,7 +171,7 @@ export default function QRCodeCard({
 
       {/* Info */}
       <div style={styles.info}>
-        {/* Redirect URL with copy */}
+        {/* Short link, with copy and download */}
         <div style={styles.redirectRow}>
           <span className="truncate" style={styles.redirectUrl}>
             {redirectUrl}
@@ -152,11 +179,44 @@ export default function QRCodeCard({
           <button
             onClick={handleCopy}
             className="btn btn-ghost btn-sm"
-            style={{ padding: "4px 8px", fontSize: "0.8rem", minWidth: "auto" }}
+            style={styles.iconButton}
             aria-label="Copy redirect URL"
           >
             {copied ? <span className="copy-feedback">✓ Copied</span> : "📋"}
           </button>
+          <div style={styles.downloadWrap} ref={menuRef}>
+            <button
+              id={`download-qr-${qrcode.id}`}
+              type="button"
+              className="btn btn-ghost btn-sm"
+              style={styles.iconButton}
+              onClick={() => setMenuOpen((o) => !o)}
+              aria-label="Download"
+              title="Download PNG or SVG"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+            >
+              ⬇️
+            </button>
+            {menuOpen && (
+              <div className="qr-download-menu" style={styles.downloadMenu} role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => handleDownload("png")}
+                >
+                  PNG
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => handleDownload("svg")}
+                >
+                  SVG
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Meta row */}
@@ -209,59 +269,6 @@ export default function QRCodeCard({
           </div>
         )}
       </div>
-
-      {/* Actions */}
-      <div style={styles.actions}>
-        <button
-          id={`edit-qr-${qrcode.id}`}
-          className="btn btn-ghost btn-sm"
-          style={styles.actionButton}
-          onClick={() => onEdit(qrcode)}
-          title="Edit"
-        >
-          ✏️ Edit
-        </button>
-        <div style={styles.downloadWrap} ref={menuRef}>
-          <button
-            id={`download-qr-${qrcode.id}`}
-            className="btn btn-ghost btn-sm"
-            style={styles.actionButton}
-            onClick={() => setMenuOpen((o) => !o)}
-            title="Download"
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-          >
-            ⬇️ Download ▾
-          </button>
-          {menuOpen && (
-            <div className="qr-download-menu" role="menu">
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => handleDownload("png")}
-              >
-                PNG
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => handleDownload("svg")}
-              >
-                SVG
-              </button>
-            </div>
-          )}
-        </div>
-        <button
-          id={`delete-qr-${qrcode.id}`}
-          className="btn btn-danger btn-sm"
-          style={styles.actionButton}
-          onClick={() => onDelete(qrcode)}
-          title="Delete"
-        >
-          🗑️ Delete
-        </button>
-      </div>
     </div>
   )
 }
@@ -281,15 +288,10 @@ const styles = {
     gap: "14px",
     minWidth: 0
   },
-  previewWrap: {
-    flex: "none",
-    padding: "6px",
-    background: "rgba(255,255,255,0.03)",
-    borderRadius: "10px"
-  },
   previewImg: {
     width: "88px",
     height: "88px",
+    flex: "none",
     borderRadius: "6px",
     overflow: "hidden",
     display: "flex",
@@ -375,20 +377,18 @@ const styles = {
     fontSize: "0.78rem",
     color: "var(--text-tertiary)"
   },
-  actions: {
-    display: "flex",
-    gap: "8px",
-    borderTop: "1px solid rgba(255,255,255,0.06)",
-    paddingTop: "12px",
-    justifyContent: "space-between",
-    // On the narrowest phones the buttons wrap rather than overflow the card.
-    flexWrap: "wrap"
-  },
-  actionButton: {
-    paddingLeft: "12px",
-    paddingRight: "12px"
+  iconButton: {
+    padding: "4px 8px",
+    fontSize: "0.8rem",
+    minWidth: "auto"
   },
   downloadWrap: {
-    position: "relative"
+    position: "relative",
+    flex: "none"
+  },
+  // Open the menu leftwards: the button sits at the card's right edge.
+  downloadMenu: {
+    left: "auto",
+    right: 0
   }
 }

@@ -87,6 +87,7 @@ export default function DashboardPage() {
     setModalOpen(true)
   }
 
+  // Delete is on the edit screen, so the screen closes once the code is gone.
   async function handleDelete(qr) {
     if (!confirm(`Delete "${qr.title}"? This cannot be undone.`)) return
 
@@ -95,9 +96,14 @@ export default function DashboardPage() {
       if (res.ok) {
         setQrcodes((prev) => prev.filter((q) => q.id !== qr.id))
         setTotalScans((prev) => prev - (qr.scanCount ?? 0))
+        setModalOpen(false)
+        return
       }
+      const data = await res.json().catch(() => ({}))
+      alert(data.error || "Could not delete the QR code. Please try again.")
     } catch (error) {
       console.error("Failed to delete QR code:", error)
+      alert("Could not delete the QR code. Check your connection and try again.")
     }
   }
 
@@ -431,7 +437,6 @@ export default function DashboardPage() {
                 qrcode={qr}
                 collections={collections}
                 onEdit={handleEdit}
-                onDelete={handleDelete}
                 onAssignCollection={handleAssignCollection}
               />
             ))}
@@ -444,6 +449,7 @@ export default function DashboardPage() {
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         onSave={handleSave}
+        onDelete={handleDelete}
         qrcode={editingQR}
         collections={collections}
         defaultCollectionId={newCodeCollectionId}

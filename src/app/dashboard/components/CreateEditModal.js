@@ -16,11 +16,13 @@ import {
   evaluateContrast
 } from "@/lib/qrStyle"
 import { renderBwipCanvas } from "@/lib/barcode"
+import footerStyles from "./CreateEditModal.module.css"
 
 export default function CreateEditModal({
   isOpen,
   onClose,
   onSave,
+  onDelete,
   qrcode,
   collections = [],
   defaultCollectionId = null
@@ -46,6 +48,7 @@ export default function CreateEditModal({
       key={qrcode?.id ?? "new"}
       onClose={onClose}
       onSave={onSave}
+      onDelete={onDelete}
       qrcode={qrcode}
       collections={collections}
       defaultCollectionId={defaultCollectionId}
@@ -96,6 +99,7 @@ function toHttpsUrl(value) {
 function QRCodeForm({
   onClose,
   onSave,
+  onDelete,
   qrcode,
   collections = [],
   defaultCollectionId = null
@@ -117,6 +121,7 @@ function QRCodeForm({
   const [style, setStyle] = useState(() => normalizeStyle(qrcode))
   const [tab, setTab] = useState("content")
   const [loading, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   const qrRef = useRef(null)
   const qrCodeObj = useRef(null)
@@ -236,6 +241,15 @@ function QRCodeForm({
       await onSave(payload)
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleDelete() {
+    setDeleting(true)
+    try {
+      await onDelete(qrcode)
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -446,7 +460,7 @@ function QRCodeForm({
           </div>
 
           {/* Footer Buttons */}
-          <div className="modal-footer" style={{ marginTop: "24px" }}>
+          <div className={`modal-footer ${footerStyles.footer}`}>
             <button
               id="cancel-qr-btn"
               type="button"
@@ -455,27 +469,46 @@ function QRCodeForm({
             >
               Cancel
             </button>
-            <button
-              id="save-qr-btn"
-              type="submit"
-              className="btn btn-primary"
-              disabled={loading || blockSave}
-              title={
-                blockSave
-                  ? "Increase the contrast between the foreground and background to save."
-                  : undefined
-              }
-            >
-              {loading ? (
-                <>
-                  <span className="spinner" /> Saving…
-                </>
-              ) : isEdit ? (
-                "Save Changes"
-              ) : (
-                "Create QR Code"
+            <div className={footerStyles.footerActions}>
+              {isEdit && onDelete && (
+                <button
+                  id="delete-qr-btn"
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={handleDelete}
+                  disabled={loading || deleting}
+                >
+                  {deleting ? (
+                    <>
+                      <span className="spinner" /> Deleting…
+                    </>
+                  ) : (
+                    "🗑️ Delete"
+                  )}
+                </button>
               )}
-            </button>
+              <button
+                id="save-qr-btn"
+                type="submit"
+                className="btn btn-primary"
+                disabled={loading || deleting || blockSave}
+                title={
+                  blockSave
+                    ? "Increase the contrast between the foreground and background to save."
+                    : undefined
+                }
+              >
+                {loading ? (
+                  <>
+                    <span className="spinner" /> Saving…
+                  </>
+                ) : isEdit ? (
+                  "Save Changes"
+                ) : (
+                  "Create QR Code"
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>

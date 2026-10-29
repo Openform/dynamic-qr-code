@@ -1,0 +1,64 @@
+/* The small code on each dashboard card doubles as its Edit button. */
+
+.codeButton {
+  position: relative;
+  flex: none;
+  display: block;
+  padding: 6px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  transition: background var(--transition-fast);
+}
+
+.codeButton:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.codeButton:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+/* A pencil over the code, shown on hover or keyboard focus. */
+.editBadge {
+  position: absolute;
+  inset: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: rgba(10, 10, 26, 0.45);
+  color: #fff;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
+}
+
+.editBadge svg {
+  width: 36px;
+  height: 36px;
+  padding: 9px;
+  border-radius: 50%;
+  background: rgba(10, 10, 26, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.codeButton:hover .editBadge,
+.codeButton:focus-visible .editBadge {
+  opacity: 1;
+}
+
+/* Touch screens can't hover, so keep a small pencil in the corner instead. */
+@media (hover: none) {
+  .editBadge {
+    inset: auto -6px -6px auto;
+    background: none;
+    opacity: 1;
+  }
+
+  .editBadge svg {
+    width: 26px;
+    height: 26px;
+    padding: 6px;
+  }
+}

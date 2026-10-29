@@ -1,0 +1,29 @@
+/* Footer of the create/edit screen: Cancel on the left, Delete and Save on the right. */
+
+.footer {
+  margin-top: 24px;
+  align-items: center;
+}
+
+.footerActions {
+  display: flex;
+  gap: 12px;
+  margin-left: auto;
+}
+
+/* Phones: full-width buttons, Save on top, then Delete, then Cancel. */
+@media (max-width: 480px) {
+  .footer {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .footerActions {
+    flex-direction: column-reverse;
+    margin-left: 0;
+  }
+
+  .footer :global(.btn) {
+    width: 100%;
+  }
+}
