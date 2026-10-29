@@ -17,7 +17,7 @@ import {
 } from "@/lib/qrStyle"
 import { renderBwipCanvas } from "@/lib/barcode"
 import footerStyles from "./CreateEditModal.module.css"
-import { TrashIcon } from "./icons"
+import { TrashIcon } from "@/app/components/icons"
 
 export default function CreateEditModal({
   isOpen,

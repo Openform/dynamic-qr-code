@@ -13,7 +13,7 @@
  *   onSelect(key), onNew(), onRename(collection), onDelete(collection)
  */
 
-import { PencilIcon, TrashIcon } from "./icons"
+import { PencilIcon, TrashIcon } from "@/app/components/icons"
 export default function CollectionsBar({
   collections = [],
   activeCollection,

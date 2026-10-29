@@ -3,7 +3,8 @@
 import { useState } from "react"
 import styles from "../analytics.module.css"
 import RankedBars from "./RankedBars"
-import { countryName, flag, placeLabel } from "./format"
+import { countryName, placeLabel } from "./format"
+import CountryFlag from "./CountryFlag"
 
 /** Countries or cities, ranked. Includes the DB-IP credit its licence requires. */
 export default function Locations({ countries, cities, total }) {
@@ -11,10 +12,10 @@ export default function Locations({ countries, cities, total }) {
 
   const items =
     view === "countries"
-      ? countries.map((c) => ({ key: c.code ?? "unknown", icon: flag(c.code), label: countryName(c.code), scans: c.scans }))
+      ? countries.map((c) => ({ key: c.code ?? "unknown", icon: <CountryFlag code={c.code} />, label: countryName(c.code), scans: c.scans }))
       : cities.map((c) => ({
           key: `${c.countryCode}-${c.region}-${c.city}`,
-          icon: flag(c.countryCode),
+          icon: <CountryFlag code={c.countryCode} />,
           label: placeLabel(c),
           scans: c.scans,
         }))

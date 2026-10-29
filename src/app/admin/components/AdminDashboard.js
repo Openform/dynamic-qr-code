@@ -6,6 +6,7 @@ import Avatar from "../../dashboard/components/Avatar"
 import CreateAccountModal from "./CreateAccountModal"
 import ConfirmActionModal from "./ConfirmActionModal"
 import { PACKAGES, getPackage, describeLimit } from "@/lib/packages"
+import { SearchIcon } from "@/app/components/icons"
 
 /** 1 → "1 QR code", 3 → "3 QR codes". */
 function codesLabel(count) {
@@ -412,7 +413,9 @@ export default function AdminDashboard({ currentAdminId, openInviteCount = 0 }) 
             {/* ---- Toolbar ---- */}
             <div style={styles.toolbar}>
               <div style={styles.searchWrap}>
-                <span style={styles.searchIcon}>🔍</span>
+                <span style={styles.searchIcon} aria-hidden="true">
+                  <SearchIcon size={16} />
+                </span>
                 <input
                   id="search-accounts"
                   type="text"
@@ -757,7 +760,8 @@ const styles = {
     left: "14px",
     top: "50%",
     transform: "translateY(-50%)",
-    fontSize: "0.9rem",
+    display: "flex",
+    color: "var(--text-tertiary)",
     pointerEvents: "none"
   },
   tableCard: {

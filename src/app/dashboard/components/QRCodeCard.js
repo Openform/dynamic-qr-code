@@ -13,7 +13,7 @@ import {
   DownloadIcon,
   ChartIcon,
   FolderIcon
-} from "./icons"
+} from "@/app/components/icons"
 
 export default function QRCodeCard({
   qrcode,

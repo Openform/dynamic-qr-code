@@ -1,6 +1,6 @@
 'use client';
 
-import { PackageIcon, QrCodeIcon, ScanIcon } from './icons';
+import { PackageIcon, QrCodeIcon, ScanIcon } from '@/app/components/icons';
 
 export default function StatsCards({ totalQRCodes = 0, totalScans = 0, plan = null }) {
   return (

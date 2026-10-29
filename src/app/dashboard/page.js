@@ -7,7 +7,7 @@ import CreateEditModal from "./components/CreateEditModal"
 import CollectionsBar from "./components/CollectionsBar"
 import CollectionModal from "./components/CollectionModal"
 import Avatar from "./components/Avatar"
-import { SearchIcon, InboxIcon } from "./components/icons"
+import { SearchIcon, InboxIcon } from "@/app/components/icons"
 import Link from "next/link"
 
 export default function DashboardPage() {

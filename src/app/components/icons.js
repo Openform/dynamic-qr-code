@@ -1,10 +1,10 @@
 /**
- * Line icons for the dashboard, drawn in the text colour (currentColor) so
+ * Line icons used across the app, drawn in the text colour (currentColor) so
  * they pick up the colour of the button or label they sit in. Paths follow
  * the Lucide icon set (ISC licence).
  */
 
-function Icon({ size = 16, strokeWidth = 2, children, ...rest }) {
+function Icon({ size = 16, strokeWidth = 2, style, children, ...rest }) {
   return (
     <svg
       width={size}
@@ -17,7 +17,7 @@ function Icon({ size = 16, strokeWidth = 2, children, ...rest }) {
       strokeLinejoin="round"
       aria-hidden="true"
       focusable="false"
-      style={{ flex: "none" }}
+      style={{ flex: "none", ...style }}
       {...rest}
     >
       {children}
@@ -146,6 +146,45 @@ export function ScanIcon(props) {
       <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
       <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
       <path d="M7 12h10" />
+    </Icon>
+  )
+}
+
+export function GlobeIcon(props) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+      <path d="M2 12h20" />
+    </Icon>
+  )
+}
+
+export function PauseIcon(props) {
+  return (
+    <Icon {...props}>
+      <rect x="6" y="4" width="4" height="16" rx="1" />
+      <rect x="14" y="4" width="4" height="16" rx="1" />
+    </Icon>
+  )
+}
+
+/** A question mark on its own, for use inside a circle. */
+export function QuestionIcon(props) {
+  return (
+    <Icon {...props}>
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+      <path d="M12 17h.01" />
+    </Icon>
+  )
+}
+
+/** An exclamation mark on its own, for use inside a circle. */
+export function AlertIcon(props) {
+  return (
+    <Icon {...props}>
+      <path d="M12 7v6" />
+      <path d="M12 17h.01" />
     </Icon>
   )
 }
