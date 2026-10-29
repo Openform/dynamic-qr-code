@@ -55,6 +55,7 @@ export default function QRCodeCard({
       qrCodeObj.current = null
       const canvas = document.createElement("canvas")
       canvas.style.maxWidth = "100%"
+      canvas.style.maxHeight = "100%"
       canvas.style.height = "auto"
       if (qrRef.current) {
         qrRef.current.innerHTML = ""
@@ -119,27 +120,30 @@ export default function QRCodeCard({
 
   return (
     <div className="glass-card animate-fadeIn" style={styles.card}>
-      {/* QR Preview */}
-      <div style={styles.previewWrap}>
-        <div ref={qrRef} style={styles.previewImg} />
+      {/* Small code on the left, its name and destination on the right */}
+      <div style={styles.header}>
+        <div style={styles.previewWrap}>
+          <div ref={qrRef} style={styles.previewImg} />
+        </div>
+        <div style={styles.headerText}>
+          <h3 style={styles.title} title={qrcode.title}>
+            {qrcode.title}
+          </h3>
+          <a
+            href={safeDestinationUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="truncate"
+            style={styles.destUrl}
+            title={qrcode.destinationUrl}
+          >
+            {qrcode.destinationUrl}
+          </a>
+        </div>
       </div>
 
       {/* Info */}
       <div style={styles.info}>
-        <h3 className="truncate" style={styles.title}>
-          {qrcode.title}
-        </h3>
-
-        <a
-          href={safeDestinationUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="truncate"
-          style={styles.destUrl}
-        >
-          {qrcode.destinationUrl}
-        </a>
-
         {/* Redirect URL with copy */}
         <div style={styles.redirectRow}>
           <span className="truncate" style={styles.redirectUrl}>
@@ -211,6 +215,7 @@ export default function QRCodeCard({
         <button
           id={`edit-qr-${qrcode.id}`}
           className="btn btn-ghost btn-sm"
+          style={styles.actionButton}
           onClick={() => onEdit(qrcode)}
           title="Edit"
         >
@@ -220,6 +225,7 @@ export default function QRCodeCard({
           <button
             id={`download-qr-${qrcode.id}`}
             className="btn btn-ghost btn-sm"
+            style={styles.actionButton}
             onClick={() => setMenuOpen((o) => !o)}
             title="Download"
             aria-haspopup="menu"
@@ -249,6 +255,7 @@ export default function QRCodeCard({
         <button
           id={`delete-qr-${qrcode.id}`}
           className="btn btn-danger btn-sm"
+          style={styles.actionButton}
           onClick={() => onDelete(qrcode)}
           title="Delete"
         >
@@ -261,23 +268,40 @@ export default function QRCodeCard({
 
 const styles = {
   card: {
-    padding: "24px",
+    padding: "20px",
     display: "flex",
     flexDirection: "column",
-    gap: "16px"
+    gap: "14px",
+    // Lets long names truncate instead of stretching the grid column.
+    minWidth: 0
+  },
+  header: {
+    display: "flex",
+    alignItems: "center",
+    gap: "14px",
+    minWidth: 0
   },
   previewWrap: {
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: "16px",
-    background: "rgba(255,255,255,0.02)",
-    borderRadius: "12px"
+    flex: "none",
+    padding: "6px",
+    background: "rgba(255,255,255,0.03)",
+    borderRadius: "10px"
   },
   previewImg: {
-    width: "160px",
-    height: "160px",
-    borderRadius: "8px"
+    width: "88px",
+    height: "88px",
+    borderRadius: "6px",
+    overflow: "hidden",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  headerText: {
+    flex: 1,
+    minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px"
   },
   info: {
     display: "flex",
@@ -288,7 +312,13 @@ const styles = {
   title: {
     fontSize: "1.05rem",
     fontWeight: 600,
-    maxWidth: "100%"
+    lineHeight: 1.3,
+    // Up to two lines, then an ellipsis.
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
+    overflowWrap: "anywhere"
   },
   destUrl: {
     fontSize: "0.82rem",
@@ -350,8 +380,13 @@ const styles = {
     gap: "8px",
     borderTop: "1px solid rgba(255,255,255,0.06)",
     paddingTop: "12px",
-    justifyContent: "space-between"
-    // flexWrap: 'wrap',
+    justifyContent: "space-between",
+    // On the narrowest phones the buttons wrap rather than overflow the card.
+    flexWrap: "wrap"
+  },
+  actionButton: {
+    paddingLeft: "12px",
+    paddingRight: "12px"
   },
   downloadWrap: {
     position: "relative"
