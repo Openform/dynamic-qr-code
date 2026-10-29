@@ -10,7 +10,7 @@
  * there's nothing to do. See markdown.js for the formatting itself.
  */
 
-import { isSafeHref } from './markdown';
+import { isSafeHref, isTableRow, readTableDivider, splitTableRow } from './markdown';
 
 const BLOCK_PREFIX_RE = /^\s*(?:#{1,6}\s+|[-*+]\s+|\d{1,9}[.)]\s+)?/;
 const LIST_ITEM_RE = /^(\s*)([-*+]|\d{1,9}[.)])(\s+)(.*)$/;
@@ -241,4 +241,186 @@ export function continueList(value, start, end) {
   const insert = `\n${indent}${nextMarker} `;
   const cursor = start + insert.length;
   return { from: start, to: start, insert, selectionStart: cursor, selectionEnd: cursor };
+}
+
+/* ---- Tables ---- */
+
+/** The lines of the text, where each starts, and which line `position` is on. */
+function locateLine(value, position) {
+  const lines = value.split('\n');
+  const starts = [];
+  let offset = 0;
+  let index = 0;
+  for (let line = 0; line < lines.length; line += 1) {
+    starts.push(offset);
+    if (offset <= position) index = line;
+    offset += lines[line].length + 1;
+  }
+  return { lines, starts, index };
+}
+
+/**
+ * The table that line `index` is part of, the same way markdown.js reads it:
+ * { header, divider, last } (line numbers), or null.
+ */
+function tableAround(lines, index) {
+  if (!isTableRow(lines[index])) return null;
+  let top = index;
+  while (top > 0 && isTableRow(lines[top - 1])) top -= 1;
+
+  // The first row with a line of dashes under it is the header; any rows
+  // above it are an ordinary paragraph.
+  let header = -1;
+  for (let line = top; line <= index; line += 1) {
+    if (line + 1 < lines.length && readTableDivider(lines[line + 1])) {
+      header = line;
+      break;
+    }
+  }
+  if (header === -1) return null;
+
+  let last = header + 1;
+  while (last + 1 < lines.length && isTableRow(lines[last + 1])) last += 1;
+  return { header, divider: header + 1, last };
+}
+
+function tableColumns(lines, table) {
+  let columns = 1;
+  for (let line = table.header; line <= table.last; line += 1) {
+    columns = Math.max(columns, splitTableRow(lines[line]).length);
+  }
+  return columns;
+}
+
+/** "|  |  |": a row of empty cells. The cursor goes 2 in, inside the first. */
+function emptyRow(columns) {
+  return `|${'  |'.repeat(columns)}`;
+}
+
+/** Where to put the cursor in a cell: select its text, or sit inside it if it's empty. */
+function cellSelection(cell, lineStart) {
+  if (cell.text) return [lineStart + cell.start, lineStart + cell.end];
+  const inside = lineStart + cell.segmentStart + (cell.segmentEnd > cell.segmentStart ? 1 : 0);
+  return [inside, inside];
+}
+
+/**
+ * A new table, `columns` wide and `rows` tall counting the header row, on
+ * its own after the line the cursor is on (or in place of an empty line).
+ * The first heading is selected, ready to type over.
+ */
+export function insertTable(value, start, end, columns, rows) {
+  const cols = Math.max(1, Math.floor(columns) || 1);
+  const bodyRows = Math.max(0, (Math.floor(rows) || 1) - 1);
+
+  // A selection ending at the very start of a line doesn't include that line.
+  const at = end > start && value[end - 1] === '\n' ? end - 1 : end;
+  const { lines, starts, index } = locateLine(value, at);
+  // Inside a table, the new one goes after it rather than splitting it.
+  const line = tableAround(lines, index)?.last ?? index;
+  const lineStart = starts[line];
+  const lineEnd = lineStart + lines[line].length;
+  const blankLine = !lines[line].trim();
+  const from = blankLine ? lineStart : lineEnd;
+
+  const header = `| ${Array.from({ length: cols }, (_, i) => `Column ${i + 1}`).join(' | ')} |`;
+  const divider = `|${' --- |'.repeat(cols)}`;
+  const table = [header, divider, ...Array.from({ length: bodyRows }, () => emptyRow(cols))].join('\n');
+
+  // Keep a blank line between the table and the text around it.
+  const before = value.slice(0, from);
+  const after = value.slice(lineEnd);
+  const lead = !before.trim() || /\n[ \t]*\n$/.test(before) ? '' : before.endsWith('\n') ? '\n' : '\n\n';
+  const trail = !after.trim() || /^\n[ \t]*\n/.test(after) ? '' : after.startsWith('\n') ? '\n' : '\n\n';
+
+  const selectionStart = from + lead.length + 2;
+  return {
+    from,
+    to: lineEnd,
+    insert: lead + table + trail,
+    selectionStart,
+    selectionEnd: selectionStart + 'Column 1'.length,
+  };
+}
+
+/**
+ * Enter in a table: add an empty row under this one (under the header, from
+ * the header or its line of dashes). Enter on an empty last row ends the
+ * table instead. Returns null outside a table, so Enter works as normal.
+ */
+export function continueTable(value, start, end) {
+  if (start !== end) return null;
+  const { lines, starts, index } = locateLine(value, start);
+  const table = tableAround(lines, index);
+  if (!table) return null;
+  // At the very start of the header, Enter makes room above the table as usual.
+  if (index === table.header && start === starts[index]) return null;
+
+  const inBody = index > table.divider;
+  if (inBody && index === table.last && splitTableRow(lines[index]).every((cell) => !cell.text)) {
+    const lineStart = starts[index];
+    return {
+      from: lineStart,
+      to: lineStart + lines[index].length,
+      insert: '',
+      selectionStart: lineStart,
+      selectionEnd: lineStart,
+    };
+  }
+
+  const after = inBody ? index : table.divider;
+  const at = starts[after] + lines[after].length;
+  const cursor = at + 3; // past the new line and "| "
+  return {
+    from: at,
+    to: at,
+    insert: `\n${emptyRow(tableColumns(lines, table))}`,
+    selectionStart: cursor,
+    selectionEnd: cursor,
+  };
+}
+
+/**
+ * Tab (or Shift + Tab, `backwards`) in a table: move to the next (or
+ * previous) cell, skipping the line of dashes. Tab in the last cell adds a
+ * new row. Returns null outside a table, and for Shift + Tab in the first
+ * cell, so the key works as normal there.
+ */
+export function moveTableCell(value, start, end, backwards = false) {
+  if (value.slice(start, end).includes('\n')) return null;
+  const { lines, starts, index } = locateLine(value, start);
+  const table = tableAround(lines, index);
+  if (!table) return null;
+
+  const cells = [];
+  for (let line = table.header; line <= table.last; line += 1) {
+    if (line === table.divider) continue;
+    for (const cell of splitTableRow(lines[line])) cells.push({ ...cell, lineStart: starts[line] });
+  }
+
+  // The cell the cursor is in, or the last one before it (between rows, or
+  // outside the "|"s at the ends of a row).
+  let current = -1;
+  while (current + 1 < cells.length && cells[current + 1].lineStart + cells[current + 1].segmentStart <= start) {
+    current += 1;
+  }
+  const cell = cells[current];
+  const inCell = Boolean(cell) && start <= cell.lineStart + cell.segmentEnd;
+  const target = backwards ? (inCell ? current - 1 : current) : current + 1;
+
+  if (target < 0) return null;
+  if (target >= cells.length) {
+    const at = starts[table.last] + lines[table.last].length;
+    const cursor = at + 3;
+    return {
+      from: at,
+      to: at,
+      insert: `\n${emptyRow(tableColumns(lines, table))}`,
+      selectionStart: cursor,
+      selectionEnd: cursor,
+    };
+  }
+
+  const [selectionStart, selectionEnd] = cellSelection(cells[target], cells[target].lineStart);
+  return { from: start, to: start, insert: '', selectionStart, selectionEnd };
 }

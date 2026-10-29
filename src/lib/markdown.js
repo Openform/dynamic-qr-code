@@ -7,8 +7,13 @@
  *   [link text](https://example.com)   (also mailto:, tel:, /path and #anchor)
  *   \*                   a backslash shows the next symbol as-is
  *
+ *   | Name | Purpose |    a table: the first row is the header, and the
+ *   | ---- | :-----: |    line of dashes under it is required (":" at either
+ *   | Cell | Cell    |    end of the dashes aligns that column)
+ *
  * Lines next to each other form one paragraph, with a line break between
- * them; a blank line starts a new paragraph.
+ * them; a blank line starts a new paragraph. A table runs until a blank line
+ * or a line without a "|".
  *
  * parseMarkdown() returns plain data (blocks and inline nodes) that
  * FormattedText renders as React elements. Nothing is ever treated as HTML,
@@ -23,6 +28,7 @@ const HEADING_RE = /^(#{1,3})\s+(.*?)(?:\s+#+)?\s*$/;
 const BULLET_RE = /^\s*[-*+]\s+(.*)$/;
 const NUMBERED_RE = /^\s*(\d{1,9})[.)]\s+(.*)$/;
 const INDENTED_RE = /^\s{2,}\S/;
+const DIVIDER_CELL_RE = /^:?-+:?$/;
 const ESCAPABLE = '\\`*_{}[]()#+-.!>~|';
 
 /** True for link targets we're happy to render. */
@@ -42,9 +48,12 @@ export function isSafeHref(href) {
  *   { type: 'heading', line, level: 2 | 3, id, children: Inline[] }
  *   { type: 'paragraph', line, lines: Inline[][] }
  *   { type: 'list', line, ordered, start, items: Inline[][][] }   (each item is lines)
+ *   { type: 'table', line, align, header: Inline[][], rows: Inline[][][] }
  *
  * `line` is the 0-based line of the text the block starts on, which the admin
- * editor uses to keep its preview scrolled to the same place.
+ * editor uses to keep its preview scrolled to the same place. A table's
+ * `align` has 'left' | 'center' | 'right' | null for each column, and every
+ * row has one cell per column.
  */
 export function parseMarkdown(text) {
   const source = typeof text === 'string' ? text.replace(/\r\n?/g, '\n') : '';
@@ -71,6 +80,14 @@ export function parseMarkdown(text) {
         id: uniqueId(slugify(plainText(children)), usedIds),
         children,
       });
+      current = null;
+      continue;
+    }
+
+    const table = readTable(sourceLines, lineNumber);
+    if (table) {
+      blocks.push(table.block);
+      lineNumber = table.lastLine;
       current = null;
       continue;
     }
@@ -108,6 +125,94 @@ export function parseMarkdown(text) {
   }
 
   return blocks;
+}
+
+/**
+ * The table whose header row is sourceLines[start], or null if there isn't
+ * one: { block, lastLine }.
+ */
+function readTable(sourceLines, start) {
+  const header = splitTableRow(sourceLines[start]);
+  const align = header && start + 1 < sourceLines.length ? readTableDivider(sourceLines[start + 1]) : null;
+  if (!align) return null;
+
+  const body = [];
+  let next = start + 2;
+  while (next < sourceLines.length && isTableRow(sourceLines[next])) {
+    body.push(splitTableRow(sourceLines[next]));
+    next += 1;
+  }
+
+  // The widest row sets the number of columns, so nothing typed goes missing;
+  // shorter rows get empty cells.
+  const columns = Math.max(header.length, align.length, ...body.map((cells) => cells.length));
+  const toCells = (cells) =>
+    Array.from({ length: columns }, (_, index) => parseInline(cells[index]?.text ?? ''));
+
+  return {
+    lastLine: next - 1,
+    block: {
+      type: 'table',
+      line: start,
+      align: Array.from({ length: columns }, (_, index) => align[index] ?? null),
+      header: toCells(header),
+      rows: body.map(toCells),
+    },
+  };
+}
+
+/**
+ * The cells of one table row, or null if the line has no "|". The "|"s at
+ * either end of a row are optional, and "\|" is part of a cell, not a divider.
+ * Each cell is { text, start, end, segmentStart, segmentEnd }: its text
+ * without the spaces around it, where that text is in the line, and the whole
+ * space between its "|"s.
+ */
+export function splitTableRow(line) {
+  const pipes = [];
+  for (let i = 0; i < line.length; i += 1) {
+    if (line[i] === '\\') i += 1;
+    else if (line[i] === '|') pipes.push(i);
+  }
+  if (!pipes.length) return null;
+
+  const bounds = [-1, ...pipes, line.length];
+  const cells = [];
+  for (let k = 0; k + 1 < bounds.length; k += 1) {
+    const segmentStart = bounds[k] + 1;
+    const segmentEnd = bounds[k + 1];
+    const raw = line.slice(segmentStart, segmentEnd);
+    // Nothing before the first "|" or after the last: that's an outer edge, not a cell.
+    if ((k === 0 || k === bounds.length - 2) && !raw.trim()) continue;
+    const text = raw.trim();
+    const start = text ? segmentStart + raw.length - raw.trimStart().length : segmentStart;
+    cells.push({ text, start, end: start + text.length, segmentStart, segmentEnd });
+  }
+  return cells;
+}
+
+/**
+ * If the line is the row of dashes under a table's header ("| --- | :-: |"),
+ * each column's alignment: 'left' (":--"), 'center' (":-:"), 'right' ("--:")
+ * or null. Otherwise null.
+ */
+export function readTableDivider(line) {
+  const cells = splitTableRow(line);
+  if (!cells?.length || !cells.every((cell) => DIVIDER_CELL_RE.test(cell.text))) return null;
+  return cells.map(({ text }) => {
+    const left = text.startsWith(':');
+    const right = text.endsWith(':');
+    if (left && right) return 'center';
+    if (right) return 'right';
+    return left ? 'left' : null;
+  });
+}
+
+/** Whether a line can be a row of a table: not blank, not a heading, and has a "|". */
+export function isTableRow(line) {
+  if (!line.trim()) return false;
+  const heading = line.match(HEADING_RE);
+  return !(heading && heading[2]) && splitTableRow(line) !== null;
 }
 
 /**

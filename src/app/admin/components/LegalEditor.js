@@ -16,9 +16,13 @@ import {
   toggleLinePrefix,
   insertLink,
   normalizeLinkInput,
-  continueList
+  continueList,
+  insertTable,
+  continueTable,
+  moveTableCell
 } from "@/lib/markdownEditing"
 import { useScrollSync } from "./useScrollSync"
+import TableTool from "./TableTool"
 import styles from "./LegalEditor.module.css"
 
 /** Toolbar buttons, in groups. */
@@ -87,6 +91,7 @@ export default function LegalEditor({ initialPages }) {
   const [syncScroll, setSyncScroll] = useState(true)
   const textareaRef = useRef(null)
   const previewRef = useRef(null)
+  const editorPanelRef = useRef(null)
   const pendingSelection = useRef(null)
   const inBrowser = useInBrowser()
 
@@ -212,6 +217,13 @@ export default function LegalEditor({ initialPages }) {
     applyChange(toggleLinePrefix(value, start, end, id))
   }
 
+  function addTable(columns, rows) {
+    const textarea = textareaRef.current
+    if (!textarea) return
+    const { value, selectionStart, selectionEnd } = textarea
+    applyChange(insertTable(value, selectionStart, selectionEnd, columns, rows))
+  }
+
   function handleTextareaKeyDown(event) {
     const mod = event.metaKey || event.ctrlKey
     if (mod && !event.shiftKey && !event.altKey) {
@@ -222,13 +234,20 @@ export default function LegalEditor({ initialPages }) {
       }
       return
     }
-    if (event.key === "Enter" && !event.shiftKey && !event.altKey && !event.nativeEvent.isComposing) {
-      const { value, selectionStart, selectionEnd } = event.currentTarget
-      const change = continueList(value, selectionStart, selectionEnd)
-      if (change) {
-        event.preventDefault()
-        applyChange(change)
-      }
+    if (event.nativeEvent.isComposing || event.altKey) return
+    const { value, selectionStart, selectionEnd } = event.currentTarget
+    let change = null
+    if (event.key === "Enter" && !event.shiftKey) {
+      change =
+        continueTable(value, selectionStart, selectionEnd) ??
+        continueList(value, selectionStart, selectionEnd)
+    } else if (event.key === "Tab" && !mod) {
+      // Only inside a table; elsewhere Tab moves on from the text box as usual.
+      change = moveTableCell(value, selectionStart, selectionEnd, event.shiftKey)
+    }
+    if (change) {
+      event.preventDefault()
+      applyChange(change)
     }
   }
 
@@ -381,7 +400,7 @@ export default function LegalEditor({ initialPages }) {
 
         {/* ---- Editor and preview ---- */}
         <div className={styles.workspace}>
-          <section className={`glass-card-static ${styles.panel}`} aria-label="Editor">
+          <section ref={editorPanelRef} className={`glass-card-static ${styles.panel}`} aria-label="Editor">
             <div className={`${styles.panelHeader} ${styles.toolbarHeader}`}>
               <div className={styles.toolbar} role="toolbar" aria-label="Formatting">
                 {TOOL_GROUPS.map((group, index) => (
@@ -401,6 +420,9 @@ export default function LegalEditor({ initialPages }) {
                     ))}
                   </div>
                 ))}
+                <div className={styles.toolGroup}>
+                  <TableTool onInsert={addTable} boundaryRef={editorPanelRef} />
+                </div>
               </div>
             </div>
             <textarea
@@ -535,6 +557,17 @@ export default function LegalEditor({ initialPages }) {
                   <td>A link. Works with web addresses, <code>mailto:</code> emails and pages on this site</td>
                 </tr>
                 <tr>
+                  <td>
+                    <code className={styles.guideCodeLines}>
+                      {"| Name | Role |\n| --- | --- |\n| Sam | Owner |"}
+                    </code>
+                  </td>
+                  <td>
+                    A table. The top row is the header, and the line of dashes under it is
+                    needed. Use the Table button to start one
+                  </td>
+                </tr>
+                <tr>
                   <td>An empty line</td>
                   <td>Starts a new paragraph</td>
                 </tr>
@@ -543,6 +576,11 @@ export default function LegalEditor({ initialPages }) {
             <ul className={styles.guideTips}>
               <li>Select text and click a toolbar button to format it. Click it again to remove the formatting.</li>
               <li>In a list, press Enter to add the next item. Press Enter on an empty item to end the list.</li>
+              <li>
+                In a table, press Tab to go to the next cell (Shift + Tab goes back) and Enter to add a
+                row. Press Enter on an empty last row to end the table. The <code>|</code> symbols
+                don&rsquo;t need to line up: the columns line up on the page by themselves.
+              </li>
               <li>Text pasted from Word or a website keeps its words but not its formatting.</li>
               <li>Shortcuts: Ctrl/⌘ + B bold, Ctrl/⌘ + I italic, Ctrl/⌘ + K link, Ctrl/⌘ + S save, Ctrl/⌘ + Z undo.</li>
             </ul>

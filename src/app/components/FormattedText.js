@@ -5,7 +5,7 @@ import styles from "./FormattedText.module.css"
 
 /**
  * Render text written with the formatting in lib/markdown.js (headings,
- * bold, italic, lists, links). Everything is built as React elements, never
+ * bold, italic, lists, links, tables). Everything is built as React elements, never
  * raw HTML. Used by the legal pages and the admin editor's preview.
  *
  * `sourceLines` marks each block with the line of text it came from
@@ -48,10 +48,49 @@ function Block({ block, dataLine }) {
     )
   }
 
+  if (block.type === "table") {
+    return <Table block={block} dataLine={dataLine} />
+  }
+
   return (
     <p data-line={dataLine}>
       <Lines lines={block.lines} />
     </p>
+  )
+}
+
+/** Wide tables scroll sideways on small screens instead of squashing the text. */
+function Table({ block, dataLine }) {
+  const alignOf = (index) => (block.align[index] ? { textAlign: block.align[index] } : undefined)
+  // A header row left completely empty is left out.
+  const hasHeader = block.header.some((cell) => cell.length > 0)
+  return (
+    <div className={styles.tableScroll} data-line={dataLine}>
+      <table>
+        {hasHeader && (
+          <thead>
+            <tr>
+              {block.header.map((cell, index) => (
+                <th key={index} scope="col" style={alignOf(index)}>
+                  <Inline nodes={cell} />
+                </th>
+              ))}
+            </tr>
+          </thead>
+        )}
+        <tbody>
+          {block.rows.map((row, rowIndex) => (
+            <tr key={rowIndex}>
+              {row.map((cell, index) => (
+                <td key={index} style={alignOf(index)}>
+                  <Inline nodes={cell} />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }
 

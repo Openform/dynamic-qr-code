@@ -5,6 +5,9 @@ import {
   normalizeLinkInput,
   insertLink,
   continueList,
+  insertTable,
+  continueTable,
+  moveTableCell,
 } from '../markdownEditing';
 
 /** Apply a change and show the result with the selection marked by [ ]. */
@@ -149,5 +152,98 @@ describe('continueList', () => {
     expect(run('plain[]', continueList)).toBeNull();
     expect(run('- [one]', continueList)).toBeNull();
     expect(run('**bold**[]', continueList)).toBeNull();
+  });
+});
+
+describe('insertTable', () => {
+  const table = (columns, rows) => (value, s, e) => insertTable(value, s, e, columns, rows);
+
+  it('adds a table with the first heading selected', () => {
+    expect(run('[]', table(2, 3))).toBe('| [Column 1] | Column 2 |\n| --- | --- |\n|  |  |\n|  |  |');
+    expect(run('[]', table(1, 1))).toBe('| [Column 1] |\n| --- |');
+  });
+
+  it('goes after the current line, with a blank line around it', () => {
+    expect(run('Intro te[]xt\nMore', table(1, 2))).toBe('Intro text\n\n| [Column 1] |\n| --- |\n|  |\n\nMore');
+    expect(run('Intro[]', table(1, 1))).toBe('Intro\n\n| [Column 1] |\n| --- |');
+  });
+
+  it('fills an empty line without adding extra blank lines', () => {
+    expect(run('One\n\n[]\n\nTwo', table(1, 1))).toBe('One\n\n| [Column 1] |\n| --- |\n\nTwo');
+    expect(run('One\n[]\nTwo', table(1, 1))).toBe('One\n\n| [Column 1] |\n| --- |\n\nTwo');
+  });
+
+  it('goes after a table the cursor is in, instead of splitting it', () => {
+    expect(run('| a |\n| --- |\n| []1 |\n| 2 |', table(1, 1))).toBe(
+      '| a |\n| --- |\n| 1 |\n| 2 |\n\n| [Column 1] |\n| --- |'
+    );
+  });
+});
+
+describe('continueTable', () => {
+  const doc = '| Name | Role |\n| --- | --- |\n| Sam | Owner |';
+
+  it('adds an empty row under the current one', () => {
+    expect(run(doc.replace('Sam', 'S[]am'), continueTable)).toBe(`${doc}\n| [] |  |`);
+    expect(run('| a | b |\n| --- | --- |\n| 1 | 2 |[]\n| 3 | 4 |', continueTable)).toBe(
+      '| a | b |\n| --- | --- |\n| 1 | 2 |\n| [] |  |\n| 3 | 4 |'
+    );
+  });
+
+  it('adds the row under the header when on the header or the dashes', () => {
+    const expected = '| Name | Role |\n| --- | --- |\n| [] |  |\n| Sam | Owner |';
+    expect(run(doc.replace('Role', 'Role[]'), continueTable)).toBe(expected);
+    expect(run(doc.replace('| --- | --- |', '| --- | ---[] |'), continueTable)).toBe(expected);
+  });
+
+  it('ends the table on an empty last row', () => {
+    expect(run(`${doc}\n| [] |  |`, continueTable)).toBe(`${doc}\n[]`);
+  });
+
+  it('keeps an empty row in the middle and adds another', () => {
+    expect(run('| a |\n| --- |\n|  []|\n| 1 |', continueTable)).toBe('| a |\n| --- |\n|  |\n| [] |\n| 1 |');
+  });
+
+  it('leaves Enter alone outside a table and at the very start of one', () => {
+    expect(run('plain | text[]', continueTable)).toBeNull();
+    expect(run('[]| a |\n| --- |', continueTable)).toBeNull();
+    expect(run(`${doc}\n\nafter[]`, continueTable)).toBeNull();
+    expect(run(doc.replace('Sam', '[Sam]'), continueTable)).toBeNull();
+  });
+});
+
+describe('moveTableCell', () => {
+  const doc = '| Name | Role |\n| --- | --- |\n| Sam |  |';
+  const next = (value, s, e) => moveTableCell(value, s, e, false);
+  const back = (value, s, e) => moveTableCell(value, s, e, true);
+
+  it('selects the next cell, skipping the dashes', () => {
+    expect(run(doc.replace('Name', 'Na[]me'), next)).toBe(doc.replace('Role', '[Role]'));
+    expect(run(doc.replace('Role', '[Role]'), next)).toBe(doc.replace('Sam', '[Sam]'));
+  });
+
+  it('puts the cursor inside an empty cell', () => {
+    expect(run(doc.replace('Sam', 'Sam[]'), next)).toBe('| Name | Role |\n| --- | --- |\n| Sam | [] |');
+  });
+
+  it('adds a row after the last cell', () => {
+    expect(run('| Name | Role |\n| --- | --- |\n| Sam |  []|', next)).toBe(`${doc}\n| [] |  |`);
+  });
+
+  it('goes back with Shift + Tab, and leaves it alone in the first cell', () => {
+    expect(run(doc.replace('Sam', 'S[]am'), back)).toBe(doc.replace('Role', '[Role]'));
+    expect(run(doc.replace('Name', 'Na[]me'), back)).toBeNull();
+  });
+
+  it('moves from outside the pipes at either end of a row', () => {
+    expect(run('| a | b |[]\n| --- | --- |\n| 1 | 2 |', next)).toBe('| a | b |\n| --- | --- |\n| [1] | 2 |');
+    expect(run('| a | b |\n| --- | --- |\n[]| 1 | 2 |', next)).toBe('| a | b |\n| --- | --- |\n| [1] | 2 |');
+    expect(run('| a | b |\n| --- | --- |\n[]| 1 | 2 |', back)).toBe('| a | [b] |\n| --- | --- |\n| 1 | 2 |');
+  });
+
+  it('leaves Tab alone outside a table or across lines', () => {
+    expect(run('plain[]', next)).toBeNull();
+    expect(run('| a | b |\n| 1 | 2 |[]', next)).toBeNull();
+    expect(run('| [a |\n| --- |\n| 1] |', next)).toBeNull();
   });
 });
