@@ -25,10 +25,10 @@ describe('getAlertSettings', () => {
     expect(getAlertSettings({ RESEND_API_KEY: ' ' })).toBeNull();
   });
 
-  it('sends from mail@qr.openform.co.za to kenton@openform.co.za by default', () => {
+  it('sends from mail@qrgo.openform.co.za to kenton@openform.co.za by default', () => {
     expect(getAlertSettings({ ...RESEND, ADMIN_EMAILS: 'admin@qrgo.test' })).toEqual({
       apiKey: 're_test_123',
-      from: 'QR Go <mail@qr.openform.co.za>',
+      from: 'QR Go <mail@qrgo.openform.co.za>',
       to: ['kenton@openform.co.za'],
     });
   });
@@ -94,7 +94,7 @@ describe('sendInviteAlert', () => {
     expect(Resend).toHaveBeenCalledWith('re_test_123');
     expect(send).toHaveBeenCalledWith(
       expect.objectContaining({
-        from: 'QR Go <mail@qr.openform.co.za>',
+        from: 'QR Go <mail@qrgo.openform.co.za>',
         to: ['kenton@openform.co.za'],
         replyTo: 'jane@acme.co.za',
         subject: 'Invite request from Jane Smith',

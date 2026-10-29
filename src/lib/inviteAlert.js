@@ -4,7 +4,7 @@
  *
  * Settings (environment variables):
  *   RESEND_API_KEY       the Resend API key                 (required)
- *   INVITE_ALERT_FROM    optional sender, default "QR Go <mail@qr.openform.co.za>".
+ *   INVITE_ALERT_FROM    optional sender, default "QR Go <mail@qrgo.openform.co.za>".
  *                        Its domain must be verified in Resend.
  *   INVITE_ALERT_EMAILS  optional, comma-separated recipients; default
  *                        kenton@openform.co.za
@@ -17,7 +17,7 @@ import { Resend } from 'resend';
 import { getPackage, describeLimit } from './packages';
 import { REPLY_PROMISE } from './inviteRequests';
 
-export const DEFAULT_ALERT_FROM = 'QR Go <mail@qr.openform.co.za>';
+export const DEFAULT_ALERT_FROM = 'QR Go <mail@qrgo.openform.co.za>';
 export const DEFAULT_ALERT_TO = ['kenton@openform.co.za'];
 
 // Give up on Resend after this long rather than hold the request open.
