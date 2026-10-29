@@ -1,21 +1,27 @@
 /**
- * Emails the team about each new invite request, over SMTP.
+ * Emails the team about each new invite request, through Resend
+ * (https://resend.com).
  *
  * Settings (environment variables):
- *   SMTP_HOST            e.g. smtp.hostinger.com            (required)
- *   SMTP_PORT            465 (SSL, default) or 587 (STARTTLS)
- *   SMTP_USER            the mailbox to send from          (required)
- *   SMTP_PASSWORD        that mailbox's password           (required)
- *   SMTP_FROM            optional sender, default "QR Go <SMTP_USER>"
- *   INVITE_ALERT_EMAILS  optional, comma-separated; default ADMIN_EMAILS
+ *   RESEND_API_KEY       the Resend API key                 (required)
+ *   INVITE_ALERT_FROM    optional sender, default "QR Go <mail@qr.openform.co.za>".
+ *                        Its domain must be verified in Resend.
+ *   INVITE_ALERT_EMAILS  optional, comma-separated recipients; default
+ *                        kenton@openform.co.za
  *
- * Without them, requests are still saved and listed at /admin/invites; only
- * the email is skipped, with a warning in the server log.
+ * Without the API key, requests are still saved and listed at /admin/invites;
+ * only the email is skipped, with a warning in the server log.
  */
 
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import { getPackage, describeLimit } from './packages';
 import { REPLY_PROMISE } from './inviteRequests';
+
+export const DEFAULT_ALERT_FROM = 'QR Go <mail@qr.openform.co.za>';
+export const DEFAULT_ALERT_TO = ['kenton@openform.co.za'];
+
+// Give up on Resend after this long rather than hold the request open.
+const SEND_TIMEOUT_MS = 15_000;
 
 function splitEmails(value) {
   return (value || '')
@@ -24,18 +30,14 @@ function splitEmails(value) {
     .filter(Boolean);
 }
 
-/** The SMTP settings and recipients, or null when alerts aren't set up. */
+/** The Resend key, sender and recipients, or null when alerts aren't set up. */
 export function getAlertSettings(env = process.env) {
-  const host = (env.SMTP_HOST || '').trim();
-  const user = (env.SMTP_USER || '').trim();
-  const pass = env.SMTP_PASSWORD || '';
-  const to = splitEmails(env.INVITE_ALERT_EMAILS || env.ADMIN_EMAILS);
-  if (!host || !user || !pass || to.length === 0) return null;
+  const apiKey = (env.RESEND_API_KEY || '').trim();
+  if (!apiKey) return null;
 
-  const port = Number(env.SMTP_PORT) || 465;
-  const from = (env.SMTP_FROM || '').trim() || { name: 'QR Go', address: user };
-  // Port 465 speaks TLS from the start; 587 upgrades with STARTTLS.
-  return { host, port, secure: port === 465, user, pass, from, to };
+  const from = (env.INVITE_ALERT_FROM || '').trim() || DEFAULT_ALERT_FROM;
+  const to = splitEmails(env.INVITE_ALERT_EMAILS);
+  return { apiKey, from, to: to.length > 0 ? to : DEFAULT_ALERT_TO };
 }
 
 /** "Business (20 codes)", or "Not sure yet" when no plan was picked. */
@@ -66,27 +68,14 @@ export function buildInviteAlert(request, { baseUrl } = {}) {
   return { subject: `Invite request from ${request.name}`, text: lines.join('\n') };
 }
 
-// One transport per settings, reused across requests.
-let cached = { key: '', transport: null };
+// One client per API key, reused across requests.
+let cached = { apiKey: '', client: null };
 
-function getTransport(settings) {
-  const key = JSON.stringify([settings.host, settings.port, settings.user, settings.pass]);
-  if (cached.key !== key) {
-    cached = {
-      key,
-      transport: nodemailer.createTransport({
-        host: settings.host,
-        port: settings.port,
-        secure: settings.secure,
-        auth: { user: settings.user, pass: settings.pass },
-        // Give up quickly rather than holding a connection open for minutes.
-        connectionTimeout: 10_000,
-        greetingTimeout: 10_000,
-        socketTimeout: 20_000,
-      }),
-    };
+function getClient(apiKey) {
+  if (cached.apiKey !== apiKey) {
+    cached = { apiKey, client: new Resend(apiKey) };
   }
-  return cached.transport;
+  return cached.client;
 }
 
 let warnedNotSetUp = false;
@@ -100,7 +89,7 @@ export async function sendInviteAlert(request) {
   if (!settings) {
     if (!warnedNotSetUp) {
       console.warn(
-        'Invite request saved, but no alert email was sent: set SMTP_HOST, SMTP_USER and SMTP_PASSWORD to turn alerts on (see README).'
+        'Invite request saved, but no alert email was sent: set RESEND_API_KEY to turn alerts on (see README).'
       );
       warnedNotSetUp = true;
     }
@@ -109,14 +98,22 @@ export async function sendInviteAlert(request) {
 
   try {
     const { subject, text } = buildInviteAlert(request, { baseUrl: process.env.BASE_URL });
-    await getTransport(settings).sendMail({
-      from: settings.from,
-      to: settings.to,
-      // Replying to the alert goes straight to the person who asked.
-      replyTo: { name: request.name, address: request.email },
-      subject,
-      text,
-    });
+    const { error } = await getClient(settings.apiKey).emails.send(
+      {
+        from: settings.from,
+        to: settings.to,
+        // Replying to the alert goes straight to the person who asked.
+        replyTo: request.email,
+        subject,
+        text,
+      },
+      { signal: AbortSignal.timeout(SEND_TIMEOUT_MS) }
+    );
+    // Resend reports problems (bad key, unverified domain...) as a returned error.
+    if (error) {
+      console.error('Could not send the invite request alert email:', error);
+      return false;
+    }
     return true;
   } catch (error) {
     console.error('Could not send the invite request alert email:', error);

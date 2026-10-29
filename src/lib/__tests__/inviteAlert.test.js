@@ -1,17 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const sendMail = vi.fn();
-const createTransport = vi.fn(() => ({ sendMail }));
-vi.mock('nodemailer', () => ({ default: { createTransport } }));
+const send = vi.fn();
+const Resend = vi.fn(function Resend(apiKey) {
+  this.apiKey = apiKey;
+  this.emails = { send };
+});
+vi.mock('resend', () => ({ Resend }));
 
 const { getAlertSettings, buildInviteAlert, sendInviteAlert } = await import('../inviteAlert.js');
 
-const SMTP = {
-  SMTP_HOST: 'smtp.hostinger.com',
-  SMTP_USER: 'hello@qrgo.test',
-  SMTP_PASSWORD: 'secret',
-  ADMIN_EMAILS: 'admin@qrgo.test, owner@qrgo.test',
-};
+const RESEND = { RESEND_API_KEY: 're_test_123' };
 
 const request = {
   name: 'Jane Smith',
@@ -22,36 +20,27 @@ const request = {
 };
 
 describe('getAlertSettings', () => {
-  it('is null until the mailbox and a recipient are set', () => {
+  it('is null until the Resend API key is set', () => {
     expect(getAlertSettings({})).toBeNull();
-    expect(getAlertSettings({ ...SMTP, SMTP_PASSWORD: '' })).toBeNull();
-    expect(getAlertSettings({ ...SMTP, SMTP_HOST: ' ' })).toBeNull();
-    expect(getAlertSettings({ ...SMTP, ADMIN_EMAILS: '' })).toBeNull();
+    expect(getAlertSettings({ RESEND_API_KEY: ' ' })).toBeNull();
   });
 
-  it('defaults to SSL on port 465, sending as QR Go to the admins', () => {
-    expect(getAlertSettings(SMTP)).toEqual({
-      host: 'smtp.hostinger.com',
-      port: 465,
-      secure: true,
-      user: 'hello@qrgo.test',
-      pass: 'secret',
-      from: { name: 'QR Go', address: 'hello@qrgo.test' },
-      to: ['admin@qrgo.test', 'owner@qrgo.test'],
+  it('sends from mail@qr.openform.co.za to kenton@openform.co.za by default', () => {
+    expect(getAlertSettings({ ...RESEND, ADMIN_EMAILS: 'admin@qrgo.test' })).toEqual({
+      apiKey: 're_test_123',
+      from: 'QR Go <mail@qr.openform.co.za>',
+      to: ['kenton@openform.co.za'],
     });
   });
 
-  it('uses STARTTLS on other ports, and the optional sender and recipients', () => {
+  it('uses the optional sender and recipients', () => {
     const settings = getAlertSettings({
-      ...SMTP,
-      SMTP_PORT: '587',
-      SMTP_FROM: 'QR Go <invites@qrgo.test>',
-      INVITE_ALERT_EMAILS: 'sales@qrgo.test',
+      ...RESEND,
+      INVITE_ALERT_FROM: 'QR Go <invites@qrgo.test>',
+      INVITE_ALERT_EMAILS: 'sales@qrgo.test, owner@qrgo.test',
     });
-    expect(settings.port).toBe(587);
-    expect(settings.secure).toBe(false);
     expect(settings.from).toBe('QR Go <invites@qrgo.test>');
-    expect(settings.to).toEqual(['sales@qrgo.test']);
+    expect(settings.to).toEqual(['sales@qrgo.test', 'owner@qrgo.test']);
   });
 });
 
@@ -78,8 +67,10 @@ describe('sendInviteAlert', () => {
   const saved = { ...process.env };
 
   beforeEach(() => {
-    sendMail.mockReset();
-    createTransport.mockClear();
+    send.mockReset();
+    Resend.mockClear();
+    delete process.env.INVITE_ALERT_FROM;
+    delete process.env.INVITE_ALERT_EMAILS;
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
@@ -90,28 +81,43 @@ describe('sendInviteAlert', () => {
   });
 
   it('skips the email, without failing, when alerts are not set up', async () => {
-    for (const key of Object.keys(SMTP)) delete process.env[key];
+    delete process.env.RESEND_API_KEY;
     await expect(sendInviteAlert(request)).resolves.toBe(false);
-    expect(sendMail).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
   });
 
-  it('emails the team with Reply-To set to the person who asked', async () => {
-    Object.assign(process.env, SMTP, { BASE_URL: 'https://qrgo.test' });
-    sendMail.mockResolvedValue({});
+  it('emails kenton@openform.co.za with Reply-To set to the person who asked', async () => {
+    Object.assign(process.env, RESEND, { BASE_URL: 'https://qrgo.test' });
+    send.mockResolvedValue({ data: { id: 'email_1' }, error: null });
 
     await expect(sendInviteAlert(request)).resolves.toBe(true);
-    expect(sendMail).toHaveBeenCalledWith(
+    expect(Resend).toHaveBeenCalledWith('re_test_123');
+    expect(send).toHaveBeenCalledWith(
       expect.objectContaining({
-        to: ['admin@qrgo.test', 'owner@qrgo.test'],
-        replyTo: { name: 'Jane Smith', address: 'jane@acme.co.za' },
+        from: 'QR Go <mail@qr.openform.co.za>',
+        to: ['kenton@openform.co.za'],
+        replyTo: 'jane@acme.co.za',
         subject: 'Invite request from Jane Smith',
-      })
+        text: expect.stringContaining('https://qrgo.test/admin/invites'),
+      }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
     );
   });
 
-  it('logs and returns false when the mail server fails', async () => {
-    Object.assign(process.env, SMTP);
-    sendMail.mockRejectedValue(new Error('connection refused'));
+  it('logs and returns false when Resend returns an error', async () => {
+    Object.assign(process.env, RESEND);
+    send.mockResolvedValue({
+      data: null,
+      error: { name: 'validation_error', message: 'The domain is not verified', statusCode: 403 },
+    });
+
+    await expect(sendInviteAlert(request)).resolves.toBe(false);
+    expect(console.error).toHaveBeenCalled();
+  });
+
+  it('logs and returns false when the request to Resend throws', async () => {
+    Object.assign(process.env, RESEND);
+    send.mockRejectedValue(new Error('network down'));
 
     await expect(sendInviteAlert(request)).resolves.toBe(false);
     expect(console.error).toHaveBeenCalled();

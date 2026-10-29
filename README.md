@@ -9,7 +9,7 @@ The app uses **MySQL/MariaDB** (via [`mysql2`](https://github.com/sidorares/node
 - `JWT_SECRET` — secret for signing auth tokens
 - `BASE_URL` — public URL used to build QR redirect links
 - `SIGNUP_INVITE_CODE` — shared code required on the public `/register` page
-- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` — the mailbox that sends the team an email for each [invite request](#invite-requests). Optional `SMTP_FROM` (sender, default `QR Go <SMTP_USER>`) and `INVITE_ALERT_EMAILS` (comma-separated recipients, default `ADMIN_EMAILS`)
+- `RESEND_API_KEY` — the [Resend](https://resend.com) API key used to email the team about each [invite request](#invite-requests). Optional `INVITE_ALERT_FROM` (sender, default `QR Go <mail@qr.openform.co.za>`) and `INVITE_ALERT_EMAILS` (comma-separated recipients, default `kenton@openform.co.za`)
 - `ADMIN_EMAILS` — comma-separated emails of the accounts allowed into the admin dashboard
 - `ANALYTICS_SECRET` — secret for the anonymous visitor IDs used to count unique scanners (falls back to `JWT_SECRET`)
 - `ANALYTICS_RETENTION_MONTHS` — how long detailed scan records are kept (default `24`; `0` keeps them forever)
@@ -68,12 +68,16 @@ first and flagged when they're close to, or past, 24 hours old. Reply (the
 **Reply by email** button opens your mail app), then **Mark done**. Spam can be
 deleted.
 
-The team also gets an email for each request, sent through the mailbox in the
-`SMTP_*` settings, to `INVITE_ALERT_EMAILS` (or `ADMIN_EMAILS`). Replying to
-it goes straight to the person who asked. On Hostinger, create a mailbox in
-**hPanel → Emails** and use `SMTP_HOST=smtp.hostinger.com`, `SMTP_PORT=465`,
-and that mailbox's address and password. Until these are set, requests are
-still saved, and the server log notes that no email was sent.
+The team also gets an email for each request, sent through
+[Resend](https://resend.com) from `mail@qr.openform.co.za` to
+`kenton@openform.co.za` (change these with `INVITE_ALERT_FROM` and
+`INVITE_ALERT_EMAILS`). Replying to it goes straight to the person who asked.
+To turn it on, verify the sending domain (`qr.openform.co.za`) in
+**Resend → Domains**, create a key in **Resend → API Keys** (sending access is
+enough), and set it as `RESEND_API_KEY`. Until it's set, requests are still
+saved, and the server log notes that no email was sent. If Resend rejects an
+email (for example, an unverified domain), the error is in the server log and
+the request is still saved.
 
 Each IP address can send 5 requests an hour, and requests from simple spam bots
 (caught by a hidden field) are dropped.
