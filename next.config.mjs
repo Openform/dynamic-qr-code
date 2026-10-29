@@ -22,7 +22,7 @@ const securityHeaders = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  serverExternalPackages: ['mysql2', 'maxmind', 'nodemailer'],
+  serverExternalPackages: ['mysql2', 'maxmind'],
   allowedDevOrigins: ['192.168.0.44'],
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];
