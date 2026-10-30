@@ -3,8 +3,6 @@
    Premium Dark Theme with Glassmorphism
    ============================================ */
 
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
-
 /* ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// */
 
 /* From Uiverse.io by kleenpulse */
@@ -185,11 +183,10 @@
   --transition-base: 0.3s ease;
   --transition-slow: 0.5s ease;
 
-  /* Font */
+  /* Font — --font-inter is set on <html> by next/font in layout.js */
   --font-family:
-    /* "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; */
-    "Bricolage Grotesque", -apple-system, BlinkMacSystemFont, "Segoe UI",
-    Roboto, sans-serif;
+    var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    sans-serif;
 }
 
 /* ---- Reset / Normalize ---- */
