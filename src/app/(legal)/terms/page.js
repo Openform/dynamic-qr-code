@@ -9,7 +9,8 @@ const info = getLegalPageInfo("terms")
 
 export const metadata = {
   title: `${info.title} — QR Go`,
-  description: info.description
+  description: info.description,
+  alternates: { canonical: info.path }
 }
 
 export default async function TermsPage() {

@@ -9,7 +9,29 @@ import DestinationHistory from "./components/landing/DestinationHistory"
 import ScansChart from "./components/landing/ScansChart"
 import StyleMorph from "./components/landing/StyleMorph"
 import { PACKAGES, formatRand } from "@/lib/packages"
+import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "@/lib/site"
 import styles from "./page.module.css"
+
+export const metadata = {
+  alternates: { canonical: "/" },
+  openGraph: {
+    siteName: SITE_NAME,
+    type: "website",
+    locale: "en_ZA",
+    url: "/",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION
+  }
+}
+
+// Tells Google which name to show for the site in search results.
+const WEBSITE_JSON_LD = JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: SITE_NAME,
+  alternateName: "QRGo",
+  url: `${SITE_URL}/`
+}).replace(/</g, "\\u003c")
 
 const USE_CASES = [
   "Restaurant menus",
@@ -87,6 +109,10 @@ function Check() {
 export default function LandingPage() {
   return (
     <div className={styles.page}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: WEBSITE_JSON_LD }}
+      />
       <RevealObserver />
       <SiteHeader />
 
