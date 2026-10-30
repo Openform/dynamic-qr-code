@@ -13,7 +13,7 @@ const inter = localFont({
 export const metadata = {
   title: "QR Go — Dynamic QR Code Generator",
   description:
-    "Create, manage, and track dynamic QR codes. Change destinations anytime without reprinting."
+    "Create branded QR codes, update their destinations anytime and track scans — all from one simple dashboard."
 }
 
 export default function RootLayout({ children }) {

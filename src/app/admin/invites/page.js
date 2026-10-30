@@ -10,7 +10,7 @@ export const metadata = {
 }
 
 /**
- * Requests from the "Request an invite" form on the public pages. Checked on
+ * Requests from the "Request access" form on the public pages. Checked on
  * the server so non-admins never receive the page — they're sent to their own
  * dashboard.
  */

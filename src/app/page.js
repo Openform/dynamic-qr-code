@@ -8,8 +8,7 @@ import SpotlightGrid from "./components/landing/SpotlightGrid"
 import DestinationHistory from "./components/landing/DestinationHistory"
 import ScansChart from "./components/landing/ScansChart"
 import StyleMorph from "./components/landing/StyleMorph"
-import { PACKAGES, describeLimit } from "@/lib/packages"
-import { REPLY_PROMISE } from "@/lib/inviteRequests"
+import { PACKAGES, formatRand } from "@/lib/packages"
 import styles from "./page.module.css"
 
 const USE_CASES = [
@@ -23,7 +22,7 @@ const USE_CASES = [
   "Name badges"
 ]
 
-// Example data for the "Know where and how" tile.
+// Example data for the "Understand your audience" tile.
 const CITIES = [
   { name: "Cape Town", share: 42 },
   { name: "Johannesburg", share: 31 },
@@ -106,8 +105,9 @@ export default function LandingPage() {
                 </span>
               </h1>
               <p className={`${styles.heroLead} ${styles.enter}`} style={{ "--d": "380ms" }}>
-                QR Go makes codes you can point somewhere new after they&apos;re printed,
-                styled to match your brand, with a live view of every scan.
+                Whether it&apos;s a menu, brochure, product label or outdoor sign, you can update
+                where your QR code leads without having to reprint anything. Create, customise and
+                track your QR codes from one simple dashboard.
               </p>
             </div>
 
@@ -143,8 +143,7 @@ export default function LandingPage() {
           <div className={styles.wrap}>
             <div className={styles.sectionHead}>
               <h2 data-reveal className={`${styles.h2} ${styles.reveal}`}>
-                Everything a printed code <span className="gradient-text">can&apos;t do</span> on
-                its own
+                More than <span className="gradient-text">just a QR code</span>.
               </h2>
               <p
                 data-reveal
@@ -163,7 +162,7 @@ export default function LandingPage() {
                 className={`${styles.tile} ${styles.tileWide} ${styles.reveal}`}
               >
                 <div>
-                  <h3>Change the link, keep the code</h3>
+                  <h3>Change the destination. Keep the code.</h3>
                   <p>
                     Swap where a code goes in seconds. Every past destination is kept, with the
                     scans it got.
@@ -179,7 +178,7 @@ export default function LandingPage() {
                 style={{ "--d": "120ms" }}
               >
                 <div>
-                  <h3>See every scan</h3>
+                  <h3>Track your scans</h3>
                   <p>Scans and unique scanners over time, and the days people scan most.</p>
                 </div>
                 <ScansChart />
@@ -187,7 +186,7 @@ export default function LandingPage() {
 
               <article data-reveal data-spotlight className={`${styles.tile} ${styles.reveal}`}>
                 <div>
-                  <h3>Know where and how</h3>
+                  <h3>Understand your audience</h3>
                   <p>Country, region and city, plus phone and browser for each scan.</p>
                 </div>
                 <ul className={styles.bars} aria-label="Example: share of scans by city">
@@ -222,7 +221,7 @@ export default function LandingPage() {
                 style={{ "--d": "120ms" }}
               >
                 <div>
-                  <h3>Make it look like yours</h3>
+                  <h3>Make it your own</h3>
                   <p>Dot shapes, colours, gradients and your logo in the middle.</p>
                 </div>
                 <StyleMorph />
@@ -235,7 +234,7 @@ export default function LandingPage() {
                 style={{ "--d": "240ms" }}
               >
                 <div>
-                  <h3>Stay organised</h3>
+                  <h3>Everything in one place</h3>
                   <p>Group codes into collections and take your data with you.</p>
                 </div>
                 <div className={styles.chips}>
@@ -266,7 +265,7 @@ export default function LandingPage() {
         <section id="how-it-works" className={styles.section}>
           <div className={styles.wrap}>
             <h2 data-reveal className={`${styles.h2} ${styles.reveal}`}>
-              Live in three steps
+              Get started in three simple steps
             </h2>
             <ol data-reveal className={styles.steps}>
               {STEPS.map((step, i) => (
@@ -288,15 +287,15 @@ export default function LandingPage() {
           <div className={styles.wrap}>
             <div className={styles.centerHead}>
               <h2 data-reveal className={`${styles.h2} ${styles.reveal}`}>
-                Plans that grow with your codes
+                Simple pricing. No surprises.
               </h2>
               <p
                 data-reveal
                 className={`${styles.sectionLead} ${styles.reveal}`}
                 style={{ "--d": "120ms" }}
               >
-                Every plan includes dynamic links, scan analytics, custom styling and collections.
-                Plans differ only in how many codes you can have.
+                Every plan includes dynamic QR codes, custom styling, scan analytics and your own
+                management dashboard. Simply choose how many codes you need.
               </p>
             </div>
 
@@ -310,13 +309,25 @@ export default function LandingPage() {
                 >
                   <div className={styles.planCard}>
                     <h3 className={styles.planName}>{pkg.name}</h3>
-                    <span className={styles.planNumber} aria-hidden="true">
-                      {pkg.limit ?? "∞"}
-                    </span>
-                    <span className={styles.planUnit} aria-hidden="true">
-                      {pkg.limit === null ? "unlimited codes" : "dynamic codes"}
-                    </span>
-                    <span className={styles.srOnly}>{describeLimit(pkg.id)}</span>
+                    {pkg.yearlyPrice === null ? (
+                      <p className={styles.planPrice}>
+                        Custom <span className={styles.planPer}>pricing</span>
+                      </p>
+                    ) : (
+                      <p className={styles.planPrice}>
+                        {formatRand(pkg.yearlyPrice)}
+                        <span className={styles.planPer}>/year</span>
+                      </p>
+                    )}
+                    <p className={styles.planLimit}>
+                      {pkg.limit === null ? (
+                        "Tailored to your requirements"
+                      ) : (
+                        <>
+                          Up to <strong>{pkg.limit}</strong> dynamic QR codes
+                        </>
+                      )}
+                    </p>
                   </div>
                 </li>
               ))}
@@ -325,7 +336,7 @@ export default function LandingPage() {
             <div data-reveal className={`${styles.plansCta} ${styles.reveal}`}>
               <InviteRequestButton className={`btn btn-primary ${styles.bigBtn}`} id="plans-signup" />
               <p className={styles.plansNote}>
-                Tell us which plan suits you when you request an invite.
+                All prices exclude VAT. Annual licences are renewable every 12 months.
               </p>
             </div>
           </div>
@@ -337,10 +348,10 @@ export default function LandingPage() {
             <div data-reveal className={`${styles.ctaFrame} ${styles.reveal}`}>
               <div className={styles.ctaInner}>
                 <div className={styles.ctaGlow} aria-hidden="true" />
-                <h2 className={styles.h2}>Ready when your next print run is</h2>
+                <h2 className={styles.h2}>Ready to get started?</h2>
                 <p className={styles.sectionLead}>
-                  Request an invite and we&apos;ll get back to you {REPLY_PROMISE}, or sign in if
-                  you already have an account.
+                  Choose a package that suits your needs and we&apos;ll help you get started.
+                  Already have an account? Simply sign in.
                 </p>
                 <div className={styles.ctaButtons}>
                   <InviteRequestButton
