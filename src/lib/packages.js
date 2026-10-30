@@ -5,12 +5,14 @@
  * file must stay free of server-only imports.
  */
 
+// `yearlyPrice` is in rand, excluding VAT. It's only shown to visitors (the
+// landing page and the access request form); the app doesn't bill anyone.
 export const PACKAGES = [
-  { id: 'starter', name: 'Starter', limit: 5 },
-  { id: 'business', name: 'Business', limit: 20 },
-  { id: 'extended', name: 'Extended', limit: 50 },
-  // `null` means unlimited.
-  { id: 'enterprise', name: 'Enterprise', limit: null },
+  { id: 'starter', name: 'Starter', limit: 5, yearlyPrice: 1500 },
+  { id: 'business', name: 'Business', limit: 20, yearlyPrice: 3000 },
+  { id: 'extended', name: 'Extended', limit: 50, yearlyPrice: 5000 },
+  // A `null` limit means unlimited; a `null` price means custom pricing.
+  { id: 'enterprise', name: 'Enterprise', limit: null, yearlyPrice: null },
 ];
 
 /** Package given to accounts created through the public sign-up page. */
@@ -40,4 +42,15 @@ export function hasReachedLimit(packageId, codeCount) {
 export function describeLimit(packageId) {
   const { limit } = getPackage(packageId);
   return limit === null ? 'Unlimited codes' : `${limit} codes`;
+}
+
+/** Whole rands as shown to visitors, e.g. 1500 → "R1,500". */
+export function formatRand(amount) {
+  return `R${amount.toLocaleString('en-US')}`;
+}
+
+/** Human-readable price, e.g. "R1,500/year" or "Custom pricing". */
+export function describePrice(packageId) {
+  const { yearlyPrice } = getPackage(packageId);
+  return yearlyPrice === null ? 'Custom pricing' : `${formatRand(yearlyPrice)}/year`;
 }

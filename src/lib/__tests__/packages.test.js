@@ -6,6 +6,8 @@ import {
   getPackage,
   hasReachedLimit,
   describeLimit,
+  describePrice,
+  formatRand,
 } from '../packages';
 
 describe('packages', () => {
@@ -57,5 +59,20 @@ describe('describeLimit', () => {
   it('describes limited and unlimited packages', () => {
     expect(describeLimit('starter')).toBe('5 codes');
     expect(describeLimit('enterprise')).toBe('Unlimited codes');
+  });
+});
+
+describe('prices', () => {
+  it('formats rands with a thousands separator', () => {
+    expect(formatRand(1500)).toBe('R1,500');
+    expect(formatRand(500)).toBe('R500');
+    expect(formatRand(12000)).toBe('R12,000');
+  });
+
+  it('describes yearly and custom prices', () => {
+    expect(describePrice('starter')).toBe('R1,500/year');
+    expect(describePrice('business')).toBe('R3,000/year');
+    expect(describePrice('extended')).toBe('R5,000/year');
+    expect(describePrice('enterprise')).toBe('Custom pricing');
   });
 });

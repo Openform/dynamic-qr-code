@@ -3,7 +3,7 @@
 import { useEffect, useEffectEvent, useId, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import Link from "next/link"
-import { PACKAGES, describeLimit } from "@/lib/packages"
+import { PACKAGES, describePrice } from "@/lib/packages"
 import { HONEYPOT_FIELD, INVITE_FIELD_LIMITS, REPLY_PROMISE } from "@/lib/inviteRequests"
 import styles from "./InviteRequest.module.css"
 
@@ -17,6 +17,14 @@ const EMPTY_FORM = {
   phone: "",
   package: "",
   [HONEYPOT_FIELD]: ""
+}
+
+/** e.g. "Starter · up to 5 codes · R1,500/year" or "Enterprise · custom pricing". */
+function planOptionLabel(pkg) {
+  const price = describePrice(pkg.id)
+  return pkg.limit === null
+    ? `${pkg.name} · ${price.toLowerCase()}`
+    : `${pkg.name} · up to ${pkg.limit} codes · ${price}`
 }
 
 function ClockIcon() {
@@ -39,7 +47,7 @@ function ClockIcon() {
 }
 
 /**
- * "Request an invite" button that opens the request form in a popup.
+ * "Request access" button that opens the request form in a popup.
  * Whatever the visitor has typed is kept if they close the popup before
  * sending, and cleared once the request is sent.
  *
@@ -49,7 +57,7 @@ export default function InviteRequestButton({
   className,
   id,
   openOnHash = false,
-  children = "Request an invite"
+  children = "Request access"
 }) {
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -260,7 +268,7 @@ function InviteRequestDialog({ form, setForm, sent, onSent, onClosed }) {
         ) : (
           <>
             <h2 id={ids.title} className={styles.title}>
-              Request an invite
+              Request access
             </h2>
             <p id={ids.intro} className={styles.intro}>
               Tell us a little about yourself and we&apos;ll get back to you{" "}
@@ -351,7 +359,7 @@ function InviteRequestDialog({ form, setForm, sent, onSent, onClosed }) {
                   <option value="">Not sure yet</option>
                   {PACKAGES.map((pkg) => (
                     <option key={pkg.id} value={pkg.id}>
-                      {pkg.name} · {describeLimit(pkg.id).toLowerCase()}
+                      {planOptionLabel(pkg)}
                     </option>
                   ))}
                 </select>

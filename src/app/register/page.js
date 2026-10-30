@@ -179,7 +179,7 @@ export default function RegisterPage() {
         <p style={{ ...styles.footerText, marginTop: "8px" }}>
           No invite code yet?{" "}
           <Link href="/#request-invite" style={styles.link} id="register-request-invite">
-            Request an invite
+            Request access
           </Link>
         </p>
       </div>

@@ -1,5 +1,5 @@
 /**
- * Invite requests sent from the "Request an invite" form on the public pages:
+ * Invite requests sent from the "Request access" form on the public pages:
  * the reply time we promise, field limits, and checks for a submitted form.
  *
  * Shared by the server and the browser, so this file must stay free of

@@ -168,7 +168,7 @@ async function initSchema() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
-  // Requests from the "Request an invite" form on the public pages, listed at
+  // Requests from the "Request access" form on the public pages, listed at
   // /admin/invites. package is the plan they're interested in (NULL = not
   // sure). handled_at / handled_by record who marked it done, and when; NULL
   // means it's still open. Times are UTC.

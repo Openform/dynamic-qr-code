@@ -1,7 +1,7 @@
 /**
  * POST /api/invite-requests
  *
- * Public: the "Request an invite" form on the landing page.
+ * Public: the "Request access" form on the landing page.
  * Body: { name, email, company?, phone?, package? }
  *
  * The request is saved for the admin page (/admin/invites), then the team is
