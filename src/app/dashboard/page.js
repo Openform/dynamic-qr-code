@@ -906,7 +906,11 @@ export default function DashboardPage() {
       {/* ---- Create / Edit Modal ---- */}
       <CreateEditModal
         isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
+        // While the "Move to Trash" confirmation is up it owns Escape: without
+        // this the edit screen would close under it too and lose unsaved edits.
+        onClose={() => {
+          if (!trashConfirm) setModalOpen(false)
+        }}
         onSave={handleSave}
         onDelete={handleDelete}
         qrcode={editingQR}
