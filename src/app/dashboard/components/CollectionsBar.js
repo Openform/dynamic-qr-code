@@ -6,10 +6,14 @@
  * a live count. Selecting a pill filters the grid. When a user collection is
  * selected, Rename/Delete actions for it appear alongside "+ New Collection".
  *
+ * A "Trash" pill at the end switches to the Trash view (deleted codes that can
+ * still be restored).
+ *
  * Props:
  *   collections      — [{ id, name }]
- *   activeCollection — "all" | "default" | <collectionId number>
+ *   activeCollection — "all" | "default" | "trash" | <collectionId number>
  *   countFor(key)    — returns the number of codes for a pill key
+ *   trashCount       — how many codes are in Trash
  *   onSelect(key), onNew(), onRename(collection), onDelete(collection)
  */
 
@@ -18,6 +22,7 @@ export default function CollectionsBar({
   collections = [],
   activeCollection,
   countFor,
+  trashCount = 0,
   onSelect,
   onNew,
   onRename,
@@ -91,20 +96,30 @@ export default function CollectionsBar({
             onClick={() => onSelect(c.id)}
           />
         ))}
+        <Pill
+          id="trash-pill"
+          icon={<TrashIcon size={13} />}
+          label="Trash"
+          count={trashCount}
+          active={activeCollection === "trash"}
+          onClick={() => onSelect("trash")}
+        />
       </div>
     </section>
   )
 }
 
-function Pill({ label, count, active, onClick }) {
+function Pill({ id, icon, label, count, active, onClick }) {
   return (
     <button
+      id={id}
       type="button"
       aria-pressed={active}
       onClick={onClick}
       className="glass-card-static"
       style={{ ...styles.pill, ...(active ? styles.pillActive : null) }}
     >
+      {icon}
       <span style={styles.pillLabel}>{label}</span>
       <span
         style={{ ...styles.pillCount, ...(active ? styles.pillCountActive : null) }}

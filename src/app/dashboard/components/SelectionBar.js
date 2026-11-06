@@ -2,13 +2,17 @@
 
 /**
  * The bar at the bottom of the dashboard while selecting codes: how many are
- * selected, quick select-all / clear, and the action (move to Trash).
+ * selected, quick select-all / clear, and the actions that apply to them.
  *
  *   count          — codes currently selected (and visible)
  *   selectAllCount — how many "Select all" would select (the codes in view, up to
  *                    the per-request cap)
  *   capped         — true when the view holds more than the cap, so the button
  *                    says "Select first N"
+ *   actions        — [{ id, label, danger?, onClick }], disabled until something
+ *                    is selected (Move to Trash; or Restore / Delete forever in
+ *                    the Trash view)
+ *   onDone         — when given, a "Done" button leaves select mode
  */
 
 export default function SelectionBar({
@@ -17,8 +21,8 @@ export default function SelectionBar({
   capped = false,
   onSelectAll,
   onClear,
-  onTrash,
-  onDone
+  actions = [],
+  onDone = null
 }) {
   return (
     <div
@@ -53,23 +57,28 @@ export default function SelectionBar({
             Clear
           </button>
         )}
-        <button
-          type="button"
-          id="trash-selected-btn"
-          className="btn btn-danger btn-sm"
-          onClick={onTrash}
-          disabled={count === 0}
-        >
-          Move to Trash
-        </button>
-        <button
-          type="button"
-          id="done-selecting-btn"
-          className="btn btn-secondary btn-sm"
-          onClick={onDone}
-        >
-          Done
-        </button>
+        {actions.map((action) => (
+          <button
+            key={action.id}
+            type="button"
+            id={action.id}
+            className={`btn ${action.danger ? "btn-danger" : "btn-secondary"} btn-sm`}
+            onClick={action.onClick}
+            disabled={count === 0}
+          >
+            {action.label}
+          </button>
+        ))}
+        {onDone && (
+          <button
+            type="button"
+            id="done-selecting-btn"
+            className="btn btn-secondary btn-sm"
+            onClick={onDone}
+          >
+            Done
+          </button>
+        )}
       </div>
     </div>
   )

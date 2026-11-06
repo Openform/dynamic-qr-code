@@ -7,12 +7,13 @@ import CreateEditModal from "./components/CreateEditModal"
 import BulkCreateModal from "./components/BulkCreateModal"
 import UndoToast from "./components/UndoToast"
 import SelectionBar from "./components/SelectionBar"
+import TrashedCodeCard from "./components/TrashedCodeCard"
 import { downloadCodesCsv } from "./components/downloadCsv"
 import ConfirmActionModal from "@/app/components/ConfirmActionModal"
 import CollectionsBar from "./components/CollectionsBar"
 import CollectionModal from "./components/CollectionModal"
 import Avatar from "./components/Avatar"
-import { SearchIcon, InboxIcon } from "@/app/components/icons"
+import { SearchIcon, InboxIcon, TrashIcon } from "@/app/components/icons"
 import { remainingCodes } from "@/lib/bulk"
 import { MAX_TRASH_IDS, TRASH_RETENTION_DAYS } from "@/lib/trash"
 import Link from "next/link"
@@ -45,6 +46,16 @@ export default function DashboardPage() {
   const [lastSelectedId, setLastSelectedId] = useState(null)
   // Confirm dialog before moving codes to Trash: { codes, fromEditModal }
   const [trashConfirm, setTrashConfirm] = useState(null)
+  // Trash: codes deleted but still restorable. `trashCount` is known from the
+  // start (it labels the pill); the list itself is fetched when Trash is opened.
+  const [trashed, setTrashed] = useState([])
+  const [trashStatus, setTrashStatus] = useState("idle") // idle | loading | error
+  const [trashCount, setTrashCount] = useState(0)
+  const [trashBusy, setTrashBusy] = useState(false) // a restore is in flight
+  const [trashNotice, setTrashNotice] = useState(null) // { text, error }
+  // Typed-confirmation dialog for deleting from Trash for good:
+  // { ids, codes, all, count }
+  const [purgeConfirm, setPurgeConfirm] = useState(null)
 
   // ---- Fetch user & QR codes on mount ----
   useEffect(() => {
@@ -73,6 +84,7 @@ export default function DashboardPage() {
         if (statsRes.ok) {
           const statsData = await statsRes.json()
           setTotalScans(statsData.totalScans ?? 0)
+          setTrashCount(statsData.trashedQRCodes ?? 0)
         }
 
         if (collectionsRes.ok) {
@@ -91,20 +103,26 @@ export default function DashboardPage() {
   }, [])
 
   // Escape leaves select mode — unless a dialog is open, which closes itself.
+  const inTrash = activeCollection === "trash"
   const anyModalOpen =
-    modalOpen || bulkOpen || Boolean(collectionModal) || Boolean(trashConfirm)
+    modalOpen ||
+    bulkOpen ||
+    Boolean(collectionModal) ||
+    Boolean(trashConfirm) ||
+    Boolean(purgeConfirm)
   useEffect(() => {
-    if (!selectMode || anyModalOpen) return
+    if ((!selectMode && !inTrash) || anyModalOpen) return
     function onKey(e) {
       if (e.key === "Escape") {
-        setSelectMode(false)
+        // The Trash view is always selectable, so Escape just clears the selection.
+        if (!inTrash) setSelectMode(false)
         setSelected(new Set())
         setLastSelectedId(null)
       }
     }
     document.addEventListener("keydown", onKey)
     return () => document.removeEventListener("keydown", onKey)
-  }, [selectMode, anyModalOpen])
+  }, [selectMode, inTrash, anyModalOpen])
 
   // ---- Package limit ----
   // `limit` is null on unlimited packages. The server enforces this too; the
@@ -141,9 +159,28 @@ export default function DashboardPage() {
       if (statsRes.ok) {
         const statsData = await statsRes.json()
         setTotalScans(statsData.totalScans ?? 0)
+        setTrashCount(statsData.trashedQRCodes ?? 0)
       }
     } catch (error) {
       console.error("Failed to refresh dashboard data:", error)
+    }
+  }, [])
+
+  // Load the Trash list (the server also deletes anything past its 30 days
+  // first). `quiet` keeps the list on screen while it reloads.
+  const loadTrash = useCallback(async (quiet = false) => {
+    if (!quiet) setTrashStatus("loading")
+    try {
+      const res = await fetch("/api/qrcodes/trash")
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      const list = data.qrcodes ?? []
+      setTrashed(list)
+      setTrashCount(list.length)
+      setTrashStatus("idle")
+    } catch (error) {
+      console.error("Failed to load Trash:", error)
+      if (!quiet) setTrashStatus("error")
     }
   }, [])
 
@@ -246,6 +283,7 @@ export default function DashboardPage() {
       setTotalScans((prev) => prev - codes.reduce((n, q) => n + (q.scanCount ?? 0), 0))
     }
 
+    setTrashCount((count) => count + data.trashed)
     exitSelectMode()
     if (fromEditModal) setModalOpen(false)
     setTrashConfirm(null)
@@ -261,6 +299,65 @@ export default function DashboardPage() {
       onUndo: () => restoreIds(ids),
       doneMessage: (r) => `Restored ${plural(r.restored, "QR code", "QR codes")}.`
     })
+  }
+
+  // Switch the collection pill / Trash. Selecting stays on while moving between
+  // collections, but not into or out of Trash (those are different kinds of
+  // code, with different actions).
+  function handleSelectView(key) {
+    if (key === "trash" || inTrash) exitSelectMode()
+    setTrashNotice(null)
+    setActiveCollection(key)
+    if (key === "trash") loadTrash()
+  }
+
+  // ---- Trash actions ----
+
+  // Restore codes from Trash (one card, or the selection). Refused as a whole
+  // when they wouldn't fit the package limit; the message says how many do.
+  async function restoreFromTrash(ids) {
+    setTrashBusy(true)
+    setTrashNotice(null)
+    try {
+      const data = await postIds("restore", ids, "Couldn’t restore the codes. Please try again.")
+      setSelected(new Set())
+      setTrashNotice({
+        text: `Restored ${plural(data.restored, "QR code", "QR codes")}.`,
+        error: false
+      })
+    } catch (error) {
+      setTrashNotice({ text: error.message, error: true })
+    } finally {
+      // Either way, take the server's word for what's where now.
+      await Promise.all([loadTrash(true), refreshCodes()])
+      setTrashBusy(false)
+    }
+  }
+
+  // Run from the typed-confirmation dialog: delete from Trash for good. Throws
+  // (so the dialog shows the message) on failure.
+  async function confirmPurge() {
+    const { ids, all } = purgeConfirm
+    let res
+    try {
+      res = await fetch("/api/qrcodes/bulk/purge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(all ? { all: true } : { ids })
+      })
+    } catch {
+      throw new Error("Couldn’t reach the server. Check your connection and try again.")
+    }
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.error || "Couldn’t delete the codes. Please try again.")
+
+    setPurgeConfirm(null)
+    setSelected(new Set())
+    setTrashNotice({
+      text: `Deleted ${plural(data.deleted, "QR code", "QR codes")} forever.`,
+      error: false
+    })
+    await loadTrash(true)
   }
 
   // ---- Selection ----
@@ -279,12 +376,12 @@ export default function DashboardPage() {
       const next = new Set(prev)
       if (extendRange && lastSelectedId !== null) {
         // Shift-click selects everything between the last click and this one.
-        const a = filteredQRCodes.findIndex((q) => q.id === lastSelectedId)
-        const b = filteredQRCodes.findIndex((q) => q.id === qr.id)
+        const a = viewCodes.findIndex((q) => q.id === lastSelectedId)
+        const b = viewCodes.findIndex((q) => q.id === qr.id)
         if (a !== -1 && b !== -1) {
           const [from, to] = a < b ? [a, b] : [b, a]
           for (let i = from; i <= to && next.size < MAX_TRASH_IDS; i++) {
-            next.add(filteredQRCodes[i].id)
+            next.add(viewCodes[i].id)
           }
           return next
         }
@@ -297,7 +394,7 @@ export default function DashboardPage() {
   }
 
   function selectAllInView() {
-    setSelected(new Set(filteredQRCodes.slice(0, MAX_TRASH_IDS).map((q) => q.id)))
+    setSelected(new Set(viewCodes.slice(0, MAX_TRASH_IDS).map((q) => q.id)))
   }
 
   const handleSave = useCallback(
@@ -459,10 +556,18 @@ export default function DashboardPage() {
     return matchesSearch && matchesCollection
   })
 
-  // Only codes in the current view count as selected: filtering or searching
-  // never leaves hidden codes selected, so an action can't touch what the user
-  // can't see.
-  const selectedVisible = filteredQRCodes.filter((q) => selected.has(q.id))
+  // The Trash view lists trashed codes (search applies there too).
+  const filteredTrashed = trashed.filter((qr) =>
+    qr.title?.toLowerCase().includes(search.toLowerCase())
+  )
+
+  // Whatever list is on screen, selectable. Only codes in the current view count
+  // as selected: filtering or searching never leaves hidden codes selected, so
+  // an action can't touch what the user can't see.
+  const viewCodes = inTrash ? filteredTrashed : filteredQRCodes
+  const selectedVisible = viewCodes.filter((q) => selected.has(q.id))
+  const showSelectionBar =
+    selectMode || (inTrash && selectedVisible.length > 0)
 
   // New codes default into whichever collection is currently being viewed.
   const newCodeCollectionId =
@@ -534,7 +639,7 @@ export default function DashboardPage() {
         className="container"
         // Extra room at the bottom while selecting, so the fixed selection bar
         // never covers the last row of codes.
-        style={{ paddingTop: "32px", paddingBottom: selectMode ? "140px" : "64px" }}
+        style={{ paddingTop: "32px", paddingBottom: showSelectionBar ? "140px" : "64px" }}
       >
         {/* Stats */}
         <div className="animate-fadeIn">
@@ -568,7 +673,8 @@ export default function DashboardPage() {
           collections={collections}
           activeCollection={activeCollection}
           countFor={countFor}
-          onSelect={setActiveCollection}
+          trashCount={trashCount}
+          onSelect={handleSelectView}
           onNew={() => setCollectionModal({ mode: "create", collection: null })}
           onRename={(collection) =>
             setCollectionModal({ mode: "rename", collection })
@@ -586,12 +692,27 @@ export default function DashboardPage() {
               id="search-qrcodes"
               type="text"
               className="input-field"
-              placeholder="Search QR codes…"
+              placeholder={inTrash ? "Search Trash…" : "Search QR codes…"}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               style={{ paddingLeft: "40px" }}
             />
           </div>
+          {inTrash ? (
+            <div style={styles.actionButtons}>
+              <button
+                id="empty-trash-btn"
+                className="btn btn-danger"
+                onClick={() =>
+                  setPurgeConfirm({ ids: [], codes: [], all: true, count: trashCount })
+                }
+                disabled={trashCount === 0 || trashBusy}
+                title="Delete everything in Trash for good"
+              >
+                <TrashIcon size={16} /> Empty Trash
+              </button>
+            </div>
+          ) : (
           <div style={styles.actionButtons}>
             <button
               id="select-mode-btn"
@@ -626,10 +747,80 @@ export default function DashboardPage() {
               + Create New QR Code
             </button>
           </div>
+          )}
         </div>
 
-        {/* QR Codes Grid */}
-        {filteredQRCodes.length === 0 && !loading ? (
+        {/* Trash, or the QR Codes Grid */}
+        {inTrash ? (
+          <>
+            <p id="trash-intro" style={styles.trashIntro}>
+              Codes in Trash don’t work: anyone who scans one sees a “not
+              found” page. They’re deleted permanently after{" "}
+              {TRASH_RETENTION_DAYS} days.
+            </p>
+
+            {trashNotice && (
+              <div
+                id="trash-notice"
+                role={trashNotice.error ? "alert" : "status"}
+                style={{
+                  ...styles.trashNotice,
+                  ...(trashNotice.error ? styles.trashNoticeError : null)
+                }}
+              >
+                {trashNotice.text}
+              </div>
+            )}
+
+            {trashStatus === "loading" ? (
+              <div style={styles.trashLoading}>
+                <div className="spinner spinner-lg" />
+              </div>
+            ) : trashStatus === "error" ? (
+              <div style={styles.emptyState} className="animate-fadeIn">
+                <h3 style={{ fontWeight: 600, marginBottom: "8px" }}>
+                  Couldn’t load Trash
+                </h3>
+                <p style={{ color: "var(--text-secondary)", marginBottom: "24px" }}>
+                  Check your connection and try again.
+                </p>
+                <button className="btn btn-secondary" onClick={() => loadTrash()}>
+                  Try again
+                </button>
+              </div>
+            ) : filteredTrashed.length === 0 ? (
+              <div id="trash-empty" style={styles.emptyState} className="animate-fadeIn">
+                <div style={styles.emptyIcon}>
+                  <TrashIcon size={44} strokeWidth={1.5} />
+                </div>
+                <h3 style={{ fontWeight: 600, marginBottom: "8px" }}>
+                  {search ? "No codes in Trash match" : "Trash is empty"}
+                </h3>
+                <p style={{ color: "var(--text-secondary)" }}>
+                  {search
+                    ? "Try a different search term."
+                    : `Codes you delete appear here for ${TRASH_RETENTION_DAYS} days, so you can restore them.`}
+                </p>
+              </div>
+            ) : (
+              <div className="grid-responsive animate-fadeIn">
+                {filteredTrashed.map((qr) => (
+                  <TrashedCodeCard
+                    key={qr.id}
+                    qrcode={qr}
+                    selected={selected.has(qr.id)}
+                    onToggleSelect={toggleSelect}
+                    onRestore={(code) => restoreFromTrash([code.id])}
+                    onPurge={(code) =>
+                      setPurgeConfirm({ ids: [code.id], codes: [code], all: false, count: 1 })
+                    }
+                    disabled={trashBusy}
+                  />
+                ))}
+              </div>
+            )}
+          </>
+        ) : filteredQRCodes.length === 0 && !loading ? (
           <div style={styles.emptyState} className="animate-fadeIn">
             <div style={styles.emptyIcon}>
               <InboxIcon size={44} strokeWidth={1.5} />
@@ -703,22 +894,50 @@ export default function DashboardPage() {
 
       {/* ---- Undo popup for the latest bulk creation / move to Trash ---- */}
       {/* Hidden while a dialog or the selection bar is up; it comes back after. */}
-      {toast && !selectMode && !anyModalOpen && (
+      {toast && !selectMode && !inTrash && !anyModalOpen && (
         <UndoToast key={toast.id} {...toast} onDismiss={() => setToast(null)} />
       )}
 
       {/* ---- Selection bar ---- */}
-      {selectMode && !anyModalOpen && (
+      {showSelectionBar && !anyModalOpen && (
         <SelectionBar
           count={selectedVisible.length}
-          selectAllCount={Math.min(filteredQRCodes.length, MAX_TRASH_IDS)}
-          capped={filteredQRCodes.length > MAX_TRASH_IDS}
+          selectAllCount={Math.min(viewCodes.length, MAX_TRASH_IDS)}
+          capped={viewCodes.length > MAX_TRASH_IDS}
           onSelectAll={selectAllInView}
           onClear={() => setSelected(new Set())}
-          onTrash={() =>
-            setTrashConfirm({ codes: selectedVisible, fromEditModal: false })
+          actions={
+            inTrash
+              ? [
+                  {
+                    id: "restore-selected-btn",
+                    label: "Restore",
+                    onClick: () => restoreFromTrash(selectedVisible.map((q) => q.id))
+                  },
+                  {
+                    id: "purge-selected-btn",
+                    label: "Delete forever",
+                    danger: true,
+                    onClick: () =>
+                      setPurgeConfirm({
+                        ids: selectedVisible.map((q) => q.id),
+                        codes: selectedVisible,
+                        all: false,
+                        count: selectedVisible.length
+                      })
+                  }
+                ]
+              : [
+                  {
+                    id: "trash-selected-btn",
+                    label: "Move to Trash",
+                    danger: true,
+                    onClick: () =>
+                      setTrashConfirm({ codes: selectedVisible, fromEditModal: false })
+                  }
+                ]
           }
-          onDone={exitSelectMode}
+          onDone={inTrash ? null : exitSelectMode}
         />
       )}
 
@@ -757,6 +976,57 @@ export default function DashboardPage() {
             found” page. You can restore{" "}
             {trashConfirm.codes.length === 1 ? "it" : "them"} from Trash for{" "}
             {TRASH_RETENTION_DAYS} days.
+          </p>
+        </ConfirmActionModal>
+      )}
+
+      {/* ---- Confirm: delete from Trash for good (typed) ---- */}
+      {purgeConfirm && (
+        <ConfirmActionModal
+          title={
+            purgeConfirm.all
+              ? "Empty Trash?"
+              : purgeConfirm.count === 1
+                ? "Delete this QR code forever?"
+                : `Delete ${purgeConfirm.count} QR codes forever?`
+          }
+          confirmLabel={
+            purgeConfirm.all || purgeConfirm.count !== 1
+              ? `Delete ${purgeConfirm.count} forever`
+              : "Delete forever"
+          }
+          busyLabel="Deleting…"
+          danger
+          requireText="delete"
+          onConfirm={confirmPurge}
+          onClose={() => setPurgeConfirm(null)}
+        >
+          {!purgeConfirm.all && (
+            <ul id="purge-confirm-list" style={styles.confirmList}>
+              {purgeConfirm.codes.slice(0, 5).map((q) => (
+                <li key={q.id} className="truncate">
+                  {q.title}
+                </li>
+              ))}
+              {purgeConfirm.codes.length > 5 && (
+                <li>…and {purgeConfirm.codes.length - 5} more</li>
+              )}
+            </ul>
+          )}
+          <p style={{ margin: 0 }}>
+            This can’t be undone.{" "}
+            {purgeConfirm.all
+              ? `All ${purgeConfirm.count} codes in Trash`
+              : purgeConfirm.count === 1
+                ? "This code"
+                : "These codes"}{" "}
+            will be deleted for good, along with{" "}
+            {!purgeConfirm.all && purgeConfirm.count === 1 ? "its" : "their"}{" "}
+            scan history.{" "}
+            {!purgeConfirm.all && purgeConfirm.count === 1
+              ? "Its link"
+              : "Their links"}{" "}
+            will stop working permanently.
           </p>
         </ConfirmActionModal>
       )}
@@ -840,6 +1110,30 @@ const styles = {
     gap: "16px",
     marginBottom: "28px",
     flexWrap: "wrap"
+  },
+  trashIntro: {
+    margin: "0 0 16px",
+    fontSize: "0.88rem",
+    color: "var(--text-secondary)"
+  },
+  trashNotice: {
+    margin: "0 0 16px",
+    padding: "12px 16px",
+    borderRadius: "var(--radius-md)",
+    fontSize: "0.9rem",
+    background: "rgba(16,185,129,0.1)",
+    border: "1px solid rgba(16,185,129,0.25)",
+    color: "var(--success)"
+  },
+  trashNoticeError: {
+    background: "rgba(239,68,68,0.1)",
+    border: "1px solid rgba(239,68,68,0.3)",
+    color: "var(--error)"
+  },
+  trashLoading: {
+    display: "flex",
+    justifyContent: "center",
+    padding: "64px 0"
   },
   confirmList: {
     margin: "0 0 12px",
