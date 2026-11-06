@@ -55,12 +55,18 @@ export async function DELETE(request, { params }) {
       return Response.json({ error: 'Authentication required' }, { status: 401 });
     }
 
-    const deleted = await deleteCollection(Number(id), session.userId);
-    if (!deleted) {
+    // ?trashCodes=1 also moves the collection's codes to Trash (otherwise they
+    // go to the Default collection).
+    const trashCodes = new URL(request.url).searchParams.get('trashCodes') === '1';
+    const result = await deleteCollection(Number(id), session.userId, { trashCodes });
+    if (!result.ok) {
       return Response.json({ error: 'Collection not found' }, { status: 404 });
     }
 
-    return Response.json({ message: 'Collection deleted successfully' });
+    return Response.json({
+      message: 'Collection deleted successfully',
+      trashedIds: result.trashedIds,
+    });
   } catch (error) {
     console.error('DELETE /api/collections/[id] error:', error);
     return Response.json({ error: 'Internal server error' }, { status: 500 });

@@ -506,6 +506,27 @@ export function normalizeDestinationUrl(url) {
 }
 
 /**
+ * The URL inputs show a fixed, greyed-out "https://" prefix, so the field holds
+ * only the host/path. Strip a scheme off a full URL for display (a stored URL,
+ * or one a user pastes); also trims whitespace.
+ */
+export function stripHttpsPrefix(url) {
+  return String(url || '')
+    .trim()
+    .replace(/^https?:\/\//i, '');
+}
+
+/**
+ * Inverse of `stripHttpsPrefix`: build the full URL to store by re-attaching
+ * "https://" to the host/path the user typed. Empty input stays empty (some
+ * fields, like the logo URL, are optional).
+ */
+export function toHttpsUrl(value) {
+  const host = stripHttpsPrefix(value);
+  return host ? `https://${host}` : '';
+}
+
+/**
  * Validate a destination URL. Only absolute https:// URLs are allowed — plain
  * http:// (and any other scheme) is rejected so every redirect goes over TLS.
  * Run `normalizeDestinationUrl` first so scheme-less input is accepted.

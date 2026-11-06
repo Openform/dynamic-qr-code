@@ -97,7 +97,9 @@ async function initSchema() {
       scan_count INT UNSIGNED NOT NULL DEFAULT 0,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      deleted_at DATETIME NULL,
       INDEX idx_qrcodes_user_id (user_id),
+      INDEX idx_qrcodes_user_deleted (user_id, deleted_at),
       INDEX idx_qrcodes_collection_id (collection_id),
       CONSTRAINT fk_qrcodes_user FOREIGN KEY (user_id) REFERENCES users(id),
       CONSTRAINT fk_qrcodes_collection FOREIGN KEY (collection_id)
@@ -214,6 +216,10 @@ async function migrateColumns() {
     // deleted collection's codes to Default in app code, so integrity holds
     // without relying on ON DELETE SET NULL.
     ['collection_id', 'ADD COLUMN collection_id INT UNSIGNED NULL, ADD INDEX idx_qrcodes_collection_id (collection_id)'],
+    // Trash. A code with deleted_at set has been deleted by its owner and can be
+    // restored until it is purged (see the Trash section below). Existing codes
+    // get NULL, so they all stay live.
+    ['deleted_at', 'ADD COLUMN deleted_at DATETIME NULL, ADD INDEX idx_qrcodes_user_deleted (user_id, deleted_at)'],
   ];
 
   const clausesToAdd = [];
@@ -432,6 +438,7 @@ const ACCOUNT_SUMMARY_SQL = `
   LEFT JOIN (
     SELECT user_id, COUNT(*) AS codeCount, SUM(scan_count) AS scanCount
     FROM qrcodes
+    WHERE deleted_at IS NULL
     GROUP BY user_id
   ) s ON s.user_id = u.id`;
 
@@ -482,11 +489,9 @@ async function updateUserPassword(userId, passwordHash) {
   );
 }
 
-/** Get all QR codes belonging to a user, newest first (camelCase keys). */
-async function getQRCodesByUserId(userId) {
-  await ensureSchema();
-  const [rows] = await pool.execute(
-    `SELECT
+// The client-facing (camelCase) shape of a QR code row, shared by every query
+// that returns codes to the dashboard.
+const QRCODE_CLIENT_COLUMNS = `
        id,
        short_id AS shortId,
        user_id AS userId,
@@ -502,24 +507,57 @@ async function getQRCodesByUserId(userId) {
        style_config AS styleConfig,
        scan_count AS scanCount,
        created_at AS createdAt,
-       updated_at AS updatedAt
-     FROM qrcodes
-     WHERE user_id = :userId
-     ORDER BY created_at DESC`,
-    { userId }
-  );
-  // style_config is stored as a JSON string; expose it as a parsed object.
+       updated_at AS updatedAt`;
+
+/** style_config is stored as a JSON string; expose it as a parsed object. */
+function parseClientRows(rows) {
   for (const row of rows) {
     row.styleConfig = parseStyleConfig(row.styleConfig);
   }
   return rows;
 }
 
+/**
+ * Get all QR codes belonging to a user, newest first (camelCase keys). Codes
+ * created in the same second (a bulk batch) fall back to newest id first, so
+ * the order is stable between requests.
+ */
+async function getQRCodesByUserId(userId) {
+  await ensureSchema();
+  const [rows] = await pool.execute(
+    `SELECT ${QRCODE_CLIENT_COLUMNS}
+     FROM qrcodes
+     WHERE user_id = :userId AND deleted_at IS NULL
+     ORDER BY created_at DESC, id DESC`,
+    { userId }
+  );
+  return parseClientRows(rows);
+}
+
+/**
+ * Get a user's codes by short id, in the order the short ids were given
+ * (camelCase keys, like the list above). Ids that don't exist or belong to
+ * someone else are simply absent from the result.
+ */
+async function getQRCodesByShortIds(userId, shortIds) {
+  await ensureSchema();
+  if (shortIds.length === 0) return [];
+  const [rows] = await pool.query(
+    `SELECT ${QRCODE_CLIENT_COLUMNS}
+     FROM qrcodes
+     WHERE user_id = ? AND short_id IN (?) AND deleted_at IS NULL`,
+    [userId, shortIds]
+  );
+  parseClientRows(rows);
+  const byShortId = new Map(rows.map((row) => [row.shortId, row]));
+  return shortIds.map((shortId) => byShortId.get(shortId)).filter(Boolean);
+}
+
 /** Get a single QR code by ID, verifying ownership. Returns null if not found or not owned. */
 async function getQRCodeById(id, userId) {
   await ensureSchema();
   const [rows] = await pool.execute(
-    'SELECT * FROM qrcodes WHERE id = :id AND user_id = :userId LIMIT 1',
+    'SELECT * FROM qrcodes WHERE id = :id AND user_id = :userId AND deleted_at IS NULL LIMIT 1',
     { id, userId }
   );
   return rows[0] || null;
@@ -536,7 +574,7 @@ async function getQRCodeByShortId(shortId) {
     `SELECT q.*, u.disabled_at AS owner_disabled_at
      FROM qrcodes q
      JOIN users u ON u.id = q.user_id
-     WHERE q.short_id = :shortId
+     WHERE q.short_id = :shortId AND q.deleted_at IS NULL
      LIMIT 1`,
     { shortId }
   );
@@ -578,7 +616,7 @@ async function createQRCodeWithinLimit(
     const limit = getLimit(users[0].package);
     if (limit !== null) {
       const [counts] = await conn.execute(
-        'SELECT COUNT(*) AS count FROM qrcodes WHERE user_id = :userId',
+        'SELECT COUNT(*) AS count FROM qrcodes WHERE user_id = :userId AND deleted_at IS NULL',
         { userId }
       );
       if (Number(counts[0].count) >= limit) {
@@ -621,6 +659,101 @@ async function createQRCodeWithinLimit(
     conn.release();
   }
   return { ok: true, qrcode: await getQRCodeById(insertId, userId) };
+}
+
+/**
+ * Create several QR codes at once, all with the same style and collection,
+ * unless that would take the owner past their package limit. All or nothing:
+ * either every code in `codes` is created, or none is.
+ *
+ * `codes` is a list of `{ shortId, title, destinationUrl }`; the style fields
+ * (`foregroundColor`, … `styleConfig`) are the same ones the single-code
+ * function takes and are stored on every code. `getLimit(packageId)` returns
+ * the package's code limit (null = unlimited).
+ *
+ * Like the single-code function, the owner's row is locked while counting, so
+ * simultaneous requests can't both slip in under the limit. Everything happens
+ * in one transaction, with one multi-row INSERT per table. The destination
+ * history rows are copied from the codes just inserted, so there's no need to
+ * work out which auto-increment id each code got.
+ *
+ * Returns `{ ok: true, qrcodes }` (camelCase, in the order of `codes`), or
+ * `{ ok: false, reason: 'limit', limit, remaining }`, or
+ * `{ ok: false, reason: 'no_user' }`.
+ */
+async function createQRCodesWithinLimit(
+  { userId, collectionId, foregroundColor, backgroundColor, logoUrl, dotStyle, cornerSquareStyle, cornerDotStyle, styleConfig, codes },
+  getLimit
+) {
+  await ensureSchema();
+  const conn = await pool.getConnection();
+  const shortIds = codes.map((code) => code.shortId);
+  try {
+    await conn.beginTransaction();
+
+    const [users] = await conn.execute(
+      'SELECT package FROM users WHERE id = :userId FOR UPDATE',
+      { userId }
+    );
+    if (!users[0]) {
+      await conn.rollback();
+      return { ok: false, reason: 'no_user' };
+    }
+
+    const limit = getLimit(users[0].package);
+    if (limit !== null) {
+      const [counts] = await conn.execute(
+        'SELECT COUNT(*) AS count FROM qrcodes WHERE user_id = :userId AND deleted_at IS NULL',
+        { userId }
+      );
+      // Never negative: an account can already be over a limit that was lowered.
+      const remaining = Math.max(0, limit - Number(counts[0].count));
+      if (codes.length > remaining) {
+        await conn.rollback();
+        return { ok: false, reason: 'limit', limit, remaining };
+      }
+    }
+
+    const styleJson = styleConfig != null ? JSON.stringify(styleConfig) : null;
+    const rows = codes.map((code) => [
+      code.shortId,
+      userId,
+      collectionId ?? null,
+      code.title,
+      code.destinationUrl,
+      foregroundColor || '#000000',
+      backgroundColor || '#ffffff',
+      logoUrl || null,
+      dotStyle || 'square',
+      cornerSquareStyle || 'square',
+      cornerDotStyle || 'square',
+      styleJson,
+    ]);
+    // query(), not execute(): only query() expands a nested array into a
+    // multi-row VALUES list. An array of values also bypasses the pool's
+    // named-placeholder conversion, so `?` placeholders are safe here.
+    await conn.query(
+      `INSERT INTO qrcodes
+         (short_id, user_id, collection_id, title, destination_url, foreground_color, background_color, logo_url, dot_style, corner_square_style, corner_dot_style, style_config)
+       VALUES ?`,
+      [rows]
+    );
+    await conn.query(
+      `INSERT INTO qrcode_destinations (qrcode_id, destination_url, started_at)
+       SELECT id, destination_url, UTC_TIMESTAMP()
+         FROM qrcodes
+        WHERE user_id = ? AND short_id IN (?)`,
+      [userId, shortIds]
+    );
+
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+  return { ok: true, qrcodes: await getQRCodesByShortIds(userId, shortIds) };
 }
 
 /** Update an existing QR code. Returns the updated record or null if not found/not owned. */
@@ -694,14 +827,215 @@ async function recordDestinationChange(existing, newUrl) {
   );
 }
 
-/** Delete a QR code. Returns true if a row was deleted, false otherwise. */
-async function deleteQRCode(id, userId) {
+// ──────────────────────────────────────────────
+// Trash
+// ──────────────────────────────────────────────
+//
+// Deleting a code moves it to Trash (deleted_at is set) rather than removing
+// the row, so it can be restored with the same short link and its scan history
+// intact. While in Trash a code behaves exactly like a deleted one: it doesn't
+// redirect, doesn't count toward the package limit and doesn't appear in the
+// list, stats or analytics (every query that reads live codes filters on
+// `deleted_at IS NULL`). Codes are removed for good by purgeQRCodes (the owner
+// choosing "Delete forever") or purgeExpiredTrash (once they've been in Trash
+// longer than the retention period).
+
+/** Get a user's live codes by id, newest first (camelCase keys, like the list). */
+async function getQRCodesByIds(userId, ids) {
   await ensureSchema();
-  const [result] = await pool.execute(
-    'DELETE FROM qrcodes WHERE id = :id AND user_id = :userId',
-    { id, userId }
+  if (ids.length === 0) return [];
+  const [rows] = await pool.query(
+    `SELECT ${QRCODE_CLIENT_COLUMNS}
+     FROM qrcodes
+     WHERE user_id = ? AND id IN (?) AND deleted_at IS NULL
+     ORDER BY created_at DESC, id DESC`,
+    [userId, ids]
   );
-  return result.affectedRows > 0;
+  return parseClientRows(rows);
+}
+
+/**
+ * Move a user's codes to Trash. Ids that don't exist, belong to someone else or
+ * are already in Trash are skipped. Returns the number moved.
+ */
+async function trashQRCodes(userId, ids) {
+  await ensureSchema();
+  if (ids.length === 0) return 0;
+  const [result] = await pool.query(
+    `UPDATE qrcodes SET deleted_at = CURRENT_TIMESTAMP
+      WHERE user_id = ? AND id IN (?) AND deleted_at IS NULL`,
+    [userId, ids]
+  );
+  return result.affectedRows;
+}
+
+/**
+ * A user's codes in Trash, most recently deleted first, with how long ago each
+ * was deleted (`deletedMinutesAgo`) and how many days it has left before it is
+ * purged (`daysLeft`, rounded up: a code deleted just now has the full period,
+ * and one in its last day has 1). Both are worked out by the database against
+ * its own clock, so they're right whatever time zone it runs in.
+ */
+async function getTrashedQRCodes(userId, retentionDays) {
+  await ensureSchema();
+  const days = Math.floor(Number(retentionDays));
+  if (!Number.isFinite(days) || days < 1) {
+    throw new Error('retentionDays must be a positive number');
+  }
+  const [rows] = await pool.query(
+    `SELECT ${QRCODE_CLIENT_COLUMNS},
+            TIMESTAMPDIFF(MINUTE, deleted_at, CURRENT_TIMESTAMP) AS deletedMinutesAgo,
+            GREATEST(0, CEIL(TIMESTAMPDIFF(MINUTE, CURRENT_TIMESTAMP, deleted_at + INTERVAL ${days} DAY) / 1440)) AS daysLeft
+     FROM qrcodes
+     WHERE user_id = ? AND deleted_at IS NOT NULL
+     ORDER BY deleted_at DESC, id DESC`,
+    [userId]
+  );
+  for (const row of rows) {
+    row.deletedMinutesAgo = Number(row.deletedMinutesAgo) || 0;
+    row.daysLeft = Number(row.daysLeft) || 0;
+  }
+  return parseClientRows(rows);
+}
+
+/**
+ * Restore codes from Trash, unless that would take the owner past their package
+ * limit. All or nothing: either every named code that is in Trash comes back or
+ * none does. Ids that aren't in this user's Trash are ignored.
+ *
+ * Trashed codes don't count toward the limit, so restoring has to check it just
+ * as creating does, in the same way: the owner's row is locked while counting,
+ * so a restore and a create (or two restores) can't both slip under the limit.
+ * `getLimit(packageId)` returns the package's limit (null = unlimited).
+ *
+ * Returns `{ ok: true, restored, qrcodes }` (the restored codes, camelCase), or
+ * `{ ok: false, reason: 'limit', limit, remaining, requested }`, or
+ * `{ ok: false, reason: 'no_user' }`.
+ */
+async function restoreQRCodes(userId, ids, getLimit) {
+  await ensureSchema();
+  if (ids.length === 0) return { ok: true, restored: 0, qrcodes: [] };
+  const conn = await pool.getConnection();
+  let restoreIds;
+  try {
+    await conn.beginTransaction();
+
+    const [users] = await conn.execute(
+      'SELECT package FROM users WHERE id = :userId FOR UPDATE',
+      { userId }
+    );
+    if (!users[0]) {
+      await conn.rollback();
+      return { ok: false, reason: 'no_user' };
+    }
+
+    const [toRestore] = await conn.query(
+      `SELECT id FROM qrcodes
+        WHERE user_id = ? AND id IN (?) AND deleted_at IS NOT NULL
+        FOR UPDATE`,
+      [userId, ids]
+    );
+    restoreIds = toRestore.map((row) => row.id);
+    if (restoreIds.length === 0) {
+      await conn.commit();
+      return { ok: true, restored: 0, qrcodes: [] };
+    }
+
+    const limit = getLimit(users[0].package);
+    if (limit !== null) {
+      const [counts] = await conn.execute(
+        'SELECT COUNT(*) AS count FROM qrcodes WHERE user_id = :userId AND deleted_at IS NULL',
+        { userId }
+      );
+      // Never negative: an account can already be over a limit that was lowered.
+      const remaining = Math.max(0, limit - Number(counts[0].count));
+      if (restoreIds.length > remaining) {
+        await conn.rollback();
+        return { ok: false, reason: 'limit', limit, remaining, requested: restoreIds.length };
+      }
+    }
+
+    await conn.query('UPDATE qrcodes SET deleted_at = NULL WHERE user_id = ? AND id IN (?)', [
+      userId,
+      restoreIds,
+    ]);
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+  return { ok: true, restored: restoreIds.length, qrcodes: await getQRCodesByIds(userId, restoreIds) };
+}
+
+// How many codes one DELETE removes. Each code takes its scan history with it
+// (ON DELETE CASCADE), so a large purge is done in small steps rather than one
+// long statement.
+const PURGE_BATCH = 100;
+
+/**
+ * Delete codes from Trash for good ("Delete forever"). Only codes that are
+ * already in Trash are touched — `deleted_at IS NOT NULL` is part of every
+ * statement — so this can never delete a live code, whatever ids it is given.
+ * Scan history and destination history go with each code.
+ *
+ * Pass `{ ids }` to delete those codes, or `{ all: true }` to empty the
+ * user's Trash. Returns the number of codes deleted.
+ */
+async function purgeQRCodes(userId, { ids = null, all = false } = {}) {
+  await ensureSchema();
+  let deleted = 0;
+
+  if (all) {
+    for (;;) {
+      const [result] = await pool.query(
+        `DELETE FROM qrcodes WHERE user_id = ? AND deleted_at IS NOT NULL LIMIT ${PURGE_BATCH}`,
+        [userId]
+      );
+      deleted += result.affectedRows;
+      if (result.affectedRows < PURGE_BATCH) return deleted;
+    }
+  }
+
+  for (let i = 0; i < (ids?.length ?? 0); i += PURGE_BATCH) {
+    const [result] = await pool.query(
+      'DELETE FROM qrcodes WHERE user_id = ? AND deleted_at IS NOT NULL AND id IN (?)',
+      [userId, ids.slice(i, i + PURGE_BATCH)]
+    );
+    deleted += result.affectedRows;
+  }
+  return deleted;
+}
+
+/**
+ * Permanently delete codes that have been in Trash longer than `retentionDays`,
+ * for one user or (without `userId`) for everyone. There is no cron job on
+ * shared hosting, so this is called lazily: for a user whenever they look at
+ * their Trash, and for everyone from the scan housekeeping job. Compared on the
+ * database's own clock, the one deleted_at was written with. Returns the
+ * number of codes deleted.
+ */
+async function purgeExpiredTrash({ retentionDays, userId = null } = {}) {
+  await ensureSchema();
+  const days = Math.floor(Number(retentionDays));
+  if (!Number.isFinite(days) || days < 1) {
+    throw new Error('retentionDays must be a positive number');
+  }
+  const owner = userId !== null ? 'AND user_id = ?' : '';
+  let deleted = 0;
+  for (;;) {
+    const [result] = await pool.query(
+      `DELETE FROM qrcodes
+        WHERE deleted_at IS NOT NULL
+          AND deleted_at < (CURRENT_TIMESTAMP - INTERVAL ${days} DAY)
+          ${owner}
+        LIMIT ${PURGE_BATCH}`,
+      userId !== null ? [userId] : []
+    );
+    deleted += result.affectedRows;
+    if (result.affectedRows < PURGE_BATCH) return deleted;
+  }
 }
 
 /**
@@ -778,7 +1112,7 @@ async function getCollectionsByUserId(userId) {
        c.updated_at AS updatedAt,
        COUNT(q.id) AS count
      FROM collections c
-     LEFT JOIN qrcodes q ON q.collection_id = c.id
+     LEFT JOIN qrcodes q ON q.collection_id = c.id AND q.deleted_at IS NULL
      WHERE c.user_id = :userId
      GROUP BY c.id
      ORDER BY c.created_at DESC`,
@@ -829,15 +1163,39 @@ async function updateCollection(id, userId, name) {
 
 /**
  * Delete a collection. Any codes assigned to it are reverted to the Default
- * Collection (collection_id set to NULL) first, so deleting a collection never
- * deletes codes. Done in a transaction so the two steps can't half-apply.
- * Returns true if a collection was deleted, false otherwise.
+ * Collection (collection_id set to NULL) first, so by default deleting a
+ * collection never deletes codes. With `trashCodes`, its live codes are moved to
+ * Trash first (they can be restored, and then land in Default). Done in one
+ * transaction so the steps can't half-apply.
+ *
+ * Returns `{ ok, trashedIds }`: `ok` is false when there is no such collection
+ * (for this user); `trashedIds` lists the codes moved to Trash.
  */
-async function deleteCollection(id, userId) {
+async function deleteCollection(id, userId, { trashCodes = false } = {}) {
   await ensureSchema();
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
+
+    let trashedIds = [];
+    if (trashCodes) {
+      // Locked, so the ids returned are exactly the codes that get trashed.
+      const [codes] = await conn.execute(
+        `SELECT id FROM qrcodes
+          WHERE collection_id = :id AND user_id = :userId AND deleted_at IS NULL
+          FOR UPDATE`,
+        { id, userId }
+      );
+      trashedIds = codes.map((row) => row.id);
+      if (trashedIds.length > 0) {
+        await conn.execute(
+          `UPDATE qrcodes SET deleted_at = CURRENT_TIMESTAMP
+            WHERE collection_id = :id AND user_id = :userId AND deleted_at IS NULL`,
+          { id, userId }
+        );
+      }
+    }
+
     await conn.execute(
       'UPDATE qrcodes SET collection_id = NULL WHERE collection_id = :id AND user_id = :userId',
       { id, userId }
@@ -847,7 +1205,7 @@ async function deleteCollection(id, userId) {
       { id, userId }
     );
     await conn.commit();
-    return result.affectedRows > 0;
+    return { ok: result.affectedRows > 0, trashedIds };
   } catch (err) {
     await conn.rollback();
     throw err;
@@ -864,14 +1222,19 @@ async function getUserStats(userId) {
        COUNT(*) AS totalQRCodes,
        COALESCE(SUM(scan_count), 0) AS totalScans
      FROM qrcodes
-     WHERE user_id = :userId`,
+     WHERE user_id = :userId AND deleted_at IS NULL`,
     { userId }
   );
   const row = rows[0] || {};
+  const [trashRows] = await pool.execute(
+    'SELECT COUNT(*) AS count FROM qrcodes WHERE user_id = :userId AND deleted_at IS NOT NULL',
+    { userId }
+  );
   // COUNT/SUM come back as strings (BIGINT/DECIMAL) — coerce to numbers.
   return {
     totalQRCodes: Number(row.totalQRCodes) || 0,
     totalScans: Number(row.totalScans) || 0,
+    trashedQRCodes: Number(trashRows[0]?.count) || 0,
   };
 }
 
@@ -1003,11 +1366,18 @@ module.exports = {
   updateUserProfile,
   updateUserPassword,
   getQRCodesByUserId,
+  getQRCodesByShortIds,
+  getQRCodesByIds,
+  getTrashedQRCodes,
+  trashQRCodes,
+  restoreQRCodes,
+  purgeQRCodes,
+  purgeExpiredTrash,
   getQRCodeById,
   getQRCodeByShortId,
   createQRCodeWithinLimit,
+  createQRCodesWithinLimit,
   updateQRCode,
-  deleteQRCode,
   recordScan,
   pruneScanEvents,
   getUserStats,

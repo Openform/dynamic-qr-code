@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   normalizeDestinationUrl,
   isValidDestinationUrl,
+  stripHttpsPrefix,
+  toHttpsUrl,
   contrastRatio,
   evaluateContrast,
   effectiveErrorCorrectionLevel,
@@ -197,5 +199,27 @@ describe('sanitizeStyleConfig logoUrl', () => {
   it('drops non-string and over-long values', () => {
     expect(sanitizeStyleConfig({ logoUrl: 12345 }).logoUrl).toBe('');
     expect(sanitizeStyleConfig({ logoUrl: 'https://x/' + 'a'.repeat(2100) }).logoUrl).toBe('');
+  });
+});
+
+describe('stripHttpsPrefix / toHttpsUrl', () => {
+  it('strips an http(s) scheme and surrounding whitespace for display', () => {
+    expect(stripHttpsPrefix('https://example.com/a')).toBe('example.com/a');
+    expect(stripHttpsPrefix('  HTTP://Example.com  ')).toBe('Example.com');
+    expect(stripHttpsPrefix('example.com')).toBe('example.com');
+  });
+
+  it('tolerates empty and missing values', () => {
+    expect(stripHttpsPrefix('')).toBe('');
+    expect(stripHttpsPrefix(null)).toBe('');
+    expect(stripHttpsPrefix(undefined)).toBe('');
+  });
+
+  it('re-attaches https:// to a host/path, and keeps empty input empty', () => {
+    expect(toHttpsUrl('example.com/a')).toBe('https://example.com/a');
+    expect(toHttpsUrl('https://example.com')).toBe('https://example.com');
+    expect(toHttpsUrl('http://example.com')).toBe('https://example.com');
+    expect(toHttpsUrl('')).toBe('');
+    expect(toHttpsUrl('   ')).toBe('');
   });
 });

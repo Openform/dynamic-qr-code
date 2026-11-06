@@ -16,6 +16,7 @@ export async function GET() {
     return Response.json({
       totalQRCodes: stats.totalQRCodes,
       totalScans: stats.totalScans,
+      trashedQRCodes: stats.trashedQRCodes,
     });
   } catch (error) {
     console.error('Stats error:', error);

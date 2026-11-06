@@ -1,14 +1,14 @@
 /**
  * GET    /api/qrcodes/[id]  — Get a single QR code
  * PUT    /api/qrcodes/[id]  — Update a QR code
- * DELETE /api/qrcodes/[id]  — Delete a QR code
+ * DELETE /api/qrcodes/[id]  — Move a QR code to Trash (it can be restored)
  *
  * NOTE: In Next.js 16, `params` is a Promise and must be awaited.
  */
 
 import { getSession } from '@/lib/auth';
 import { normalizeDestinationUrl, isValidDestinationUrl } from '@/lib/qrStyle';
-const { getQRCodeById, updateQRCode, deleteQRCode, getCollectionById } = require('@/lib/db');
+const { getQRCodeById, updateQRCode, trashQRCodes, getCollectionById } = require('@/lib/db');
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 
@@ -166,15 +166,18 @@ export async function DELETE(request, { params }) {
       );
     }
 
-    const deleted = await deleteQRCode(Number(id), session.userId);
-    if (!deleted) {
+    // Deleting moves the code to Trash rather than removing it, so it can be
+    // restored. Only the owner's own live codes match; anything else is a 404.
+    const codeId = Number(id);
+    const trashed = Number.isInteger(codeId) ? await trashQRCodes(session.userId, [codeId]) : 0;
+    if (trashed === 0) {
       return Response.json(
         { error: 'QR code not found' },
         { status: 404 }
       );
     }
 
-    return Response.json({ message: 'QR code deleted successfully' });
+    return Response.json({ message: 'QR code moved to Trash', trashed: true });
   } catch (error) {
     console.error('DELETE /api/qrcodes/[id] error:', error);
     return Response.json(

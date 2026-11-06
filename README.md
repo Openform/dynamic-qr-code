@@ -103,6 +103,87 @@ the `legal_pages` table, created automatically on first run; until a page is
 saved it shows the placeholder text in
 [`src/lib/legalDefaults.js`](src/lib/legalDefaults.js).
 
+## Bulk creation
+
+**Bulk create** on the dashboard makes many codes at once, in three steps:
+
+1. **Style**: one style (type, colors, shapes, logo) is shared by every code in
+   the batch. A code's appearance is locked once it's created, so this is the
+   time to get it right. The same scannability check as single creation applies.
+2. **Rows**: a title and a link per code, typed into the grid, pasted from a
+   spreadsheet (into the box or straight into a cell), or loaded from a CSV
+   file. Comma, semicolon and tab separated data all work (Excel in some
+   locales exports with semicolons), as do a header row and Excel's Windows-1252
+   "CSV" export. Excel workbooks (`.xlsx`) aren't read directly; save as CSV or
+   paste the cells. All the codes go into one collection.
+3. **Review**: the list is checked row by row with the same rules as single
+   creation (a title, an `https://` link; `https://` is added when left out, and
+   `http://` links are flagged with a one-click upgrade). Repeated rows are
+   flagged but allowed.
+
+The request is **all or nothing**: if any row is invalid, or the batch wouldn't
+fit under the package limit, nothing is created. At most 200 codes can be
+created per batch (`MAX_BULK_ROWS` in [`src/lib/bulk.js`](src/lib/bulk.js)), and
+an account may create at most 20 batches an hour.
+
+After a batch is created, a popup offers **Undo** and **Download CSV** (the new
+links, for a printer or spreadsheet). Undo moves the whole batch to
+[Trash](#deleting-codes-trash), so it can still be restored, and needs no
+confirmation. The popup goes away after 10 minutes; the batch can be removed
+later by selecting it (see below).
+
+The API is `POST /api/qrcodes/bulk` with
+`{ rows: [{ title, destinationUrl }], styleConfig?, collectionId? }`. Parsing and
+validation live in [`src/lib/bulk.js`](src/lib/bulk.js),
+[`src/lib/codeInput.js`](src/lib/codeInput.js) (shared with single creation, and
+including the title/URL length limits) and [`src/lib/csv.js`](src/lib/csv.js).
+
+## Deleting codes (Trash)
+
+Deleting a code stops its link working at once (it shows the "QR code not
+found" page), and a printed code can't be reprinted, so nothing is deleted
+straight away: codes go to **Trash** and can be restored for 30 days
+(`TRASH_RETENTION_DAYS` in [`src/lib/trash.js`](src/lib/trash.js)).
+
+- **Select** on the dashboard puts a checkbox on every code (click the card or
+  its code image, Space on a focused checkbox, shift-click for a range, "Select
+  all N in this view"). Only codes in the current view count as selected, so
+  filtering or searching never leaves hidden codes selected. **Move to Trash**
+  asks first, then a popup offers **Undo**. At most 500 codes per request
+  (`MAX_TRASH_IDS`).
+- Deleting from a code's edit screen, and the Undo on the bulk-creation popup,
+  also move codes to Trash. **Delete collection** can optionally move the
+  collection's codes to Trash too (they're restored into Default); otherwise the
+  codes move to Default, as before.
+- The **Trash** pill opens the deleted codes, each with how long ago it was
+  deleted and how many days are left. **Restore** brings a code back with the
+  same short link and its scan history. Trashed codes don't count toward the
+  package limit, so restoring is checked against it like creating is: all or
+  nothing, and nothing is restored if the codes wouldn't fit.
+- **Delete forever** and **Empty Trash** remove codes for good, along with their
+  scan history. They ask the user to type `delete`, and only ever act on codes
+  already in Trash.
+- Codes older than 30 days in Trash are deleted for good. There's no cron job on
+  shared hosting, so this happens when someone opens their Trash and, for
+  everyone, once a day after the first scan following a restart (the same job
+  that prunes old scan records).
+
+How it's built: a code in Trash has `qrcodes.deleted_at` set (the column is added
+automatically on first run; existing codes stay live). It behaves exactly like a
+deleted code everywhere except the Trash view and restore: it's left out of the
+code list, stats, collection counts, the package limit, the admin account
+summary and every analytics total, chart and export, its link goes to the "not
+found" page and its scans aren't recorded, and its edit, image and per-code
+analytics routes return 404. Restoring puts it all back, since the code and its
+history were never removed. Every query that reads live codes filters on
+`deleted_at IS NULL`, so a new one must too.
+
+The API: `POST /api/qrcodes/bulk/trash`, `/restore` and `/purge` (each takes
+`{ ids }`; purge also accepts `{ all: true }` to empty Trash) and
+`GET /api/qrcodes/trash`. `DELETE /api/qrcodes/[id]` moves a code to Trash, and
+`DELETE /api/collections/[id]?trashCodes=1` also trashes its codes, in the same
+transaction.
+
 ## Scan analytics
 
 Every scan of a code is recorded after the visitor has been redirected, so

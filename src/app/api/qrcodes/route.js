@@ -8,10 +8,9 @@ import { nanoid } from 'nanoid';
 import {
   sanitizeStyleConfig,
   legacyFieldsFromStyle,
-  normalizeDestinationUrl,
-  isValidDestinationUrl,
   evaluateContrast,
 } from '@/lib/qrStyle';
+import { validateCodeInput, CONTRAST_ERROR_MESSAGE } from '@/lib/codeInput';
 import { getPackage } from '@/lib/packages';
 
 const { getQRCodesByUserId, createQRCodeWithinLimit, getCollectionById } = require('@/lib/db');
@@ -116,10 +115,13 @@ export async function POST(request) {
       collectionId,
     } = body;
 
-    // Validation
-    if (!title || !destinationUrl) {
+    // Validation — the same rules bulk creation applies to every row: both
+    // fields present, within the column sizes, and an https URL (https:// is
+    // added when the scheme is omitted).
+    const input = validateCodeInput({ title, destinationUrl });
+    if (!input.ok) {
       return Response.json(
-        { error: 'Title and destination URL are required' },
+        { error: Object.values(input.errors)[0], errors: input.errors },
         { status: 400 }
       );
     }
@@ -136,16 +138,6 @@ export async function POST(request) {
       resolvedCollectionId = collection.id;
     }
 
-    // Autofill https:// when the scheme is omitted, then require https — plain
-    // http URLs are rejected.
-    const normalizedUrl = normalizeDestinationUrl(destinationUrl);
-    if (!isValidDestinationUrl(normalizedUrl)) {
-      return Response.json(
-        { error: 'Invalid destination URL. Must be a valid https URL.' },
-        { status: 400 }
-      );
-    }
-
     const shortId = nanoid(10);
 
     // Prefer the full style config; sanitize untrusted input and derive the
@@ -157,10 +149,7 @@ export async function POST(request) {
     // crafted request can't bypass the client-side contrast check. Only a
     // confident failure blocks — borderline/transparent cases are allowed.
     if (sanitizedStyle && !evaluateContrast(sanitizedStyle).scannable) {
-      return Response.json(
-        { error: 'Foreground and background contrast is too low to scan reliably. Use a darker foreground or a lighter background.' },
-        { status: 400 }
-      );
+      return Response.json({ error: CONTRAST_ERROR_MESSAGE }, { status: 400 });
     }
 
     const legacy = sanitizedStyle
@@ -181,8 +170,8 @@ export async function POST(request) {
         shortId,
         userId: session.userId,
         collectionId: resolvedCollectionId,
-        title,
-        destinationUrl: normalizedUrl,
+        title: input.title,
+        destinationUrl: input.destinationUrl,
         ...legacy,
         styleConfig: sanitizedStyle,
       },

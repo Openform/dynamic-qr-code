@@ -9,6 +9,9 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
+    "e2e": "node e2e/run.mjs",
+    "e2e:api": "node e2e/run.mjs --api",
+    "e2e:browser": "node e2e/run.mjs --browser",
     "geoip:update": "node scripts/update-geoip.mjs"
   },
   "dependencies": {

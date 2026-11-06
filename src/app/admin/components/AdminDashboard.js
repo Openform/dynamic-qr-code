@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import Avatar from "../../dashboard/components/Avatar"
 import CreateAccountModal from "./CreateAccountModal"
-import ConfirmActionModal from "./ConfirmActionModal"
+import ConfirmActionModal from "@/app/components/ConfirmActionModal"
 import { PACKAGES, getPackage, describeLimit } from "@/lib/packages"
 import { SearchIcon } from "@/app/components/icons"
 
