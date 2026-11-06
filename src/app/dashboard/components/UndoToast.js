@@ -10,6 +10,7 @@
  *   (bulk creation uses one to download a CSV).
  * - `onUndo()`: performs the undo and resolves to a result, or throws an Error
  *   whose message is shown to the user (the button stays so they can retry).
+ *   Without it the popup is just a notice, with no Undo button.
  * - `doneMessage(result)`: the text shown after a successful undo.
  * - `autoDismissMs`: go away after this long (null = stay until dismissed).
  */
@@ -109,21 +110,23 @@ export default function UndoToast({
               {action.label}
             </button>
           ))}
-          <button
-            type="button"
-            id="undo-toast-btn"
-            className="btn btn-secondary btn-sm"
-            onClick={handleUndo}
-            disabled={phase === "undoing"}
-          >
-            {phase === "undoing" ? (
-              <>
-                <span className="spinner" /> Undoing…
-              </>
-            ) : (
-              undoLabel
-            )}
-          </button>
+          {onUndo && (
+            <button
+              type="button"
+              id="undo-toast-btn"
+              className="btn btn-secondary btn-sm"
+              onClick={handleUndo}
+              disabled={phase === "undoing"}
+            >
+              {phase === "undoing" ? (
+                <>
+                  <span className="spinner" /> Undoing…
+                </>
+              ) : (
+                undoLabel
+              )}
+            </button>
+          )}
         </div>
       )}
 

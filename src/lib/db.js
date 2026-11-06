@@ -1163,15 +1163,39 @@ async function updateCollection(id, userId, name) {
 
 /**
  * Delete a collection. Any codes assigned to it are reverted to the Default
- * Collection (collection_id set to NULL) first, so deleting a collection never
- * deletes codes. Done in a transaction so the two steps can't half-apply.
- * Returns true if a collection was deleted, false otherwise.
+ * Collection (collection_id set to NULL) first, so by default deleting a
+ * collection never deletes codes. With `trashCodes`, its live codes are moved to
+ * Trash first (they can be restored, and then land in Default). Done in one
+ * transaction so the steps can't half-apply.
+ *
+ * Returns `{ ok, trashedIds }`: `ok` is false when there is no such collection
+ * (for this user); `trashedIds` lists the codes moved to Trash.
  */
-async function deleteCollection(id, userId) {
+async function deleteCollection(id, userId, { trashCodes = false } = {}) {
   await ensureSchema();
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
+
+    let trashedIds = [];
+    if (trashCodes) {
+      // Locked, so the ids returned are exactly the codes that get trashed.
+      const [codes] = await conn.execute(
+        `SELECT id FROM qrcodes
+          WHERE collection_id = :id AND user_id = :userId AND deleted_at IS NULL
+          FOR UPDATE`,
+        { id, userId }
+      );
+      trashedIds = codes.map((row) => row.id);
+      if (trashedIds.length > 0) {
+        await conn.execute(
+          `UPDATE qrcodes SET deleted_at = CURRENT_TIMESTAMP
+            WHERE collection_id = :id AND user_id = :userId AND deleted_at IS NULL`,
+          { id, userId }
+        );
+      }
+    }
+
     await conn.execute(
       'UPDATE qrcodes SET collection_id = NULL WHERE collection_id = :id AND user_id = :userId',
       { id, userId }
@@ -1181,7 +1205,7 @@ async function deleteCollection(id, userId) {
       { id, userId }
     );
     await conn.commit();
-    return result.affectedRows > 0;
+    return { ok: result.affectedRows > 0, trashedIds };
   } catch (err) {
     await conn.rollback();
     throw err;

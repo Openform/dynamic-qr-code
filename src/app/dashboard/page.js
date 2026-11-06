@@ -53,6 +53,8 @@ export default function DashboardPage() {
   const [trashCount, setTrashCount] = useState(0)
   const [trashBusy, setTrashBusy] = useState(false) // a restore is in flight
   const [trashNotice, setTrashNotice] = useState(null) // { text, error }
+  // Confirm dialog for deleting a collection: { collection, trashCodes }
+  const [collectionDelete, setCollectionDelete] = useState(null)
   // Typed-confirmation dialog for deleting from Trash for good:
   // { ids, codes, all, count }
   const [purgeConfirm, setPurgeConfirm] = useState(null)
@@ -109,7 +111,8 @@ export default function DashboardPage() {
     bulkOpen ||
     Boolean(collectionModal) ||
     Boolean(trashConfirm) ||
-    Boolean(purgeConfirm)
+    Boolean(purgeConfirm) ||
+    Boolean(collectionDelete)
   useEffect(() => {
     if ((!selectMode && !inTrash) || anyModalOpen) return
     function onKey(e) {
@@ -481,31 +484,61 @@ export default function DashboardPage() {
     [collectionModal]
   )
 
-  async function handleDeleteCollection(collection) {
-    if (
-      !confirm(
-        `Delete the "${collection.name}" collection? Its codes won't be deleted — they'll move to the Default collection.`
-      )
-    )
-      return
+  // Ask first; the codes go to Default unless the user opts to trash them too.
+  function handleDeleteCollection(collection) {
+    setCollectionDelete({ collection, trashCodes: false })
+  }
 
+  // Run from the confirm dialog. Throws (so the dialog shows the message) on
+  // failure; on success the dialog is closed here.
+  async function confirmDeleteCollection() {
+    const { collection, trashCodes } = collectionDelete
+    let res
     try {
-      const res = await fetch(`/api/collections/${collection.id}`, {
-        method: "DELETE"
-      })
-      if (res.ok) {
-        setCollections((prev) => prev.filter((c) => c.id !== collection.id))
-        // Codes in the deleted collection revert to Default (collectionId null).
-        setQrcodes((prev) =>
-          prev.map((q) =>
-            q.collectionId === collection.id ? { ...q, collectionId: null } : q
-          )
-        )
-        setActiveCollection((cur) => (cur === collection.id ? "all" : cur))
-      }
-    } catch (error) {
-      console.error("Failed to delete collection:", error)
+      res = await fetch(
+        `/api/collections/${collection.id}${trashCodes ? "?trashCodes=1" : ""}`,
+        { method: "DELETE" }
+      )
+    } catch {
+      throw new Error("Couldn’t reach the server. Check your connection and try again.")
     }
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.error || "Couldn’t delete the collection. Please try again.")
+
+    setCollections((prev) => prev.filter((c) => c.id !== collection.id))
+    setActiveCollection((cur) => (cur === collection.id ? "all" : cur))
+    setCollectionDelete(null)
+
+    const trashedIds = data.trashedIds ?? []
+    if (trashedIds.length === 0) {
+      // Codes in the deleted collection revert to Default (collectionId null).
+      setQrcodes((prev) =>
+        prev.map((q) =>
+          q.collectionId === collection.id ? { ...q, collectionId: null } : q
+        )
+      )
+      return
+    }
+
+    // Its codes went to Trash: take the server's word for what's left.
+    await refreshCodes()
+    const label = plural(trashedIds.length, "QR code", "QR codes")
+    // Restore takes at most MAX_TRASH_IDS at a time, so a huge collection gets a
+    // plain notice pointing at Trash instead of an Undo button.
+    const undoable = trashedIds.length <= MAX_TRASH_IDS
+    setToast({
+      id: Date.now(),
+      title: `Deleted “${collection.name}” and moved ${label} to Trash`,
+      subtitle: undoable ? "" : "— restore them from Trash.",
+      autoDismissMs: 30_000,
+      ...(undoable
+        ? {
+            onUndo: () => restoreIds(trashedIds),
+            doneMessage: (r) =>
+              `Restored ${plural(r.restored, "QR code", "QR codes")} to the Default collection.`
+          }
+        : {})
+    })
   }
 
   // Assign a single code to a collection (null = Default) from its card.
@@ -555,6 +588,9 @@ export default function DashboardPage() {
     }
     return matchesSearch && matchesCollection
   })
+
+  // How many live codes the collection being deleted holds.
+  const deletingCodes = collectionDelete ? countFor(collectionDelete.collection.id) : 0
 
   // The Trash view lists trashed codes (search applies there too).
   const filteredTrashed = trashed.filter((qr) =>
@@ -980,6 +1016,50 @@ export default function DashboardPage() {
         </ConfirmActionModal>
       )}
 
+      {/* ---- Confirm: delete a collection ---- */}
+      {collectionDelete && (
+        <ConfirmActionModal
+          title={`Delete the “${collectionDelete.collection.name}” collection?`}
+          confirmLabel={
+            collectionDelete.trashCodes
+              ? `Delete and move ${deletingCodes} to Trash`
+              : "Delete collection"
+          }
+          busyLabel="Deleting…"
+          danger
+          onConfirm={confirmDeleteCollection}
+          onClose={() => setCollectionDelete(null)}
+        >
+          <p style={{ margin: "0 0 12px" }}>
+            {deletingCodes === 0
+              ? "This collection has no codes."
+              : `Its ${plural(deletingCodes, "code", "codes")} won’t be deleted: ${deletingCodes === 1 ? "it" : "they"} will move to the Default collection.`}
+          </p>
+          {deletingCodes > 0 && (
+            <label style={styles.checkRow}>
+              <input
+                id="collection-trash-codes"
+                type="checkbox"
+                checked={collectionDelete.trashCodes}
+                onChange={(e) =>
+                  setCollectionDelete((prev) => ({ ...prev, trashCodes: e.target.checked }))
+                }
+              />
+              <span>
+                Also move {deletingCodes === 1 ? "its code" : `its ${deletingCodes} codes`}{" "}
+                to Trash
+              </span>
+            </label>
+          )}
+          {collectionDelete.trashCodes && (
+            <p style={{ margin: "12px 0 0" }}>
+              {deletingCodes === 1 ? "It stops" : "They stop"} working straight away
+              and can be restored from Trash for {TRASH_RETENTION_DAYS} days.
+            </p>
+          )}
+        </ConfirmActionModal>
+      )}
+
       {/* ---- Confirm: delete from Trash for good (typed) ---- */}
       {purgeConfirm && (
         <ConfirmActionModal
@@ -1110,6 +1190,13 @@ const styles = {
     gap: "16px",
     marginBottom: "28px",
     flexWrap: "wrap"
+  },
+  checkRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    color: "var(--text-primary)",
+    cursor: "pointer"
   },
   trashIntro: {
     margin: "0 0 16px",
