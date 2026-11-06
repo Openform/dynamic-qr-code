@@ -97,7 +97,9 @@ async function initSchema() {
       scan_count INT UNSIGNED NOT NULL DEFAULT 0,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      deleted_at DATETIME NULL,
       INDEX idx_qrcodes_user_id (user_id),
+      INDEX idx_qrcodes_user_deleted (user_id, deleted_at),
       INDEX idx_qrcodes_collection_id (collection_id),
       CONSTRAINT fk_qrcodes_user FOREIGN KEY (user_id) REFERENCES users(id),
       CONSTRAINT fk_qrcodes_collection FOREIGN KEY (collection_id)
@@ -214,6 +216,10 @@ async function migrateColumns() {
     // deleted collection's codes to Default in app code, so integrity holds
     // without relying on ON DELETE SET NULL.
     ['collection_id', 'ADD COLUMN collection_id INT UNSIGNED NULL, ADD INDEX idx_qrcodes_collection_id (collection_id)'],
+    // Trash. A code with deleted_at set has been deleted by its owner and can be
+    // restored until it is purged (see the Trash section below). Existing codes
+    // get NULL, so they all stay live.
+    ['deleted_at', 'ADD COLUMN deleted_at DATETIME NULL, ADD INDEX idx_qrcodes_user_deleted (user_id, deleted_at)'],
   ];
 
   const clausesToAdd = [];
@@ -432,6 +438,7 @@ const ACCOUNT_SUMMARY_SQL = `
   LEFT JOIN (
     SELECT user_id, COUNT(*) AS codeCount, SUM(scan_count) AS scanCount
     FROM qrcodes
+    WHERE deleted_at IS NULL
     GROUP BY user_id
   ) s ON s.user_id = u.id`;
 
@@ -520,7 +527,7 @@ async function getQRCodesByUserId(userId) {
   const [rows] = await pool.execute(
     `SELECT ${QRCODE_CLIENT_COLUMNS}
      FROM qrcodes
-     WHERE user_id = :userId
+     WHERE user_id = :userId AND deleted_at IS NULL
      ORDER BY created_at DESC, id DESC`,
     { userId }
   );
@@ -538,7 +545,7 @@ async function getQRCodesByShortIds(userId, shortIds) {
   const [rows] = await pool.query(
     `SELECT ${QRCODE_CLIENT_COLUMNS}
      FROM qrcodes
-     WHERE user_id = ? AND short_id IN (?)`,
+     WHERE user_id = ? AND short_id IN (?) AND deleted_at IS NULL`,
     [userId, shortIds]
   );
   parseClientRows(rows);
@@ -550,7 +557,7 @@ async function getQRCodesByShortIds(userId, shortIds) {
 async function getQRCodeById(id, userId) {
   await ensureSchema();
   const [rows] = await pool.execute(
-    'SELECT * FROM qrcodes WHERE id = :id AND user_id = :userId LIMIT 1',
+    'SELECT * FROM qrcodes WHERE id = :id AND user_id = :userId AND deleted_at IS NULL LIMIT 1',
     { id, userId }
   );
   return rows[0] || null;
@@ -567,7 +574,7 @@ async function getQRCodeByShortId(shortId) {
     `SELECT q.*, u.disabled_at AS owner_disabled_at
      FROM qrcodes q
      JOIN users u ON u.id = q.user_id
-     WHERE q.short_id = :shortId
+     WHERE q.short_id = :shortId AND q.deleted_at IS NULL
      LIMIT 1`,
     { shortId }
   );
@@ -609,7 +616,7 @@ async function createQRCodeWithinLimit(
     const limit = getLimit(users[0].package);
     if (limit !== null) {
       const [counts] = await conn.execute(
-        'SELECT COUNT(*) AS count FROM qrcodes WHERE user_id = :userId',
+        'SELECT COUNT(*) AS count FROM qrcodes WHERE user_id = :userId AND deleted_at IS NULL',
         { userId }
       );
       if (Number(counts[0].count) >= limit) {
@@ -696,7 +703,7 @@ async function createQRCodesWithinLimit(
     const limit = getLimit(users[0].package);
     if (limit !== null) {
       const [counts] = await conn.execute(
-        'SELECT COUNT(*) AS count FROM qrcodes WHERE user_id = :userId',
+        'SELECT COUNT(*) AS count FROM qrcodes WHERE user_id = :userId AND deleted_at IS NULL',
         { userId }
       );
       // Never negative: an account can already be over a limit that was lowered.
@@ -931,7 +938,7 @@ async function getCollectionsByUserId(userId) {
        c.updated_at AS updatedAt,
        COUNT(q.id) AS count
      FROM collections c
-     LEFT JOIN qrcodes q ON q.collection_id = c.id
+     LEFT JOIN qrcodes q ON q.collection_id = c.id AND q.deleted_at IS NULL
      WHERE c.user_id = :userId
      GROUP BY c.id
      ORDER BY c.created_at DESC`,
@@ -1017,7 +1024,7 @@ async function getUserStats(userId) {
        COUNT(*) AS totalQRCodes,
        COALESCE(SUM(scan_count), 0) AS totalScans
      FROM qrcodes
-     WHERE user_id = :userId`,
+     WHERE user_id = :userId AND deleted_at IS NULL`,
     { userId }
   );
   const row = rows[0] || {};

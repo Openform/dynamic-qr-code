@@ -38,15 +38,44 @@ function normalizeScope({ userId = null, codeId = null, collectionId = null } = 
   return { userId, codeId, collectionId };
 }
 
+/**
+ * Ids of the codes in Trash within a scope. A trashed code behaves like a
+ * deleted one, so its scans must not show up in any total, chart or export
+ * (they come back if the code is restored). Looked up once per request and
+ * applied by `scopeWhere` as an exclusion list, which costs nothing when Trash
+ * is empty, the usual case.
+ */
+async function trashedCodeIds({ userId, codeId }) {
+  const clauses = ['deleted_at IS NOT NULL'];
+  const params = {};
+  if (userId !== null) {
+    clauses.push('user_id = :userId');
+    params.userId = userId;
+  }
+  if (codeId !== null) {
+    clauses.push('id = :codeId');
+    params.codeId = codeId;
+  }
+  const result = await rows(`SELECT id FROM qrcodes WHERE ${clauses.join(' AND ')}`, params);
+  return result.map((r) => r.id);
+}
+
 async function rows(sql, params) {
   const [result] = await pool.query(sql, params);
   return result;
 }
 
-/** WHERE clauses + params for a scope (without the time range). */
-function scopeWhere({ userId = null, codeId = null, collectionId = null }) {
+/**
+ * WHERE clauses + params for a scope (without the time range). `excludeCodeIds`
+ * are codes in Trash (see trashedCodeIds); every scan query gets its WHERE from
+ * here, so none of them can forget to leave those codes out.
+ */
+function scopeWhere({ userId = null, codeId = null, collectionId = null, excludeCodeIds = [] }) {
   const clauses = [];
   const params = {};
+  if (excludeCodeIds.length > 0) {
+    clauses.push(`e.qrcode_id NOT IN (${idList(excludeCodeIds)})`);
+  }
   if (userId !== null) {
     clauses.push('e.user_id = :userId');
     params.userId = userId;
@@ -66,7 +95,7 @@ function scopeWhere({ userId = null, codeId = null, collectionId = null }) {
 
 /** Same scope applied to the qrcodes table (for all-time totals). */
 function codeScopeWhere({ userId = null, codeId = null, collectionId = null }) {
-  const clauses = [];
+  const clauses = ['q.deleted_at IS NULL'];
   if (userId !== null) clauses.push('q.user_id = :userId');
   if (codeId !== null) clauses.push('q.id = :codeId');
   if (collectionId === 'default') clauses.push('q.collection_id IS NULL');
@@ -244,14 +273,15 @@ async function topAccounts(where, params) {
  */
 export async function getScanAnalytics({ scope: rawScope, range, offsetMinutes, admin = false, nowMs = Date.now() }) {
   await ensureSchema();
-  const scope = normalizeScope(rawScope);
+  const base = normalizeScope(rawScope);
+  const scope = { ...base, excludeCodeIds: await trashedCodeIds(base) };
 
   // The selected code, for the page title (and so admins can open any code).
   let code = null;
   if (scope.codeId !== null) {
     [code] = await rows(
       `SELECT q.id, q.title, q.short_id AS shortId, u.id AS ownerId, u.name AS ownerName, u.email AS ownerEmail
-       FROM qrcodes q JOIN users u ON u.id = q.user_id WHERE q.id = :codeId`,
+       FROM qrcodes q JOIN users u ON u.id = q.user_id WHERE q.id = :codeId AND q.deleted_at IS NULL`,
       { codeId: scope.codeId }
     );
     if (!code) return null;
@@ -392,7 +422,8 @@ export async function getScanAnalytics({ scope: rawScope, range, offsetMinutes, 
  */
 export async function* scanEventBatches({ scope, from, to, admin = false }) {
   await ensureSchema();
-  const { where, params } = periodWhere(normalizeScope(scope), from, to);
+  const base = normalizeScope(scope);
+  const { where, params } = periodWhere({ ...base, excludeCodeIds: await trashedCodeIds(base) }, from, to);
   let afterId = 0;
   for (;;) {
     const batch = await rows(
