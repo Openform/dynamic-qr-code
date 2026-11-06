@@ -482,11 +482,9 @@ async function updateUserPassword(userId, passwordHash) {
   );
 }
 
-/** Get all QR codes belonging to a user, newest first (camelCase keys). */
-async function getQRCodesByUserId(userId) {
-  await ensureSchema();
-  const [rows] = await pool.execute(
-    `SELECT
+// The client-facing (camelCase) shape of a QR code row, shared by every query
+// that returns codes to the dashboard.
+const QRCODE_CLIENT_COLUMNS = `
        id,
        short_id AS shortId,
        user_id AS userId,
@@ -502,17 +500,50 @@ async function getQRCodesByUserId(userId) {
        style_config AS styleConfig,
        scan_count AS scanCount,
        created_at AS createdAt,
-       updated_at AS updatedAt
-     FROM qrcodes
-     WHERE user_id = :userId
-     ORDER BY created_at DESC`,
-    { userId }
-  );
-  // style_config is stored as a JSON string; expose it as a parsed object.
+       updated_at AS updatedAt`;
+
+/** style_config is stored as a JSON string; expose it as a parsed object. */
+function parseClientRows(rows) {
   for (const row of rows) {
     row.styleConfig = parseStyleConfig(row.styleConfig);
   }
   return rows;
+}
+
+/**
+ * Get all QR codes belonging to a user, newest first (camelCase keys). Codes
+ * created in the same second (a bulk batch) fall back to newest id first, so
+ * the order is stable between requests.
+ */
+async function getQRCodesByUserId(userId) {
+  await ensureSchema();
+  const [rows] = await pool.execute(
+    `SELECT ${QRCODE_CLIENT_COLUMNS}
+     FROM qrcodes
+     WHERE user_id = :userId
+     ORDER BY created_at DESC, id DESC`,
+    { userId }
+  );
+  return parseClientRows(rows);
+}
+
+/**
+ * Get a user's codes by short id, in the order the short ids were given
+ * (camelCase keys, like the list above). Ids that don't exist or belong to
+ * someone else are simply absent from the result.
+ */
+async function getQRCodesByShortIds(userId, shortIds) {
+  await ensureSchema();
+  if (shortIds.length === 0) return [];
+  const [rows] = await pool.query(
+    `SELECT ${QRCODE_CLIENT_COLUMNS}
+     FROM qrcodes
+     WHERE user_id = ? AND short_id IN (?)`,
+    [userId, shortIds]
+  );
+  parseClientRows(rows);
+  const byShortId = new Map(rows.map((row) => [row.shortId, row]));
+  return shortIds.map((shortId) => byShortId.get(shortId)).filter(Boolean);
 }
 
 /** Get a single QR code by ID, verifying ownership. Returns null if not found or not owned. */
@@ -621,6 +652,128 @@ async function createQRCodeWithinLimit(
     conn.release();
   }
   return { ok: true, qrcode: await getQRCodeById(insertId, userId) };
+}
+
+/**
+ * Create several QR codes at once, all with the same style and collection,
+ * unless that would take the owner past their package limit. All or nothing:
+ * either every code in `codes` is created, or none is.
+ *
+ * `codes` is a list of `{ shortId, title, destinationUrl }`; the style fields
+ * (`foregroundColor`, … `styleConfig`) are the same ones the single-code
+ * function takes and are stored on every code. `getLimit(packageId)` returns
+ * the package's code limit (null = unlimited).
+ *
+ * Like the single-code function, the owner's row is locked while counting, so
+ * simultaneous requests can't both slip in under the limit. Everything happens
+ * in one transaction, with one multi-row INSERT per table. The destination
+ * history rows are copied from the codes just inserted, so there's no need to
+ * work out which auto-increment id each code got.
+ *
+ * Returns `{ ok: true, qrcodes }` (camelCase, in the order of `codes`), or
+ * `{ ok: false, reason: 'limit', limit, remaining }`, or
+ * `{ ok: false, reason: 'no_user' }`.
+ */
+async function createQRCodesWithinLimit(
+  { userId, collectionId, foregroundColor, backgroundColor, logoUrl, dotStyle, cornerSquareStyle, cornerDotStyle, styleConfig, codes },
+  getLimit
+) {
+  await ensureSchema();
+  const conn = await pool.getConnection();
+  const shortIds = codes.map((code) => code.shortId);
+  try {
+    await conn.beginTransaction();
+
+    const [users] = await conn.execute(
+      'SELECT package FROM users WHERE id = :userId FOR UPDATE',
+      { userId }
+    );
+    if (!users[0]) {
+      await conn.rollback();
+      return { ok: false, reason: 'no_user' };
+    }
+
+    const limit = getLimit(users[0].package);
+    if (limit !== null) {
+      const [counts] = await conn.execute(
+        'SELECT COUNT(*) AS count FROM qrcodes WHERE user_id = :userId',
+        { userId }
+      );
+      // Never negative: an account can already be over a limit that was lowered.
+      const remaining = Math.max(0, limit - Number(counts[0].count));
+      if (codes.length > remaining) {
+        await conn.rollback();
+        return { ok: false, reason: 'limit', limit, remaining };
+      }
+    }
+
+    const styleJson = styleConfig != null ? JSON.stringify(styleConfig) : null;
+    const rows = codes.map((code) => [
+      code.shortId,
+      userId,
+      collectionId ?? null,
+      code.title,
+      code.destinationUrl,
+      foregroundColor || '#000000',
+      backgroundColor || '#ffffff',
+      logoUrl || null,
+      dotStyle || 'square',
+      cornerSquareStyle || 'square',
+      cornerDotStyle || 'square',
+      styleJson,
+    ]);
+    // query(), not execute(): only query() expands a nested array into a
+    // multi-row VALUES list. An array of values also bypasses the pool's
+    // named-placeholder conversion, so `?` placeholders are safe here.
+    await conn.query(
+      `INSERT INTO qrcodes
+         (short_id, user_id, collection_id, title, destination_url, foreground_color, background_color, logo_url, dot_style, corner_square_style, corner_dot_style, style_config)
+       VALUES ?`,
+      [rows]
+    );
+    await conn.query(
+      `INSERT INTO qrcode_destinations (qrcode_id, destination_url, started_at)
+       SELECT id, destination_url, UTC_TIMESTAMP()
+         FROM qrcodes
+        WHERE user_id = ? AND short_id IN (?)`,
+      [userId, shortIds]
+    );
+
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+  return { ok: true, qrcodes: await getQRCodesByShortIds(userId, shortIds) };
+}
+
+/**
+ * Delete some of a user's codes, but only ones created within the last
+ * `windowMinutes` — this backs "undo my bulk creation", so it deliberately
+ * can't be used to delete older codes. Ids that don't exist, belong to someone
+ * else, or are too old are skipped. Scan history and destination history go
+ * with each code (ON DELETE CASCADE).
+ *
+ * Returns the number of codes deleted.
+ */
+async function deleteRecentQRCodes(userId, ids, windowMinutes) {
+  await ensureSchema();
+  if (ids.length === 0) return 0;
+  const minutes = Math.floor(Number(windowMinutes));
+  if (!Number.isFinite(minutes) || minutes < 1) {
+    throw new Error('windowMinutes must be a positive number');
+  }
+  // created_at defaults to CURRENT_TIMESTAMP (the database's own clock), so the
+  // cutoff is measured on that same clock rather than UTC_TIMESTAMP().
+  const [result] = await pool.query(
+    `DELETE FROM qrcodes
+      WHERE user_id = ? AND id IN (?)
+        AND created_at >= (CURRENT_TIMESTAMP - INTERVAL ${minutes} MINUTE)`,
+    [userId, ids]
+  );
+  return result.affectedRows;
 }
 
 /** Update an existing QR code. Returns the updated record or null if not found/not owned. */
@@ -1003,11 +1156,14 @@ module.exports = {
   updateUserProfile,
   updateUserPassword,
   getQRCodesByUserId,
+  getQRCodesByShortIds,
   getQRCodeById,
   getQRCodeByShortId,
   createQRCodeWithinLimit,
+  createQRCodesWithinLimit,
   updateQRCode,
   deleteQRCode,
+  deleteRecentQRCodes,
   recordScan,
   pruneScanEvents,
   getUserStats,
