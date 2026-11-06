@@ -1,0 +1,301 @@
+/* Bulk creation: step indicator, paste/upload tools and the editable rows grid. */
+
+.steps {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.step {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px 6px 8px;
+  border-radius: 9999px;
+  border: 1px solid var(--glass-border);
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+}
+
+.stepNum {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.stepActive {
+  color: var(--text-primary);
+  border-color: var(--cyan);
+}
+
+.stepActive .stepNum {
+  background: var(--cyan);
+  color: var(--text-inverse);
+}
+
+.stepDone .stepNum {
+  background: rgba(16, 185, 129, 0.25);
+  color: var(--success);
+}
+
+/* Paste box + upload button */
+.pasteBox {
+  width: 100%;
+  min-height: 92px;
+  resize: vertical;
+  font-family: var(--font-family);
+  line-height: 1.5;
+}
+
+.pasteActions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.hiddenFile {
+  display: none;
+}
+
+.notice {
+  margin-top: 10px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.noticeWarn {
+  color: var(--warning);
+}
+
+/* Rows grid */
+.gridHead,
+.row {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) minmax(0, 1.4fr) 32px;
+  column-gap: 8px;
+  align-items: start;
+}
+
+.gridHead {
+  padding: 0 4px 6px 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.num {
+  padding-top: 12px;
+  text-align: right;
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+
+.cell {
+  min-width: 0;
+}
+
+.cell :global(.input-field) {
+  padding-top: 9px;
+  padding-bottom: 9px;
+  font-size: 0.88rem;
+}
+
+.remove {
+  margin-top: 4px;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--text-tertiary);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.remove:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.rowMsg {
+  grid-column: 2 / 4;
+  margin: 4px 0 0;
+  font-size: 0.76rem;
+  color: var(--error);
+}
+
+.rowMsgWarn {
+  color: var(--warning);
+}
+
+.rowInvalid :global(.input-field) {
+  border-color: var(--error);
+}
+
+.gridTools {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.count {
+  margin-left: auto;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.countOver {
+  color: var(--error);
+}
+
+.banner {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  font-size: 0.86rem;
+  line-height: 1.45;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--warning);
+}
+
+.bannerError {
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--error);
+}
+
+.bannerText {
+  flex: 1 1 240px;
+}
+
+/* Review step */
+.summary {
+  display: flex;
+  gap: 32px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.summaryMain {
+  flex: 1 1 340px;
+  min-width: 0;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 16px;
+  margin: 0 0 20px;
+  font-size: 0.9rem;
+}
+
+.facts dt {
+  color: var(--text-tertiary);
+}
+
+.facts dd {
+  margin: 0;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.reviewList {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: 4px 12px;
+  font-size: 0.84rem;
+}
+
+.reviewItem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.reviewItem:last-child {
+  border-bottom: none;
+}
+
+.reviewTitle {
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reviewUrl {
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reviewDup {
+  color: var(--warning);
+}
+
+/* Phones: stack title above link, keep the row number and remove button. */
+@media (max-width: 640px) {
+  .gridHead {
+    display: none;
+  }
+
+  .row {
+    grid-template-columns: 24px minmax(0, 1fr) 28px;
+    row-gap: 6px;
+  }
+
+  .row .num {
+    grid-row: 1;
+  }
+
+  .row .remove {
+    grid-row: 1;
+    grid-column: 3;
+  }
+
+  .row .urlCell {
+    grid-column: 2 / 3;
+    grid-row: 2;
+  }
+
+  .rowMsg {
+    grid-column: 2 / 4;
+  }
+
+  .reviewItem {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+}

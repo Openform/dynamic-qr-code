@@ -445,7 +445,12 @@ function ContentTab({
 }
 
 // Collection picker shared by the create and edit forms. "" = Default Collection.
-export function CollectionSelect({ collections, value, onChange }) {
+export function CollectionSelect({
+  collections,
+  value,
+  onChange,
+  hint = "Group this code with others — moving it won’t change the code itself."
+}) {
   return (
     <div className="input-group">
       <label htmlFor="qr-collection" className="input-label">
@@ -464,9 +469,7 @@ export function CollectionSelect({ collections, value, onChange }) {
           </option>
         ))}
       </select>
-      <p style={styles.hint}>
-        Group this code with others — moving it won’t change the code itself.
-      </p>
+      <p style={styles.hint}>{hint}</p>
     </div>
   )
 }

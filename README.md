@@ -103,6 +103,43 @@ the `legal_pages` table, created automatically on first run; until a page is
 saved it shows the placeholder text in
 [`src/lib/legalDefaults.js`](src/lib/legalDefaults.js).
 
+## Bulk creation
+
+**Bulk create** on the dashboard makes many codes at once, in three steps:
+
+1. **Style**: one style (type, colors, shapes, logo) is shared by every code in
+   the batch. A code's appearance is locked once it's created, so this is the
+   time to get it right. The same scannability check as single creation applies.
+2. **Rows**: a title and a link per code, typed into the grid, pasted from a
+   spreadsheet (into the box or straight into a cell), or loaded from a CSV
+   file. Comma, semicolon and tab separated data all work (Excel in some
+   locales exports with semicolons), as do a header row and Excel's Windows-1252
+   "CSV" export. Excel workbooks (`.xlsx`) aren't read directly; save as CSV or
+   paste the cells. All the codes go into one collection.
+3. **Review**: the list is checked row by row with the same rules as single
+   creation (a title, an `https://` link; `https://` is added when left out, and
+   `http://` links are flagged with a one-click upgrade). Repeated rows are
+   flagged but allowed.
+
+The request is **all or nothing**: if any row is invalid, or the batch wouldn't
+fit under the package limit, nothing is created. At most 200 codes can be
+created per batch (`MAX_BULK_ROWS` in [`src/lib/bulk.js`](src/lib/bulk.js)), and
+an account may create at most 20 batches an hour.
+
+After a batch is created, a popup offers **Undo** and **Download CSV** (the new
+links, for a printer or spreadsheet). Undo deletes the whole batch in one go
+(`POST /api/qrcodes/bulk/undo`). It's deliberately not a general bulk delete: it
+only removes the signed-in user's own codes that were created in the last 30
+minutes (`BULK_UNDO_WINDOW_MINUTES`), and the popup disappears a minute before
+that window closes. Codes that were already deleted, or are too old, are skipped
+and reported.
+
+The API is `POST /api/qrcodes/bulk` with
+`{ rows: [{ title, destinationUrl }], styleConfig?, collectionId? }`. Parsing and
+validation live in [`src/lib/bulk.js`](src/lib/bulk.js),
+[`src/lib/codeInput.js`](src/lib/codeInput.js) (shared with single creation, and
+including the title/URL length limits) and [`src/lib/csv.js`](src/lib/csv.js).
+
 ## Scan analytics
 
 Every scan of a code is recorded after the visitor has been redirected, so

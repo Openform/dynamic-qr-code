@@ -4,10 +4,13 @@ import { useState, useEffect, useCallback } from "react"
 import StatsCards from "./components/StatsCards"
 import QRCodeCard from "./components/QRCodeCard"
 import CreateEditModal from "./components/CreateEditModal"
+import BulkCreateModal from "./components/BulkCreateModal"
+import BulkUndoBanner from "./components/BulkUndoBanner"
 import CollectionsBar from "./components/CollectionsBar"
 import CollectionModal from "./components/CollectionModal"
 import Avatar from "./components/Avatar"
 import { SearchIcon, InboxIcon } from "@/app/components/icons"
+import { remainingCodes, BULK_UNDO_WINDOW_MINUTES } from "@/lib/bulk"
 import Link from "next/link"
 
 export default function DashboardPage() {
@@ -25,6 +28,10 @@ export default function DashboardPage() {
   const [editingQR, setEditingQR] = useState(null) // null = create, object = edit
   // Collection create/rename modal: { mode: "create" | "rename", collection }
   const [collectionModal, setCollectionModal] = useState(null)
+  // Bulk creation: the modal, and the undo popup for the most recent batch
+  // ({ qrcodes, collectionName, expiresAt }), or null when there isn't one.
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [undoBatch, setUndoBatch] = useState(null)
 
   // ---- Fetch user & QR codes on mount ----
   useEffect(() => {
@@ -75,12 +82,80 @@ export default function DashboardPage() {
   // check here just stops the user filling in a code they can't save.
   const codeLimit = user?.package?.limit ?? null
   const atCodeLimit = codeLimit !== null && qrcodes.length >= codeLimit
+  const codesRemaining = remainingCodes(codeLimit, qrcodes.length)
 
   // ---- Handlers ----
   function handleCreate() {
     if (atCodeLimit) return
     setEditingQR(null)
     setModalOpen(true)
+  }
+
+  function handleBulkOpen() {
+    if (atCodeLimit) return
+    setBulkOpen(true)
+  }
+
+  // Reload the code list and scan total from the server — used when the
+  // browser can't be sure what the server did (a dropped connection, a partial
+  // undo) so the dashboard never shows a guess.
+  const refreshCodes = useCallback(async () => {
+    try {
+      const [qrRes, statsRes] = await Promise.all([
+        fetch("/api/qrcodes"),
+        fetch("/api/user/stats")
+      ])
+      if (qrRes.ok) {
+        const qrData = await qrRes.json()
+        setQrcodes(qrData.qrcodes ?? [])
+      }
+      if (statsRes.ok) {
+        const statsData = await statsRes.json()
+        setTotalScans(statsData.totalScans ?? 0)
+      }
+    } catch (error) {
+      console.error("Failed to refresh dashboard data:", error)
+    }
+  }, [])
+
+  function handleBulkCreated({ qrcodes: created, collectionId, collectionName }) {
+    // The server returns the batch in row order, but the list is newest first,
+    // so a reload would show it reversed — match that.
+    setQrcodes((prev) => [...[...created].reverse(), ...prev])
+    setBulkOpen(false)
+    setSearch("")
+    // Make sure the new codes are on screen: show the collection they went
+    // into, or Default when the user was looking at some other collection.
+    if (typeof collectionId === "number") setActiveCollection(collectionId)
+    else if (typeof activeCollection === "number") setActiveCollection("default")
+    // The popup expires a minute before the server stops accepting an undo.
+    setUndoBatch({
+      qrcodes: created,
+      collectionName,
+      expiresAt: Date.now() + (BULK_UNDO_WINDOW_MINUTES - 1) * 60_000
+    })
+  }
+
+  // Undo a bulk batch. Resolves to the server's { deleted, skipped }; throws
+  // with a user-facing message otherwise. The list is reloaded afterwards, so
+  // codes that couldn't be undone stay visible.
+  async function handleUndoBulk(batch) {
+    let res
+    try {
+      res = await fetch("/api/qrcodes/bulk/undo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: batch.qrcodes.map((q) => q.id) })
+      })
+    } catch {
+      throw new Error("Couldn’t reach the server. Check your connection and try again.")
+    }
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(data.error || "Couldn’t undo the bulk creation. Please try again.")
+    }
+    await refreshCodes()
+    return data
   }
 
   function handleEdit(qr) {
@@ -393,15 +468,30 @@ export default function DashboardPage() {
               style={{ paddingLeft: "40px" }}
             />
           </div>
-          <button
-            id="create-qr-btn"
-            className="btn btn-primary"
-            onClick={handleCreate}
-            disabled={atCodeLimit}
-            title={atCodeLimit ? "Package limit reached" : undefined}
-          >
-            + Create New QR Code
-          </button>
+          <div style={styles.actionButtons}>
+            <button
+              id="bulk-create-btn"
+              className="btn btn-secondary"
+              onClick={handleBulkOpen}
+              disabled={atCodeLimit}
+              title={
+                atCodeLimit
+                  ? "Package limit reached"
+                  : "Create many QR codes at once from a list or CSV"
+              }
+            >
+              Bulk create
+            </button>
+            <button
+              id="create-qr-btn"
+              className="btn btn-primary"
+              onClick={handleCreate}
+              disabled={atCodeLimit}
+              title={atCodeLimit ? "Package limit reached" : undefined}
+            >
+              + Create New QR Code
+            </button>
+          </div>
         </div>
 
         {/* QR Codes Grid */}
@@ -459,6 +549,30 @@ export default function DashboardPage() {
         collections={collections}
         defaultCollectionId={newCodeCollectionId}
       />
+
+      {/* ---- Bulk Create Modal ---- */}
+      <BulkCreateModal
+        isOpen={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        onCreated={handleBulkCreated}
+        onRefresh={refreshCodes}
+        collections={collections}
+        defaultCollectionId={newCodeCollectionId}
+        remaining={codesRemaining}
+        planName={user?.package?.name ?? ""}
+        limit={codeLimit}
+        usedCount={qrcodes.length}
+      />
+
+      {/* ---- Undo popup for the latest bulk batch (hidden behind modals) ---- */}
+      {undoBatch && !bulkOpen && !modalOpen && (
+        <BulkUndoBanner
+          key={undoBatch.expiresAt}
+          batch={undoBatch}
+          onUndo={handleUndoBulk}
+          onDismiss={() => setUndoBatch(null)}
+        />
+      )}
 
       {/* ---- Collection Create / Rename Modal ---- */}
       {collectionModal && (
@@ -538,6 +652,11 @@ const styles = {
     justifyContent: "space-between",
     gap: "16px",
     marginBottom: "28px",
+    flexWrap: "wrap"
+  },
+  actionButtons: {
+    display: "flex",
+    gap: "12px",
     flexWrap: "wrap"
   },
   searchWrap: {
