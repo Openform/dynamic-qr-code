@@ -19,7 +19,12 @@ export default function QRCodeCard({
   qrcode,
   collections = [],
   onEdit,
-  onAssignCollection
+  onAssignCollection,
+  // Selection (bulk actions): while `selectable`, the card shows a checkbox and
+  // clicking it selects instead of opening the editor.
+  selectable = false,
+  selected = false,
+  onToggleSelect
 }) {
   const [copied, setCopied] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -103,6 +108,14 @@ export default function QRCodeCard({
     setMenuOpen(false)
   }
 
+  // In select mode a click anywhere on the card that isn't a control toggles it
+  // (shift-click extends the selection from the last one).
+  function handleCardClick(e) {
+    if (!selectable) return
+    if (e.target.closest("a, button, select, input, label")) return
+    onToggleSelect?.(qrcode, e.shiftKey)
+  }
+
   function formatDate(dateStr) {
     return new Date(dateStr).toLocaleDateString("en-US", {
       month: "short",
@@ -127,16 +140,43 @@ export default function QRCodeCard({
   const safeDestinationUrl = getSafeUrl(qrcode.destinationUrl);
 
   return (
-    <div className="glass-card animate-fadeIn" style={styles.card}>
+    <div
+      className="glass-card animate-fadeIn"
+      style={{
+        ...styles.card,
+        ...(selectable ? styles.selectable : null),
+        ...(selected ? styles.selected : null)
+      }}
+      onClick={selectable ? handleCardClick : undefined}
+      data-selected={selectable ? selected : undefined}
+    >
+      {selectable && (
+        <input
+          type="checkbox"
+          id={`select-qr-${qrcode.id}`}
+          style={styles.checkbox}
+          checked={selected}
+          // The click handler does the work (it can see shift); onChange is
+          // only here because React wants one for a controlled checkbox.
+          onChange={() => {}}
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleSelect?.(qrcode, e.shiftKey)
+          }}
+          aria-label={`Select ${qrcode.title}`}
+        />
+      )}
       {/* Small code on the left (click it to edit), name and destination on the right */}
-      <div style={styles.header}>
+      <div style={selectable ? styles.headerSelectable : styles.header}>
         <button
           id={`edit-qr-${qrcode.id}`}
           type="button"
           className={cardStyles.codeButton}
-          onClick={() => onEdit(qrcode)}
-          aria-label={`Edit ${qrcode.title}`}
-          title="Edit"
+          onClick={(e) =>
+            selectable ? onToggleSelect?.(qrcode, e.shiftKey) : onEdit(qrcode)
+          }
+          aria-label={selectable ? `Select ${qrcode.title}` : `Edit ${qrcode.title}`}
+          title={selectable ? "Select" : "Edit"}
         >
           <span ref={qrRef} style={styles.previewImg} />
           <span className={cardStyles.editBadge} aria-hidden="true">
@@ -271,6 +311,24 @@ export default function QRCodeCard({
 }
 
 const styles = {
+  // Select mode: the whole card is a click target, with a checkbox top right.
+  selectable: {
+    position: "relative",
+    cursor: "pointer"
+  },
+  selected: {
+    boxShadow: "0 0 0 2px var(--cyan)"
+  },
+  checkbox: {
+    position: "absolute",
+    top: "14px",
+    right: "14px",
+    width: "20px",
+    height: "20px",
+    accentColor: "var(--cyan)",
+    cursor: "pointer",
+    zIndex: 2
+  },
   card: {
     padding: "20px",
     display: "flex",
@@ -284,6 +342,14 @@ const styles = {
     alignItems: "center",
     gap: "14px",
     minWidth: 0
+  },
+  // Leaves room for the checkbox in the corner.
+  headerSelectable: {
+    display: "flex",
+    alignItems: "center",
+    gap: "14px",
+    minWidth: 0,
+    paddingRight: "28px"
   },
   previewImg: {
     width: "88px",

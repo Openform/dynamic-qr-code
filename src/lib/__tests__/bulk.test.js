@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   MAX_BULK_ROWS,
-  BULK_UNDO_WINDOW_MINUTES,
   rowsFromTable,
   parseBulkText,
   validateBulkRows,
@@ -12,9 +11,8 @@ import {
 import { parseDelimitedText } from '../csv';
 
 describe('constants', () => {
-  it('keeps sensible bounds', () => {
+  it('keeps the agreed bound', () => {
     expect(MAX_BULK_ROWS).toBe(200);
-    expect(BULK_UNDO_WINDOW_MINUTES).toBeGreaterThan(0);
   });
 });
 

@@ -21,13 +21,6 @@ export const MAX_BULK_ROWS = 200;
 /** Largest bulk request body the API will read. 200 rows is roughly 100 KB. */
 export const MAX_BULK_BODY_BYTES = 1024 * 1024;
 
-/**
- * How long after creation a batch can still be undone in one step. Enforced by
- * the server; the dashboard's undo prompt expires a little earlier so its
- * button never outlives what the server will accept.
- */
-export const BULK_UNDO_WINDOW_MINUTES = 30;
-
 // ── Reading rows from pasted / uploaded text ──
 
 // Column names recognised in a header row (English, plus Afrikaans since the

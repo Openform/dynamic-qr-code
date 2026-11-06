@@ -5,13 +5,19 @@ import StatsCards from "./components/StatsCards"
 import QRCodeCard from "./components/QRCodeCard"
 import CreateEditModal from "./components/CreateEditModal"
 import BulkCreateModal from "./components/BulkCreateModal"
-import BulkUndoBanner from "./components/BulkUndoBanner"
+import UndoToast from "./components/UndoToast"
+import SelectionBar from "./components/SelectionBar"
+import { downloadCodesCsv } from "./components/downloadCsv"
+import ConfirmActionModal from "@/app/components/ConfirmActionModal"
 import CollectionsBar from "./components/CollectionsBar"
 import CollectionModal from "./components/CollectionModal"
 import Avatar from "./components/Avatar"
 import { SearchIcon, InboxIcon } from "@/app/components/icons"
-import { remainingCodes, BULK_UNDO_WINDOW_MINUTES } from "@/lib/bulk"
+import { remainingCodes } from "@/lib/bulk"
+import { MAX_TRASH_IDS, TRASH_RETENTION_DAYS } from "@/lib/trash"
 import Link from "next/link"
+
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
 
 export default function DashboardPage() {
   const [user, setUser] = useState(null)
@@ -28,10 +34,17 @@ export default function DashboardPage() {
   const [editingQR, setEditingQR] = useState(null) // null = create, object = edit
   // Collection create/rename modal: { mode: "create" | "rename", collection }
   const [collectionModal, setCollectionModal] = useState(null)
-  // Bulk creation: the modal, and the undo popup for the most recent batch
-  // ({ qrcodes, collectionName, expiresAt }), or null when there isn't one.
   const [bulkOpen, setBulkOpen] = useState(false)
-  const [undoBatch, setUndoBatch] = useState(null)
+  // The popup at the bottom with a one-click Undo for the latest bulk
+  // creation or move to Trash (props for <UndoToast>), or null.
+  const [toast, setToast] = useState(null)
+  // Selecting codes for a bulk action. `selected` holds ids; only the ones in
+  // the current view count (see selectedIds).
+  const [selectMode, setSelectMode] = useState(false)
+  const [selected, setSelected] = useState(() => new Set())
+  const [lastSelectedId, setLastSelectedId] = useState(null)
+  // Confirm dialog before moving codes to Trash: { codes, fromEditModal }
+  const [trashConfirm, setTrashConfirm] = useState(null)
 
   // ---- Fetch user & QR codes on mount ----
   useEffect(() => {
@@ -76,6 +89,22 @@ export default function DashboardPage() {
 
     loadData()
   }, [])
+
+  // Escape leaves select mode — unless a dialog is open, which closes itself.
+  const anyModalOpen =
+    modalOpen || bulkOpen || Boolean(collectionModal) || Boolean(trashConfirm)
+  useEffect(() => {
+    if (!selectMode || anyModalOpen) return
+    function onKey(e) {
+      if (e.key === "Escape") {
+        setSelectMode(false)
+        setSelected(new Set())
+        setLastSelectedId(null)
+      }
+    }
+    document.addEventListener("keydown", onKey)
+    return () => document.removeEventListener("keydown", onKey)
+  }, [selectMode, anyModalOpen])
 
   // ---- Package limit ----
   // `limit` is null on unlimited packages. The server enforces this too; the
@@ -128,31 +157,64 @@ export default function DashboardPage() {
     // into, or Default when the user was looking at some other collection.
     if (typeof collectionId === "number") setActiveCollection(collectionId)
     else if (typeof activeCollection === "number") setActiveCollection("default")
-    // The popup expires a minute before the server stops accepting an undo.
-    setUndoBatch({
-      qrcodes: created,
-      collectionName,
-      expiresAt: Date.now() + (BULK_UNDO_WINDOW_MINUTES - 1) * 60_000
+    // Undo moves the whole batch to Trash, so it stays recoverable.
+    setToast({
+      id: Date.now(),
+      title: `Created ${plural(created.length, "QR code", "QR codes")}`,
+      subtitle: collectionName ? `in ${collectionName}` : "",
+      actions: [
+        {
+          id: "bulk-download-csv",
+          label: "Download CSV",
+          title: "Download the new codes’ links as a spreadsheet",
+          onClick: () => downloadCodesCsv(created)
+        }
+      ],
+      autoDismissMs: 10 * 60_000,
+      onUndo: () => trashIds(created.map((q) => q.id)),
+      doneMessage: (r) =>
+        `Undone — ${plural(r.trashed, "QR code", "QR codes")} moved to Trash.` +
+        (r.skipped > 0 ? ` ${r.skipped} couldn’t be moved (already gone).` : "")
     })
   }
 
-  // Undo a bulk batch. Resolves to the server's { deleted, skipped }; throws
-  // with a user-facing message otherwise. The list is reloaded afterwards, so
-  // codes that couldn't be undone stay visible.
-  async function handleUndoBulk(batch) {
+  // POST a list of ids to one of the bulk endpoints. Resolves to the parsed
+  // response, or throws an Error with a user-facing message.
+  async function postIds(endpoint, ids, fallbackMessage) {
     let res
     try {
-      res = await fetch("/api/qrcodes/bulk/undo", {
+      res = await fetch(`/api/qrcodes/bulk/${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: batch.qrcodes.map((q) => q.id) })
+        body: JSON.stringify({ ids })
       })
     } catch {
       throw new Error("Couldn’t reach the server. Check your connection and try again.")
     }
     const data = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      throw new Error(data.error || "Couldn’t undo the bulk creation. Please try again.")
+    if (!res.ok) throw new Error(data.error || fallbackMessage)
+    return data
+  }
+
+  // Move codes to Trash. The list is reloaded afterwards so anything the server
+  // skipped stays visible.
+  async function trashIds(ids) {
+    const data = await postIds("trash", ids, "Couldn’t move the codes to Trash. Please try again.")
+    await refreshCodes()
+    return data
+  }
+
+  // Bring codes back from Trash. The server refuses (with a message saying how
+  // many fit) when that would take the account past its package limit.
+  async function restoreIds(ids) {
+    let data
+    try {
+      data = await postIds("restore", ids, "Couldn’t restore the codes. Please try again.")
+    } catch (error) {
+      // Most often the package limit: the account has changed since this page
+      // loaded (say, codes created in another tab), so catch the list up.
+      await refreshCodes()
+      throw error
     }
     await refreshCodes()
     return data
@@ -163,24 +225,79 @@ export default function DashboardPage() {
     setModalOpen(true)
   }
 
-  // Delete is on the edit screen, so the screen closes once the code is gone.
-  async function handleDelete(qr) {
-    if (!confirm(`Delete "${qr.title}"? This cannot be undone.`)) return
+  // Delete (on the edit screen) moves the code to Trash, after confirming.
+  function handleDelete(qr) {
+    setTrashConfirm({ codes: [qr], fromEditModal: true })
+  }
 
-    try {
-      const res = await fetch(`/api/qrcodes/${qr.id}`, { method: "DELETE" })
-      if (res.ok) {
-        setQrcodes((prev) => prev.filter((q) => q.id !== qr.id))
-        setTotalScans((prev) => prev - (qr.scanCount ?? 0))
-        setModalOpen(false)
-        return
-      }
-      const data = await res.json().catch(() => ({}))
-      alert(data.error || "Could not delete the QR code. Please try again.")
-    } catch (error) {
-      console.error("Failed to delete QR code:", error)
-      alert("Could not delete the QR code. Check your connection and try again.")
+  // Run from the confirm dialog. Throws (so the dialog shows the message) when
+  // the move fails; on success the dialog is closed here.
+  async function confirmTrash() {
+    const { codes, fromEditModal } = trashConfirm
+    const ids = codes.map((q) => q.id)
+    const data = await postIds("trash", ids, "Couldn’t move the codes to Trash. Please try again.")
+
+    if (data.skipped > 0) {
+      // Some were already gone: take the server's word for what's left.
+      await refreshCodes()
+    } else {
+      const gone = new Set(ids)
+      setQrcodes((prev) => prev.filter((q) => !gone.has(q.id)))
+      setTotalScans((prev) => prev - codes.reduce((n, q) => n + (q.scanCount ?? 0), 0))
     }
+
+    exitSelectMode()
+    if (fromEditModal) setModalOpen(false)
+    setTrashConfirm(null)
+
+    const only = codes.length === 1 ? codes[0] : null
+    setToast({
+      id: Date.now(),
+      title: only
+        ? `Moved “${only.title}” to Trash`
+        : `Moved ${plural(data.trashed, "QR code", "QR codes")} to Trash`,
+      subtitle: "",
+      autoDismissMs: 30_000,
+      onUndo: () => restoreIds(ids),
+      doneMessage: (r) => `Restored ${plural(r.restored, "QR code", "QR codes")}.`
+    })
+  }
+
+  // ---- Selection ----
+  function enterSelectMode() {
+    setSelectMode(true)
+  }
+
+  function exitSelectMode() {
+    setSelectMode(false)
+    setSelected(new Set())
+    setLastSelectedId(null)
+  }
+
+  function toggleSelect(qr, extendRange = false) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (extendRange && lastSelectedId !== null) {
+        // Shift-click selects everything between the last click and this one.
+        const a = filteredQRCodes.findIndex((q) => q.id === lastSelectedId)
+        const b = filteredQRCodes.findIndex((q) => q.id === qr.id)
+        if (a !== -1 && b !== -1) {
+          const [from, to] = a < b ? [a, b] : [b, a]
+          for (let i = from; i <= to && next.size < MAX_TRASH_IDS; i++) {
+            next.add(filteredQRCodes[i].id)
+          }
+          return next
+        }
+      }
+      if (next.has(qr.id)) next.delete(qr.id)
+      else if (next.size < MAX_TRASH_IDS) next.add(qr.id)
+      return next
+    })
+    setLastSelectedId(qr.id)
+  }
+
+  function selectAllInView() {
+    setSelected(new Set(filteredQRCodes.slice(0, MAX_TRASH_IDS).map((q) => q.id)))
   }
 
   const handleSave = useCallback(
@@ -342,6 +459,11 @@ export default function DashboardPage() {
     return matchesSearch && matchesCollection
   })
 
+  // Only codes in the current view count as selected: filtering or searching
+  // never leaves hidden codes selected, so an action can't touch what the user
+  // can't see.
+  const selectedVisible = filteredQRCodes.filter((q) => selected.has(q.id))
+
   // New codes default into whichever collection is currently being viewed.
   const newCodeCollectionId =
     typeof activeCollection === "number" ? activeCollection : null
@@ -410,7 +532,9 @@ export default function DashboardPage() {
       {/* ---- Main Content ---- */}
       <main
         className="container"
-        style={{ paddingTop: "32px", paddingBottom: "64px" }}
+        // Extra room at the bottom while selecting, so the fixed selection bar
+        // never covers the last row of codes.
+        style={{ paddingTop: "32px", paddingBottom: selectMode ? "140px" : "64px" }}
       >
         {/* Stats */}
         <div className="animate-fadeIn">
@@ -469,6 +593,16 @@ export default function DashboardPage() {
             />
           </div>
           <div style={styles.actionButtons}>
+            <button
+              id="select-mode-btn"
+              className="btn btn-secondary"
+              onClick={selectMode ? exitSelectMode : enterSelectMode}
+              disabled={qrcodes.length === 0}
+              aria-pressed={selectMode}
+              title="Select several codes to move to Trash"
+            >
+              {selectMode ? "Cancel selection" : "Select"}
+            </button>
             <button
               id="bulk-create-btn"
               className="btn btn-secondary"
@@ -533,6 +667,9 @@ export default function DashboardPage() {
                 collections={collections}
                 onEdit={handleEdit}
                 onAssignCollection={handleAssignCollection}
+                selectable={selectMode}
+                selected={selected.has(qr.id)}
+                onToggleSelect={toggleSelect}
               />
             ))}
           </div>
@@ -564,14 +701,64 @@ export default function DashboardPage() {
         usedCount={qrcodes.length}
       />
 
-      {/* ---- Undo popup for the latest bulk batch (hidden behind modals) ---- */}
-      {undoBatch && !bulkOpen && !modalOpen && (
-        <BulkUndoBanner
-          key={undoBatch.expiresAt}
-          batch={undoBatch}
-          onUndo={handleUndoBulk}
-          onDismiss={() => setUndoBatch(null)}
+      {/* ---- Undo popup for the latest bulk creation / move to Trash ---- */}
+      {/* Hidden while a dialog or the selection bar is up; it comes back after. */}
+      {toast && !selectMode && !anyModalOpen && (
+        <UndoToast key={toast.id} {...toast} onDismiss={() => setToast(null)} />
+      )}
+
+      {/* ---- Selection bar ---- */}
+      {selectMode && !anyModalOpen && (
+        <SelectionBar
+          count={selectedVisible.length}
+          selectAllCount={Math.min(filteredQRCodes.length, MAX_TRASH_IDS)}
+          capped={filteredQRCodes.length > MAX_TRASH_IDS}
+          onSelectAll={selectAllInView}
+          onClear={() => setSelected(new Set())}
+          onTrash={() =>
+            setTrashConfirm({ codes: selectedVisible, fromEditModal: false })
+          }
+          onDone={exitSelectMode}
         />
+      )}
+
+      {/* ---- Confirm: move to Trash ---- */}
+      {trashConfirm && (
+        <ConfirmActionModal
+          title={
+            trashConfirm.codes.length === 1
+              ? "Move this QR code to Trash?"
+              : `Move ${trashConfirm.codes.length} QR codes to Trash?`
+          }
+          confirmLabel={
+            trashConfirm.codes.length === 1
+              ? "Move to Trash"
+              : `Move ${trashConfirm.codes.length} to Trash`
+          }
+          busyLabel="Moving…"
+          danger
+          onConfirm={confirmTrash}
+          onClose={() => setTrashConfirm(null)}
+        >
+          <ul id="trash-confirm-list" style={styles.confirmList}>
+            {trashConfirm.codes.slice(0, 5).map((q) => (
+              <li key={q.id} className="truncate">
+                {q.title}
+              </li>
+            ))}
+            {trashConfirm.codes.length > 5 && (
+              <li>…and {trashConfirm.codes.length - 5} more</li>
+            )}
+          </ul>
+          <p style={{ margin: 0 }}>
+            {trashConfirm.codes.length === 1 ? "It stops" : "They stop"} working
+            straight away: anyone who scans{" "}
+            {trashConfirm.codes.length === 1 ? "it" : "one"} will see a “not
+            found” page. You can restore{" "}
+            {trashConfirm.codes.length === 1 ? "it" : "them"} from Trash for{" "}
+            {TRASH_RETENTION_DAYS} days.
+          </p>
+        </ConfirmActionModal>
       )}
 
       {/* ---- Collection Create / Rename Modal ---- */}
@@ -653,6 +840,12 @@ const styles = {
     gap: "16px",
     marginBottom: "28px",
     flexWrap: "wrap"
+  },
+  confirmList: {
+    margin: "0 0 12px",
+    paddingLeft: "20px",
+    listStyle: "disc",
+    color: "var(--text-primary)"
   },
   actionButtons: {
     display: "flex",

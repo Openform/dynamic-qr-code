@@ -286,11 +286,11 @@ function QRCodeForm({
                 >
                   {deleting ? (
                     <>
-                      <span className="spinner" /> Deleting…
+                      <span className="spinner" /> Moving…
                     </>
                   ) : (
                     <>
-                      <TrashIcon size={16} /> Delete
+                      <TrashIcon size={16} /> Move to Trash
                     </>
                   )}
                 </button>

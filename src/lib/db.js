@@ -756,33 +756,6 @@ async function createQRCodesWithinLimit(
   return { ok: true, qrcodes: await getQRCodesByShortIds(userId, shortIds) };
 }
 
-/**
- * Delete some of a user's codes, but only ones created within the last
- * `windowMinutes` — this backs "undo my bulk creation", so it deliberately
- * can't be used to delete older codes. Ids that don't exist, belong to someone
- * else, or are too old are skipped. Scan history and destination history go
- * with each code (ON DELETE CASCADE).
- *
- * Returns the number of codes deleted.
- */
-async function deleteRecentQRCodes(userId, ids, windowMinutes) {
-  await ensureSchema();
-  if (ids.length === 0) return 0;
-  const minutes = Math.floor(Number(windowMinutes));
-  if (!Number.isFinite(minutes) || minutes < 1) {
-    throw new Error('windowMinutes must be a positive number');
-  }
-  // created_at defaults to CURRENT_TIMESTAMP (the database's own clock), so the
-  // cutoff is measured on that same clock rather than UTC_TIMESTAMP().
-  const [result] = await pool.query(
-    `DELETE FROM qrcodes
-      WHERE user_id = ? AND id IN (?)
-        AND created_at >= (CURRENT_TIMESTAMP - INTERVAL ${minutes} MINUTE)`,
-    [userId, ids]
-  );
-  return result.affectedRows;
-}
-
 /** Update an existing QR code. Returns the updated record or null if not found/not owned. */
 async function updateQRCode(id, userId, { title, destinationUrl, foregroundColor, backgroundColor, logoUrl, dotStyle, cornerSquareStyle, cornerDotStyle, styleConfig, collectionId }) {
   await ensureSchema();
@@ -852,16 +825,6 @@ async function recordDestinationChange(existing, newUrl) {
      VALUES (:qrcodeId, :destinationUrl, UTC_TIMESTAMP())`,
     { qrcodeId: existing.id, destinationUrl: newUrl }
   );
-}
-
-/** Delete a QR code. Returns true if a row was deleted, false otherwise. */
-async function deleteQRCode(id, userId) {
-  await ensureSchema();
-  const [result] = await pool.execute(
-    'DELETE FROM qrcodes WHERE id = :id AND user_id = :userId',
-    { id, userId }
-  );
-  return result.affectedRows > 0;
 }
 
 // ──────────────────────────────────────────────
@@ -1391,8 +1354,6 @@ module.exports = {
   createQRCodeWithinLimit,
   createQRCodesWithinLimit,
   updateQRCode,
-  deleteQRCode,
-  deleteRecentQRCodes,
   recordScan,
   pruneScanEvents,
   getUserStats,

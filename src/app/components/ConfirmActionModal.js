@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react"
 
 /**
- * Confirmation dialog for account actions (disable, delete).
+ * Confirmation dialog for destructive actions (disabling or deleting an
+ * account, moving codes to Trash, deleting them for good).
  *
  * `onConfirm(typedText)` should throw an Error (shown inline) when the server
  * rejects the action, and resolve when it succeeds — the parent closes the
