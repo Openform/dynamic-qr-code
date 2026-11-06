@@ -81,6 +81,74 @@ describe('rowsFromTable', () => {
     expect(rows).toEqual([{ title: 'A', destinationUrl: 'a.com' }]);
   });
 
+  it('recognises Afrikaans header names, including swapped columns', () => {
+    const { rows, hasHeader } = rowsFromTable([
+      ['Webwerf', 'Titel'],
+      ['example.com/a', 'Alpha'],
+    ]);
+    expect(hasHeader).toBe(true);
+    expect(rows).toEqual([{ title: 'Alpha', destinationUrl: 'example.com/a' }]);
+  });
+
+  describe('a header in a language we do not know', () => {
+    it('is skipped when its link cell is one word and later rows have real links', () => {
+      // "Skakel" would otherwise validate as https://Skakel and become a real code.
+      for (const header of [['Naam', 'Skakel'], ['Item', 'Address'], ['Produk', 'Kode']]) {
+        const { rows, hasHeader } = rowsFromTable([
+          header,
+          ['Kaffee', 'example.com/k'],
+          ['Menu', 'https://example.com/menu'],
+        ]);
+        expect(hasHeader).toBe(true);
+        expect(rows.map((r) => r.title)).toEqual(['Kaffee', 'Menu']);
+      }
+    });
+
+    it('is also caught when the data rows are the only ones with a scheme', () => {
+      const { hasHeader } = rowsFromTable([
+        ['Etiket', 'Bestemmeling'],
+        ['A', 'https://a.example'],
+      ]);
+      expect(hasHeader).toBe(true);
+    });
+
+    it('does not drop a genuine first row that has a real link', () => {
+      const { rows, hasHeader } = rowsFromTable([
+        ['Menu', 'qrgo.co.za/menu'],
+        ['Wine', 'qrgo.co.za/wine'],
+      ]);
+      expect(hasHeader).toBe(false);
+      expect(rows).toHaveLength(2);
+    });
+
+    it('does not guess when no row has a real link (all single words)', () => {
+      const { rows, hasHeader } = rowsFromTable([
+        ['A', 'intranet'],
+        ['B', 'wiki'],
+      ]);
+      expect(hasHeader).toBe(false);
+      expect(rows).toHaveLength(2);
+    });
+
+    it('does not guess when the first row has no link at all', () => {
+      // Left for validation to flag as a missing link, not silently dropped.
+      const { rows, hasHeader } = rowsFromTable([
+        ['Produk', ''],
+        ['Kaffee', 'example.com/k'],
+      ]);
+      expect(hasHeader).toBe(false);
+      expect(rows).toHaveLength(2);
+    });
+
+    it('does not guess from a single row', () => {
+      expect(rowsFromTable([['Produk', 'Kode']]).hasHeader).toBe(false);
+    });
+
+    it('still recognises a known Afrikaans header by name, even on its own', () => {
+      expect(rowsFromTable([['Naam', 'Skakel']]).hasHeader).toBe(true);
+    });
+  });
+
   it('returns nothing for an empty table', () => {
     expect(rowsFromTable([])).toEqual({ rows: [], hasHeader: false });
     expect(rowsFromTable(undefined)).toEqual({ rows: [], hasHeader: false });
@@ -103,6 +171,16 @@ describe('parseBulkText', () => {
     const result = parseBulkText('Menu\texample.com/menu\nWine\texample.com/wine');
     expect(result.delimiter).toBe('\t');
     expect(result.rows).toHaveLength(2);
+  });
+
+  it('skips an Afrikaans header from a South African Excel export (semicolons, BOM)', () => {
+    const text = '\uFEFFNaam;Skakel\r\nKaffee Müller;example.com/kaffee\r\nSão Paulo;example.com/sp\r\n';
+    const result = parseBulkText(text);
+    expect(result.hasHeader).toBe(true);
+    expect(result.rows).toEqual([
+      { title: 'Kaffee Müller', destinationUrl: 'example.com/kaffee' },
+      { title: 'São Paulo', destinationUrl: 'example.com/sp' },
+    ]);
   });
 
   it('passes the unterminated-quote warning through', () => {

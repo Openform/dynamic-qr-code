@@ -30,8 +30,18 @@ export const BULK_UNDO_WINDOW_MINUTES = 30;
 
 // ── Reading rows from pasted / uploaded text ──
 
-const TITLE_HEADERS = ['title', 'name', 'label'];
-const URL_HEADERS = ['url', 'link', 'destination', 'destination url', 'website', 'target', 'target url'];
+// Column names recognised in a header row (English, plus Afrikaans since the
+// spreadsheets this reads are often South African).
+const TITLE_HEADERS = ['title', 'name', 'label', 'titel', 'naam'];
+const URL_HEADERS = [
+  'url', 'link', 'destination', 'destination url', 'website', 'target', 'target url',
+  'skakel', 'webwerf', 'bestemming',
+];
+
+/** Does this cell look like a link (a dotted host/path or a scheme)? */
+function looksLikeLink(text) {
+  return text.includes('.') || text.includes('://');
+}
 
 function normalizeHeader(cell) {
   return String(cell ?? '')
@@ -49,6 +59,13 @@ function normalizeHeader(cell) {
  * none of its cells is a URL; its names then pick the columns, so extra columns
  * (such as a collection name) are ignored. Without a header the first column is
  * the title and the second the URL.
+ *
+ * A header in a language we don't know (say "Item,Address") is caught by shape
+ * instead: a lone word such as "Address" is still a valid https host once
+ * https:// is added, so left alone it would become a real code. So when the
+ * first row's link cell is a single word with no dot, but a later row's link
+ * cell is a real link, the first row is taken to be a header. (The caller tells
+ * the user a header row was skipped.)
  */
 export function rowsFromTable(table) {
   if (!Array.isArray(table) || table.length === 0) {
@@ -59,7 +76,16 @@ export function rowsFromTable(table) {
   const titleIdx = first.findIndex((c) => TITLE_HEADERS.includes(c));
   const urlIdx = first.findIndex((c) => URL_HEADERS.includes(c));
   const looksLikeData = table[0].some((c) => /:\/\//.test(String(c)));
-  const hasHeader = (titleIdx !== -1 || urlIdx !== -1) && !looksLikeData;
+  let hasHeader = (titleIdx !== -1 || urlIdx !== -1) && !looksLikeData;
+
+  if (!hasHeader && !looksLikeData && table.length >= 2) {
+    const linkCell = (cells) => String(cells[1] ?? '').trim();
+    const firstLink = linkCell(table[0]);
+    hasHeader =
+      firstLink !== '' &&
+      !looksLikeLink(firstLink) &&
+      table.slice(1).some((cells) => looksLikeLink(linkCell(cells)));
+  }
 
   let titleCol = 0;
   let urlCol = 1;
