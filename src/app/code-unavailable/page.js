@@ -1,9 +1,10 @@
 import Link from "next/link"
-import { PauseIcon, QuestionIcon, AlertIcon } from "@/app/components/icons"
+import { PauseIcon, ClockIcon, QuestionIcon, AlertIcon } from "@/app/components/icons"
 
 /**
  * Shown to someone who scans a QR code that can't redirect (see /r/[shortId]):
  *   ?reason=inactive  — the owner's account is disabled, so its codes are paused
+ *   ?reason=expired   — the owner gave the code an expiration date and it has passed
  *   ?reason=not-found — no such code (deleted, or a mistyped link)
  *   ?reason=error     — the lookup failed (e.g. the database is briefly down)
  *
@@ -22,6 +23,13 @@ const MESSAGES = {
     title: "This QR code is inactive",
     body:
       "The owner of this QR code has paused it, so it isn't linking anywhere right now. " +
+      "If you were expecting a page here, please contact the business that shared it."
+  },
+  expired: {
+    icon: ClockIcon,
+    title: "This QR code has expired",
+    body:
+      "This QR code was set to stop working after a certain date, so it isn't linking anywhere any more. " +
       "If you were expecting a page here, please contact the business that shared it."
   },
   "not-found": {

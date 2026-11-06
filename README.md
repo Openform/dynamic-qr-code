@@ -103,6 +103,31 @@ the `legal_pages` table, created automatically on first run; until a page is
 saved it shows the placeholder text in
 [`src/lib/legalDefaults.js`](src/lib/legalDefaults.js).
 
+## Expiration dates
+
+A code can have an optional **expiration date**, set in the **Expiration date**
+field when creating or editing it (leave it empty for a code that never
+expires). The code keeps working through the end of the chosen day in the
+owner's own time zone. After that, anyone who scans it sees a "This QR code has
+expired" page (`/code-unavailable?reason=expired`) instead of being redirected,
+and the scan isn't counted. The owner's dashboard marks the card **Expired**.
+
+- **Changing it:** the date can be changed or cleared at any time, including
+  after it has passed, which makes the code work again. Everything else about
+  a code's appearance stays locked after creation; the expiration date doesn't
+  affect the image, so the printed code keeps scanning.
+- **Past dates:** a new date must be in the future, so a typo can't switch a
+  code off. Editing an expired code's title or URL without touching its date
+  works as normal.
+- **API:** `expiresAt` on `POST /api/qrcodes` and `PUT /api/qrcodes/[id]` is an
+  ISO 8601 date-time with a time zone (e.g. `2026-12-01T21:59:59Z`), or `null`
+  to clear it. On `PUT`, leave the key out to keep the current date.
+
+It's stored in the `qrcodes.expires_at` column (UTC; `NULL` = never expires),
+added automatically on first run. Existing codes never expire. The expiry check
+runs in the database against its UTC clock, so it doesn't depend on the web
+server's time zone.
+
 ## Scan analytics
 
 Every scan of a code is recorded after the visitor has been redirected, so

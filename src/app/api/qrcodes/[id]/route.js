@@ -8,6 +8,7 @@
 
 import { getSession } from '@/lib/auth';
 import { normalizeDestinationUrl, isValidDestinationUrl } from '@/lib/qrStyle';
+import { parseExpiresAt, expiresAtToIso } from '@/lib/expiry';
 const { getQRCodeById, updateQRCode, deleteQRCode, getCollectionById } = require('@/lib/db');
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
@@ -41,6 +42,7 @@ function toClientQRCode(qrcode) {
     cornerSquareStyle: qrcode.corner_square_style,
     cornerDotStyle: qrcode.corner_dot_style,
     styleConfig: parseStyleConfig(qrcode.style_config),
+    expiresAt: expiresAtToIso(qrcode.expires_at),
     scanCount: qrcode.scan_count,
     createdAt: qrcode.created_at,
     updatedAt: qrcode.updated_at,
@@ -98,8 +100,9 @@ export async function PUT(request, { params }) {
     // printed or shared, changing colours, code type, shape, logo, error
     // correction, etc. would produce a different image that no longer matches
     // the codes already in the wild. Only the title (an internal label), the
-    // destination URL, and the collection (an organizational label that doesn't
-    // affect the image) may change — any style fields in the body are ignored,
+    // destination URL, the collection (an organizational label that doesn't
+    // affect the image), and the expiration date (which only decides whether the
+    // code redirects) may change — any style fields in the body are ignored,
     // so the lock holds even against a hand-crafted request.
 
     // Validate destination URL if provided: autofill https:// when the scheme
@@ -112,6 +115,16 @@ export async function PUT(request, { params }) {
           { status: 400 }
         );
       }
+    }
+
+    // The expiration date is tri-state too: omit the key to leave it
+    // unchanged, send null/'' to clear it, or send a future ISO date-time to set
+    // it. Clients send it only when the user changed it, because a date that has
+    // already passed is refused — otherwise an expired code's title or URL
+    // couldn't be edited without also picking a new date.
+    const expiry = parseExpiresAt(body.expiresAt);
+    if (!expiry.ok) {
+      return Response.json({ error: expiry.error }, { status: 400 });
     }
 
     // Collection assignment is tri-state: omit the key to leave it unchanged,
@@ -135,6 +148,7 @@ export async function PUT(request, { params }) {
       title,
       destinationUrl,
       collectionId,
+      expiresAt: expiry.value,
     });
 
     if (!updated) {

@@ -7,8 +7,9 @@
  * lib/scanRecorder.js), so recording never slows down or breaks a scan.
  *
  * Codes that can't redirect send the visitor to /code-unavailable instead:
- * paused (the owner's account is disabled), not found, or a lookup error.
- * Paused scans aren't counted.
+ * paused (the owner's account is disabled), expired (the owner set an
+ * expiration date and it has passed), not found, or a lookup error.
+ * Paused and expired scans aren't counted.
  *
  * NOTE: In Next.js 16, `params` is a Promise and must be awaited.
  */
@@ -33,6 +34,11 @@ export async function GET(request, { params }) {
 
     if (qrcode.owner_disabled_at) {
       return unavailable(request, 'inactive');
+    }
+
+    // is_expired is worked out by the database against its UTC clock.
+    if (Number(qrcode.is_expired) > 0) {
+      return unavailable(request, 'expired');
     }
 
     // Ensure the destination is an absolute URL

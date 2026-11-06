@@ -124,6 +124,10 @@ export default function DashboardPage() {
             prev.map((q) => (q.id === editingQR.id ? { ...q, ...updated } : q))
           )
           setModalOpen(false)
+        } else {
+          // e.g. the expiration date was rejected as invalid or already past.
+          const data = await res.json().catch(() => ({}))
+          alert(data.error || "Could not save your changes. Please try again.")
         }
       } else {
         // Create new

@@ -5,6 +5,7 @@ import Link from "next/link"
 import QRCodeStyling from "qr-code-styling"
 import { normalizeStyle, buildQRStylingOptions } from "@/lib/qrStyle"
 import { renderBwipCanvas, downloadBwip } from "@/lib/barcode"
+import { isExpired, formatExpiryDate } from "@/lib/expiry"
 import cardStyles from "./QRCodeCard.module.css"
 import {
   PencilIcon,
@@ -12,7 +13,8 @@ import {
   CheckIcon,
   DownloadIcon,
   ChartIcon,
-  FolderIcon
+  FolderIcon,
+  ClockIcon
 } from "@/app/components/icons"
 
 export default function QRCodeCard({
@@ -126,6 +128,12 @@ export default function QRCodeCard({
 
   const safeDestinationUrl = getSafeUrl(qrcode.destinationUrl);
 
+  // Codes with an expiration date say when it is (or was), so the owner can see
+  // why a code stopped working. Judged against this device's clock; the scan
+  // page itself uses the database's.
+  const hasExpiry = Boolean(qrcode.expiresAt);
+  const expired = hasExpiry && isExpired(qrcode.expiresAt);
+
   return (
     <div className="glass-card animate-fadeIn" style={styles.card}>
       {/* Small code on the left (click it to edit), name and destination on the right */}
@@ -233,6 +241,23 @@ export default function QRCodeCard({
           </div>
           <span style={styles.date}>{formatDate(qrcode.createdAt)}</span>
         </div>
+
+        {hasExpiry && (
+          <div
+            style={{
+              ...styles.expiryRow,
+              color: expired ? "var(--error)" : "var(--text-tertiary)"
+            }}
+            title={
+              expired
+                ? "This code has expired, so scans show an expired page. Edit it to pick a new date."
+                : "This code stops working after this date."
+            }
+          >
+            <ClockIcon size={14} />
+            {expired ? "Expired" : "Expires"} {formatExpiryDate(qrcode.expiresAt)}
+          </div>
+        )}
 
         {/* Collection assignment (only once the user has collections) */}
         {collections.length > 0 && (
@@ -360,6 +385,12 @@ const styles = {
     display: "inline-flex",
     alignItems: "center",
     gap: "4px"
+  },
+  expiryRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "5px",
+    fontSize: "0.78rem"
   },
   collectionRow: {
     display: "flex",

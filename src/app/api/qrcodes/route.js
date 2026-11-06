@@ -13,6 +13,7 @@ import {
   evaluateContrast,
 } from '@/lib/qrStyle';
 import { getPackage } from '@/lib/packages';
+import { parseExpiresAt, expiresAtToIso } from '@/lib/expiry';
 
 const { getQRCodesByUserId, createQRCodeWithinLimit, getCollectionById } = require('@/lib/db');
 
@@ -53,6 +54,7 @@ function toClientQRCode(qrcode) {
     cornerSquareStyle: qrcode.corner_square_style,
     cornerDotStyle: qrcode.corner_dot_style,
     styleConfig: parseStyleConfig(qrcode.style_config),
+    expiresAt: expiresAtToIso(qrcode.expires_at),
     scanCount: qrcode.scan_count,
     createdAt: qrcode.created_at,
     updatedAt: qrcode.updated_at,
@@ -72,10 +74,12 @@ export async function GET() {
     }
 
     // getQRCodesByUserId already returns the client shape (camelCase fields with
-    // styleConfig parsed); only the public redirect URL needs attaching.
+    // styleConfig parsed); only the expiry (stored as a UTC DATETIME string,
+    // returned as ISO) and the public redirect URL need attaching.
     const qrcodes = await getQRCodesByUserId(session.userId);
     const clientQRCodes = qrcodes.map((qr) => ({
       ...qr,
+      expiresAt: expiresAtToIso(qr.expiresAt),
       redirectUrl: `${BASE_URL}/r/${qr.shortId}`,
     }));
 
@@ -114,6 +118,7 @@ export async function POST(request) {
       cornerDotStyle,
       styleConfig,
       collectionId,
+      expiresAt,
     } = body;
 
     // Validation
@@ -122,6 +127,13 @@ export async function POST(request) {
         { error: 'Title and destination URL are required' },
         { status: 400 }
       );
+    }
+
+    // Optional expiration: an ISO date-time with a time zone, in the future.
+    // Missing/null/'' means the code never expires.
+    const expiry = parseExpiresAt(expiresAt);
+    if (!expiry.ok) {
+      return Response.json({ error: expiry.error }, { status: 400 });
     }
 
     // Resolve the target collection. A missing/empty/null value means the
@@ -185,6 +197,7 @@ export async function POST(request) {
         destinationUrl: normalizedUrl,
         ...legacy,
         styleConfig: sanitizedStyle,
+        expiresAt: expiry.value ?? null,
       },
       (packageId) => getPackage(packageId).limit
     );

@@ -16,6 +16,13 @@ import {
   evaluateContrast
 } from "@/lib/qrStyle"
 import { renderBwipCanvas } from "@/lib/barcode"
+import {
+  endOfLocalDayIso,
+  isoToLocalDateInput,
+  todayLocalDateInput,
+  formatExpiryDate,
+  isExpired
+} from "@/lib/expiry"
 import footerStyles from "./CreateEditModal.module.css"
 import { TrashIcon } from "@/app/components/icons"
 
@@ -118,6 +125,11 @@ function QRCodeForm({
     return v == null ? "" : String(v)
   })
   const [urlError, setUrlError] = useState("")
+  // Optional expiration, edited as a calendar date ("" = never expires). The
+  // code keeps working through the end of that day in the owner's time zone.
+  const initialExpiryDate = isoToLocalDateInput(qrcode?.expiresAt)
+  const [expiryDate, setExpiryDate] = useState(initialExpiryDate)
+  const [expiryError, setExpiryError] = useState("")
   // Single style object — the source of truth for all visual customization.
   const [style, setStyle] = useState(() => normalizeStyle(qrcode))
   const [tab, setTab] = useState("content")
@@ -204,6 +216,12 @@ function QRCodeForm({
   const contrast = evaluateContrast(style)
   const blockSave = !isEdit && !contrast.scannable
 
+  // Picking another date (or clearing it) dismisses the previous error.
+  function changeExpiryDate(value) {
+    setExpiryDate(value)
+    if (expiryError) setExpiryError("")
+  }
+
   // The field shows a fixed "https://" prefix, so strip a scheme the user may
   // have pasted to keep the visible value clean (no "https://https://…").
   function handleUrlBlur() {
@@ -224,6 +242,29 @@ function QRCodeForm({
     }
     setUrlError("")
 
+    // Expiration: a new code always sends it (null = never). When editing, send
+    // it only if the user changed it — the server refuses dates that have
+    // passed, so re-sending an expired code's old date would block every other
+    // edit to it.
+    let expiresAt
+    if (!isEdit || expiryDate !== initialExpiryDate) {
+      if (expiryDate === "") {
+        expiresAt = null
+      } else if (expiryDate < todayLocalDateInput()) {
+        setExpiryError("Choose today or a later date.")
+        setTab("content")
+        return
+      } else {
+        expiresAt = endOfLocalDayIso(expiryDate)
+        if (!expiresAt) {
+          setExpiryError("Enter a valid date.")
+          setTab("content")
+          return
+        }
+      }
+    }
+    setExpiryError("")
+
     // Guard against saving an unscannable code (the button is also disabled).
     if (blockSave) return
 
@@ -231,14 +272,16 @@ function QRCodeForm({
     try {
       // Collection is sent on both create and edit — it's an organizational
       // label that doesn't affect the code's image, so it stays editable even
-      // though the appearance is locked after creation. The server ignores any
-      // style fields on edit.
+      // though the appearance is locked after creation. The expiration date is
+      // the same kind of setting (it doesn't change the image). The server
+      // ignores any style fields on edit.
       const payload = {
         title,
         destinationUrl: fullUrl,
         styleConfig: style,
         collectionId: collectionId === "" ? null : Number(collectionId)
       }
+      if (expiresAt !== undefined) payload.expiresAt = expiresAt
       await onSave(payload)
     } finally {
       setSaving(false)
@@ -314,6 +357,15 @@ function QRCodeForm({
                     setDestinationUrl={setDestinationUrl}
                     onUrlBlur={handleUrlBlur}
                     urlError={urlError}
+                    expiryDate={expiryDate}
+                    setExpiryDate={changeExpiryDate}
+                    expiryError={expiryError}
+                    expiredOn={
+                      isExpired(qrcode.expiresAt) &&
+                      expiryDate === initialExpiryDate
+                        ? formatExpiryDate(qrcode.expiresAt)
+                        : ""
+                    }
                     logoUrl={style.logoUrl}
                     setLogoUrl={(v) => setField("logoUrl", v)}
                     showLogo={false}
@@ -328,7 +380,8 @@ function QRCodeForm({
                   <p style={styles.hint}>
                     The code&apos;s appearance is locked after creation so codes
                     already printed or shared keep scanning. Only the title,
-                    destination URL, and collection can be changed.
+                    destination URL, expiration date, and collection can be
+                    changed.
                   </p>
                 </div>
               ) : (
@@ -410,6 +463,10 @@ function QRCodeForm({
                         setDestinationUrl={setDestinationUrl}
                         onUrlBlur={handleUrlBlur}
                         urlError={urlError}
+                        expiryDate={expiryDate}
+                        setExpiryDate={changeExpiryDate}
+                        expiryError={expiryError}
+                        expiredOn=""
                         logoUrl={style.logoUrl}
                         setLogoUrl={(v) => setField("logoUrl", v)}
                         showLogo={isQR}
@@ -530,6 +587,10 @@ function ContentTab({
   setDestinationUrl,
   onUrlBlur,
   urlError,
+  expiryDate,
+  setExpiryDate,
+  expiryError,
+  expiredOn,
   logoUrl,
   setLogoUrl,
   showLogo
@@ -551,10 +612,7 @@ function ContentTab({
         />
       </div>
 
-      <div
-        className="input-group"
-        style={{ marginBottom: showLogo ? undefined : 0 }}
-      >
+      <div className="input-group">
         <label htmlFor="qr-destination-url" className="input-label">
           Destination URL
         </label>
@@ -614,6 +672,54 @@ function ContentTab({
           </p>
         )}
       </div> */}
+
+      {/* Optional expiration. The code keeps redirecting through the end of the
+          chosen day (the owner's local time), then shows an "expired" page. */}
+      <div
+        className="input-group"
+        style={{ marginBottom: showLogo ? undefined : 0 }}
+      >
+        <label htmlFor="qr-expiry-date" className="input-label">
+          Expiration date (optional)
+        </label>
+        <div style={styles.expiryRow}>
+          <input
+            id="qr-expiry-date"
+            type="date"
+            className="input-field"
+            // Dark picker, to match the rest of the form.
+            style={{ flex: 1, minWidth: 0, colorScheme: "dark" }}
+            value={expiryDate}
+            onChange={(e) => setExpiryDate(e.target.value)}
+            aria-invalid={expiryError ? true : undefined}
+          />
+          {expiryDate && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => setExpiryDate("")}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+        {expiryError ? (
+          <p style={{ ...styles.hint, color: "var(--danger, #e5484d)" }}>
+            {expiryError}
+          </p>
+        ) : expiredOn ? (
+          <p style={styles.hint}>
+            This code expired on {expiredOn}. Pick a new date, or clear it, to
+            make the code work again.
+          </p>
+        ) : expiryDate ? (
+          <p style={styles.hint}>
+            The code stops working after the end of this day (your local time).
+          </p>
+        ) : (
+          <p style={styles.hint}>Leave empty so the code never expires.</p>
+        )}
+      </div>
 
       {showLogo && (
         <div className="input-group" style={{ marginBottom: 0 }}>
@@ -1288,6 +1394,11 @@ const styles = {
     color: "var(--text-tertiary)",
     marginTop: "10px",
     lineHeight: 1.5
+  },
+  expiryRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px"
   },
   contrastBox: {
     marginTop: "16px",

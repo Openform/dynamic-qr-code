@@ -94,6 +94,7 @@ async function initSchema() {
       corner_square_style VARCHAR(32) NOT NULL DEFAULT 'square',
       corner_dot_style VARCHAR(32) NOT NULL DEFAULT 'square',
       style_config LONGTEXT NULL,
+      expires_at DATETIME NULL,
       scan_count INT UNSIGNED NOT NULL DEFAULT 0,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -214,6 +215,9 @@ async function migrateColumns() {
     // deleted collection's codes to Default in app code, so integrity holds
     // without relying on ON DELETE SET NULL.
     ['collection_id', 'ADD COLUMN collection_id INT UNSIGNED NULL, ADD INDEX idx_qrcodes_collection_id (collection_id)'],
+    // When the code stops redirecting (UTC); NULL = never expires, so every
+    // existing code keeps working.
+    ['expires_at', 'ADD COLUMN expires_at DATETIME NULL'],
   ];
 
   const clausesToAdd = [];
@@ -500,6 +504,7 @@ async function getQRCodesByUserId(userId) {
        corner_square_style AS cornerSquareStyle,
        corner_dot_style AS cornerDotStyle,
        style_config AS styleConfig,
+       expires_at AS expiresAt,
        scan_count AS scanCount,
        created_at AS createdAt,
        updated_at AS updatedAt
@@ -528,12 +533,17 @@ async function getQRCodeById(id, userId) {
 /**
  * Get a QR code by its short ID (used for public redirect lookup — no auth
  * check). Includes `owner_disabled_at`, which is set when the owner's account
- * is disabled and the code should show the inactive page instead.
+ * is disabled and the code should show the inactive page instead, and
+ * `is_expired` (1/0), which is 1 once the code's `expires_at` has passed. The
+ * comparison happens in SQL, against the database's UTC clock, so it doesn't
+ * depend on the web server's time zone.
  */
 async function getQRCodeByShortId(shortId) {
   await ensureSchema();
   const [rows] = await pool.execute(
-    `SELECT q.*, u.disabled_at AS owner_disabled_at
+    `SELECT q.*,
+            u.disabled_at AS owner_disabled_at,
+            (q.expires_at IS NOT NULL AND q.expires_at <= UTC_TIMESTAMP()) AS is_expired
      FROM qrcodes q
      JOIN users u ON u.id = q.user_id
      WHERE q.short_id = :shortId
@@ -546,6 +556,8 @@ async function getQRCodeByShortId(shortId) {
 /**
  * Create a new QR code record, unless the owner's package limit is reached.
  * `styleConfig` (when provided) is a plain object stored as JSON.
+ * `expiresAt` is a "YYYY-MM-DD HH:MM:SS" UTC string, or null/omitted for a code
+ * that never expires (see lib/expiry.js).
  *
  * `getLimit(packageId)` returns the package's code limit (null = unlimited);
  * it's passed in so this module stays free of package rules.
@@ -557,7 +569,7 @@ async function getQRCodeByShortId(shortId) {
  * when the limit is reached, or `{ ok: false, reason: 'no_user' }`.
  */
 async function createQRCodeWithinLimit(
-  { shortId, userId, collectionId, title, destinationUrl, foregroundColor, backgroundColor, logoUrl, dotStyle, cornerSquareStyle, cornerDotStyle, styleConfig },
+  { shortId, userId, collectionId, title, destinationUrl, foregroundColor, backgroundColor, logoUrl, dotStyle, cornerSquareStyle, cornerDotStyle, styleConfig, expiresAt },
   getLimit
 ) {
   await ensureSchema();
@@ -589,9 +601,9 @@ async function createQRCodeWithinLimit(
 
     const [result] = await conn.execute(
       `INSERT INTO qrcodes
-         (short_id, user_id, collection_id, title, destination_url, foreground_color, background_color, logo_url, dot_style, corner_square_style, corner_dot_style, style_config)
+         (short_id, user_id, collection_id, title, destination_url, foreground_color, background_color, logo_url, dot_style, corner_square_style, corner_dot_style, style_config, expires_at)
        VALUES
-         (:shortId, :userId, :collectionId, :title, :destinationUrl, :foregroundColor, :backgroundColor, :logoUrl, :dotStyle, :cornerSquareStyle, :cornerDotStyle, :styleConfig)`,
+         (:shortId, :userId, :collectionId, :title, :destinationUrl, :foregroundColor, :backgroundColor, :logoUrl, :dotStyle, :cornerSquareStyle, :cornerDotStyle, :styleConfig, :expiresAt)`,
       {
         shortId,
         userId,
@@ -605,6 +617,7 @@ async function createQRCodeWithinLimit(
         cornerSquareStyle: cornerSquareStyle || 'square',
         cornerDotStyle: cornerDotStyle || 'square',
         styleConfig: styleConfig != null ? JSON.stringify(styleConfig) : null,
+        expiresAt: expiresAt ?? null,
       }
     );
     await conn.execute(
@@ -623,8 +636,13 @@ async function createQRCodeWithinLimit(
   return { ok: true, qrcode: await getQRCodeById(insertId, userId) };
 }
 
-/** Update an existing QR code. Returns the updated record or null if not found/not owned. */
-async function updateQRCode(id, userId, { title, destinationUrl, foregroundColor, backgroundColor, logoUrl, dotStyle, cornerSquareStyle, cornerDotStyle, styleConfig, collectionId }) {
+/**
+ * Update an existing QR code. Returns the updated record or null if not found/not owned.
+ *
+ * `collectionId` and `expiresAt` are tri-state: a value sets it, null clears
+ * it (Default Collection / never expires), and undefined leaves it unchanged.
+ */
+async function updateQRCode(id, userId, { title, destinationUrl, foregroundColor, backgroundColor, logoUrl, dotStyle, cornerSquareStyle, cornerDotStyle, styleConfig, collectionId, expiresAt }) {
   await ensureSchema();
   const existing = await getQRCodeById(id, userId);
   if (!existing) return null;
@@ -641,6 +659,7 @@ async function updateQRCode(id, userId, { title, destinationUrl, foregroundColor
            corner_dot_style = :cornerDotStyle,
            style_config = :styleConfig,
            collection_id = :collectionId,
+           expires_at = :expiresAt,
            updated_at = CURRENT_TIMESTAMP
      WHERE id = :id AND user_id = :userId`,
     {
@@ -660,6 +679,8 @@ async function updateQRCode(id, userId, { title, destinationUrl, foregroundColor
       // the Default Collection, and undefined leaves it where it is. (null vs
       // undefined matters here — `??` would treat an intentional null as "keep".)
       collectionId: collectionId !== undefined ? collectionId : existing.collection_id,
+      // Same tri-state as collectionId: null clears the expiry.
+      expiresAt: expiresAt !== undefined ? expiresAt : existing.expires_at,
     }
   );
 
