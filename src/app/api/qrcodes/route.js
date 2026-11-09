@@ -13,52 +13,13 @@ import {
   evaluateContrast,
 } from '@/lib/qrStyle';
 import { getPackage } from '@/lib/packages';
+// toClientQRCode is for the POST response, whose record comes from
+// getQRCodeById (snake_case columns). Do NOT use it for the GET list:
+// getQRCodesByUserId already returns camelCase fields, so re-mapping them reads
+// undefined for every field (the cause of URLs/styling vanishing on refresh).
+import { toClientQRCode, redirectUrlFor } from '@/lib/clientQRCode';
 
 const { getQRCodesByUserId, createQRCodeWithinLimit, getCollectionById } = require('@/lib/db');
-
-const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
-
-/** Safely parse a stored style_config value (string or already-parsed object). */
-function parseStyleConfig(value) {
-  if (!value) return null;
-  if (typeof value === 'object') return value;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Transform a raw `SELECT *` DB record (snake_case) to a client-friendly shape
- * (camelCase) and attach the public redirect URL. Used for the POST response,
- * whose record comes from `getQRCodeById` (snake_case columns).
- *
- * NOTE: do NOT use this for the GET list — `getQRCodesByUserId` already returns
- * camelCase aliased fields, so re-mapping them here reads undefined for every
- * field (the cause of URLs/styling vanishing on refresh). See GET below.
- */
-function toClientQRCode(qrcode) {
-  return {
-    id: qrcode.id,
-    shortId: qrcode.short_id,
-    userId: qrcode.user_id,
-    collectionId: qrcode.collection_id,
-    title: qrcode.title,
-    destinationUrl: qrcode.destination_url,
-    fgColor: qrcode.foreground_color,
-    bgColor: qrcode.background_color,
-    logoUrl: qrcode.logo_url,
-    dotStyle: qrcode.dot_style,
-    cornerSquareStyle: qrcode.corner_square_style,
-    cornerDotStyle: qrcode.corner_dot_style,
-    styleConfig: parseStyleConfig(qrcode.style_config),
-    scanCount: qrcode.scan_count,
-    createdAt: qrcode.created_at,
-    updatedAt: qrcode.updated_at,
-    redirectUrl: `${BASE_URL}/r/${qrcode.short_id}`,
-  };
-}
 
 // ── GET — list QR codes ────────────────────────
 export async function GET() {
@@ -72,11 +33,12 @@ export async function GET() {
     }
 
     // getQRCodesByUserId already returns the client shape (camelCase fields with
-    // styleConfig parsed); only the public redirect URL needs attaching.
+    // styleConfig parsed, and scheduled changes); only the public redirect URL
+    // needs attaching.
     const qrcodes = await getQRCodesByUserId(session.userId);
     const clientQRCodes = qrcodes.map((qr) => ({
       ...qr,
-      redirectUrl: `${BASE_URL}/r/${qr.shortId}`,
+      redirectUrl: redirectUrlFor(qr.shortId),
     }));
 
     return Response.json({ qrcodes: clientQRCodes });
