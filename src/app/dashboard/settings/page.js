@@ -68,6 +68,7 @@ function Message({ msg }) {
 export default function SettingsPage() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState("")
 
   // Profile form
   const [name, setName] = useState("")
@@ -90,6 +91,7 @@ export default function SettingsPage() {
       try {
         const res = await fetch("/api/auth/me")
         if (!res.ok) {
+          // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- treated as signed out, so start fresh on the login page
           window.location.href = "/login"
           return
         }
@@ -99,7 +101,9 @@ export default function SettingsPage() {
         setName(u.name || "")
         setAvatar(u.avatar ?? null)
       } catch {
-        window.location.href = "/login"
+        // A network or parsing failure, not a sign-out (that's handled above),
+        // so stay here and offer a retry instead of sending them to /login.
+        setLoadError("Couldn't load your settings. Check your connection and try again.")
       } finally {
         setLoading(false)
       }
@@ -220,6 +224,25 @@ export default function SettingsPage() {
         <p style={{ color: "var(--text-secondary)", marginTop: "16px" }}>
           Loading your settings…
         </p>
+      </div>
+    )
+  }
+
+  // ---- Load error ----
+  if (loadError) {
+    return (
+      <div style={{ ...styles.loadingPage, padding: "0 16px" }}>
+        <div className="error-message" role="alert">
+          <span>⚠</span> {loadError}
+        </div>
+        <button
+          type="button"
+          className="btn btn-primary"
+          style={{ marginTop: "16px" }}
+          onClick={() => window.location.reload()}
+        >
+          Try again
+        </button>
       </div>
     )
   }

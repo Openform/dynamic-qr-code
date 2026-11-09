@@ -18,6 +18,7 @@ export default function DashboardPage() {
   const [activeCollection, setActiveCollection] = useState("all")
   const [totalScans, setTotalScans] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState("")
   const [search, setSearch] = useState("")
 
   // Modal state
@@ -38,6 +39,7 @@ export default function DashboardPage() {
         ])
 
         if (!userRes.ok) {
+          // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- treated as signed out, so start fresh on the login page
           window.location.href = "/login"
           return
         }
@@ -60,8 +62,10 @@ export default function DashboardPage() {
           setCollections(colData.collections ?? [])
         }
       } catch (error) {
+        // A network or parsing failure, not a sign-out (that's handled above),
+        // so stay here and offer a retry instead of sending them to /login.
         console.error("Failed to load dashboard data:", error)
-        window.location.href = "/login"
+        setLoadError("Couldn't load your dashboard. Check your connection and try again.")
       } finally {
         setLoading(false)
       }
@@ -153,6 +157,7 @@ export default function DashboardPage() {
     } catch (error) {
       console.error("Logout failed:", error)
     }
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full page load, so nothing from the signed-out session stays in memory
     window.location.href = "/"
   }
 
@@ -279,6 +284,25 @@ export default function DashboardPage() {
         <p style={{ color: "var(--text-secondary)", marginTop: "16px" }}>
           Loading your dashboard…
         </p>
+      </div>
+    )
+  }
+
+  // ---- Load error ----
+  if (loadError) {
+    return (
+      <div style={{ ...styles.loadingPage, padding: "0 16px" }}>
+        <div className="error-message" role="alert">
+          <span>⚠</span> {loadError}
+        </div>
+        <button
+          type="button"
+          className="btn btn-primary"
+          style={{ marginTop: "16px" }}
+          onClick={() => window.location.reload()}
+        >
+          Try again
+        </button>
       </div>
     )
   }

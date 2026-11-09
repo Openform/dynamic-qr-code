@@ -27,6 +27,7 @@ export default function LoginPage() {
         throw new Error(data.error || "Invalid email or password")
       }
 
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full page load, so the app starts fresh with the new session
       window.location.href = "/dashboard"
     } catch (err) {
       setError(err.message)

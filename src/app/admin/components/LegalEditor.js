@@ -272,6 +272,7 @@ export default function LegalEditor({ initialPages }) {
         body: JSON.stringify({ content: sent.content, lastUpdated: sent.lastUpdated })
       })
       if (res.status === 401) {
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full page load, so the unsaved-changes warning (beforeunload) still fires
         window.location.href = "/login"
         return
       }
