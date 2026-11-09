@@ -164,11 +164,13 @@ credit shown on the analytics page. Keep it if you change the page.
 3. Build and start the app (`npm run build`, then `npm run start`). The schema is created on the first request, or import `schema.sql` beforehand.
 4. Nothing extra for scan locations: the build downloads the location database (see [Location data](#location-data-db-ip)). Check the build log for "Saved …/dbip-city-lite.mmdb" or "up to date".
 
+`npm run build` uses webpack (`next build --webpack`), not Next's default bundler, Turbopack. From Next.js 16.3, Next's native compiler (`@next/swc-linux-x64-gnu`) needs glibc 2.30, and Hostinger's servers have an older one. The build log shows ``version `GLIBC_2.29' not found``, then Next falls back to its WebAssembly compiler, which only works with webpack. Keep `--webpack` until Hostinger's glibc is 2.30 or newer (check with `ldd --version` over SSH). `npm run dev` still uses Turbopack.
+
 ## CI checks
 
 Hostinger redeploys whenever `main` changes, so every pull request into `main` runs two checks (`.github/workflows/ci.yml`). Make both required in the branch ruleset for `main`, so a PR can't merge until they pass.
 
-- **Lint, test and build**: `npm run lint`, `npm test` and a production build.
+- **Lint, test and build**: `npm run lint`, `npm test` and a production build with webpack, as on Hostinger.
 - **Database migration check**: `scripts/ci/check-migrations.mjs` runs the app's own schema setup (`ensureSchema()` in `src/lib/db.js`) against a throwaway MariaDB. It fails if a change would remove a table, column or row, change an existing value, or break when it runs twice. It also checks that pruning old scans deletes exactly the scans it should.
 
 The check starts from the schema `main` builds, filled with made-up sample rows (`scripts/ci/seed-data.mjs`). Production has been migrated through older versions, so it can differ from that. To test against production's real structure too, add `scripts/ci/prod-schema.sql`:
