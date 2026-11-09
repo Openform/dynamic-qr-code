@@ -25,6 +25,15 @@ function Icon({ size = 16, strokeWidth = 2, style, children, ...rest }) {
   )
 }
 
+export function CalendarIcon(props) {
+  return (
+    <Icon {...props}>
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M16 2v4M8 2v4M3 10h18" />
+    </Icon>
+  )
+}
+
 export function PencilIcon(props) {
   return (
     <Icon {...props}>

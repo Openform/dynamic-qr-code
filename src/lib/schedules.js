@@ -148,3 +148,70 @@ export function resolveDestination({ mainUrl, schedules = [], now = Date.now() }
     ? { url: winner.destinationUrl, scheduleId: winner.id ?? null }
     : { url: mainUrl, scheduleId: null };
 }
+
+/**
+ * Where a schedule stands at `now`: 'ended' (a date range whose end has
+ * passed, kept until it's deleted), 'off' (switched off), 'live' or
+ * 'upcoming'. A live schedule may still lose to another live one.
+ */
+export function scheduleStatus(schedule, now = Date.now()) {
+  const nowMs = toMs(now);
+  if (schedule.kind === 'range' && toMs(schedule.endsAt) <= nowMs) return 'ended';
+  if (!schedule.enabled) return 'off';
+  return isScheduleLive(schedule, nowMs) ? 'live' : 'upcoming';
+}
+
+/**
+ * For each switched-on date range that hasn't ended, the ids of the others
+ * whose times overlap it (a Map of id → ids). While two overlapping ranges
+ * are both live, the one higher in the list wins.
+ */
+export function findOverlaps(schedules, now = Date.now()) {
+  const nowMs = toMs(now);
+  const ranges = schedules.filter(
+    (s) => s.kind === 'range' && s.enabled && toMs(s.endsAt) > nowMs && toMs(s.startsAt) < toMs(s.endsAt)
+  );
+  const overlaps = new Map();
+  for (const a of ranges) {
+    for (const b of ranges) {
+      if (a !== b && toMs(a.startsAt) < toMs(b.endsAt) && toMs(b.startsAt) < toMs(a.endsAt)) {
+        if (!overlaps.has(a.id)) overlaps.set(a.id, []);
+        overlaps.get(a.id).push(b.id);
+      }
+    }
+  }
+  return overlaps;
+}
+
+/**
+ * A code's schedules as the schedules panel shows them: each with its
+ * `status` and `overlapsWith` (ids), plus `liveScheduleId`, the schedule
+ * sending scans now (null when scans go to the main destination).
+ */
+export function describeSchedules(schedules, now = Date.now()) {
+  const overlaps = findOverlaps(schedules, now);
+  return {
+    schedules: schedules.map((s) => ({
+      ...s,
+      status: scheduleStatus(s, now),
+      overlapsWith: overlaps.get(s.id) ?? [],
+    })),
+    liveScheduleId: resolveDestination({ mainUrl: null, schedules, now }).scheduleId,
+  };
+}
+
+/**
+ * What a code's card shows: `liveSchedule`, the schedule sending its scans
+ * now ({ id, label, destinationUrl, endsAt }, or null), and `scheduleCount`,
+ * how many schedules it has that haven't ended.
+ */
+export function scheduleSummary(schedules = [], now = Date.now()) {
+  const { scheduleId } = resolveDestination({ mainUrl: null, schedules, now });
+  const live = scheduleId == null ? null : schedules.find((s) => s.id === scheduleId);
+  return {
+    liveSchedule: live
+      ? { id: live.id, label: live.label, destinationUrl: live.destinationUrl, endsAt: live.endsAt ?? null }
+      : null,
+    scheduleCount: schedules.filter((s) => scheduleStatus(s, now) !== 'ended').length,
+  };
+}

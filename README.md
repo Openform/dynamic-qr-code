@@ -119,6 +119,32 @@ has started, so a change takes effect on the first scan after its time, with no
 cron job. Once a change has started it's part of the history and can't be
 cancelled; a change that hasn't started doesn't appear in analytics.
 
+## Schedules
+
+A schedule sends a code's scans somewhere else for a while, without changing
+its main destination: for example a Black Friday page from Friday to Monday.
+Open **Schedules** on a code's card (or from its edit screen) to add one with
+a name, a URL and the dates it starts and ends, in the browser's time zone.
+
+- **Live, upcoming, off, ended.** The card shows the schedule sending scans
+  right now. Schedules can be switched off without deleting them. Ended ones
+  are kept under **Ended** until deleted, and can be edited to run again.
+- **Overlaps are allowed.** When two are live at once, the one higher in the
+  list wins; move them with the arrows. The panel warns about overlaps.
+- **Limits.** A code can have up to 20 schedules that haven't ended.
+- **Packages.** Business, Extended and Enterprise can add and edit schedules
+  (`schedules` in [`src/lib/packages.js`](src/lib/packages.js)). Starter
+  can't. After a downgrade, existing schedules keep working, and can still be
+  switched off or deleted.
+
+Schedules are stored in `qrcode_schedules`, created automatically on first
+run. The redirect checks a code's switched-on schedules that haven't ended at
+every scan (lib/schedules.js), so no cron job is needed, and each scan records
+which schedule sent it (`scan_events.schedule_id`). A code's destination
+history in analytics counts only scans that went to the main destination.
+The table also has the columns for weekly schedules, which come in a later
+release.
+
 ## Scan analytics
 
 Every scan of a code is recorded after the visitor has been redirected, so
@@ -134,10 +160,10 @@ for a single code the scans each destination URL got while it was live. Any
 range can be downloaded as CSV.
 
 What's stored per scan (`scan_events` table): time (UTC), the destination URL
-the scan was sent to (and, once scheduled destinations arrive, the schedule
-that sent it), country, region, city, device type, OS, browser, language, and
-an anonymous visitor ID (a keyed hash of IP + browser). Scans recorded before
-the destination was stored have none. **IP addresses are never stored.** Link-preview bots
+the scan was sent to and the [schedule](#schedules) that sent it (if any),
+country, region, city, device type, OS, browser, language, and an anonymous
+visitor ID (a keyed hash of IP + browser). Scans recorded before the
+destination was stored have none. **IP addresses are never stored.** Link-preview bots
 (WhatsApp, Slack, Facebook…) and crawlers are recorded but left out of every
 chart and of each code's scan count.
 

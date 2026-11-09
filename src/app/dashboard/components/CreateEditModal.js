@@ -31,6 +31,7 @@ export default function CreateEditModal({
   onSave,
   onDelete,
   onCancelChange,
+  onOpenSchedules,
   qrcode,
   collections = [],
   defaultCollectionId = null
@@ -58,6 +59,7 @@ export default function CreateEditModal({
       onSave={onSave}
       onDelete={onDelete}
       onCancelChange={onCancelChange}
+      onOpenSchedules={onOpenSchedules}
       qrcode={qrcode}
       collections={collections}
       defaultCollectionId={defaultCollectionId}
@@ -110,6 +112,7 @@ function QRCodeForm({
   onSave,
   onDelete,
   onCancelChange,
+  onOpenSchedules,
   qrcode,
   collections = [],
   defaultCollectionId = null
@@ -368,6 +371,24 @@ function QRCodeForm({
                     changes={qrcode.scheduledChanges ?? []}
                     onCancel={(change) => onCancelChange?.(qrcode, change)}
                   />
+                  {onOpenSchedules && (
+                    <div className="input-group">
+                      <span className="input-label">Schedules</span>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => onOpenSchedules(qrcode)}
+                      >
+                        {qrcode.scheduleCount > 0
+                          ? `Manage schedules (${qrcode.scheduleCount})`
+                          : "Add a schedule"}
+                      </button>
+                      <p style={styles.hint}>
+                        Send scans somewhere else between two dates, without
+                        changing the main destination.
+                      </p>
+                    </div>
+                  )}
                   {collections.length > 0 && (
                     <CollectionSelect
                       collections={collections}

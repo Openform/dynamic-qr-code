@@ -20,6 +20,35 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // server never has to guess which time zone the browser meant.
 const ISO_WITH_OFFSET = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/i;
 
+/** An ISO time with its offset (e.g. from `Date#toISOString()`) → ms, or NaN. */
+export function parseIsoWithOffset(value) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return ISO_WITH_OFFSET.test(text) ? Date.parse(text) : NaN;
+}
+
+/** True when `ms` is more than 5 years after `nowMs`. */
+export function isTooFarAhead(ms, nowMs) {
+  return ms - nowMs > MAX_SCHEDULE_AHEAD_DAYS * DAY_MS;
+}
+
+/**
+ * Check a destination URL from a request: https:// is added if it was left
+ * out, and only https URLs that fit the column are accepted. Returns
+ * `{ url }` or `{ error }`.
+ */
+export function parseDestinationUrl(value) {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (!raw) return { error: 'Enter the new destination URL.' };
+  const url = normalizeDestinationUrl(raw);
+  if (!isValidDestinationUrl(url)) {
+    return { error: 'Invalid destination URL. Must be a valid https URL.' };
+  }
+  if (url.length > MAX_URL_LENGTH) {
+    return { error: `The destination URL can be at most ${MAX_URL_LENGTH} characters.` };
+  }
+  return { url };
+}
+
 /**
  * Check a request body `{ destinationUrl, startsAt }` for a scheduled change.
  * `startsAt` is an ISO time with an offset, e.g. from `Date#toISOString()`.
@@ -29,21 +58,14 @@ const ISO_WITH_OFFSET = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\
  * `{ error }` with a message to show.
  */
 export function parseScheduledChange(body, nowMs = Date.now()) {
-  const rawUrl = typeof body?.destinationUrl === 'string' ? body.destinationUrl.trim() : '';
-  if (!rawUrl) return { error: 'Enter the new destination URL.' };
-  const destinationUrl = normalizeDestinationUrl(rawUrl);
-  if (!isValidDestinationUrl(destinationUrl)) {
-    return { error: 'Invalid destination URL. Must be a valid https URL.' };
-  }
-  if (destinationUrl.length > MAX_URL_LENGTH) {
-    return { error: `The destination URL can be at most ${MAX_URL_LENGTH} characters.` };
-  }
+  const checked = parseDestinationUrl(body?.destinationUrl);
+  if (checked.error) return { error: checked.error };
+  const destinationUrl = checked.url;
 
-  const rawTime = typeof body?.startsAt === 'string' ? body.startsAt.trim() : '';
-  const startsMs = ISO_WITH_OFFSET.test(rawTime) ? Date.parse(rawTime) : NaN;
+  const startsMs = parseIsoWithOffset(body?.startsAt);
   if (Number.isNaN(startsMs)) return { error: 'Choose when the change should happen.' };
   if (startsMs <= nowMs) return { error: 'Choose a time in the future.' };
-  if (startsMs - nowMs > MAX_SCHEDULE_AHEAD_DAYS * DAY_MS) {
+  if (isTooFarAhead(startsMs, nowMs)) {
     return { error: 'Choose a time within the next 5 years.' };
   }
 

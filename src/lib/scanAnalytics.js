@@ -127,8 +127,9 @@ async function breakdown(column, where, params, limit = LIST_LIMIT) {
 }
 
 /**
- * Scans per destination URL for one code, over all time. Scheduled changes
- * that haven't started yet are left out until they do.
+ * Scans per main destination URL for one code, over all time. Scheduled
+ * changes that haven't started yet are left out until they do, and so are
+ * scans a schedule sent somewhere else.
  */
 async function destinationHistory(codeId) {
   let history = await rows(
@@ -152,7 +153,7 @@ async function destinationHistory(codeId) {
     const endedAt = history[i + 1]?.startedAt ?? null;
     const [row] = await rows(
       `SELECT COUNT(*) AS scans FROM scan_events e
-       WHERE e.qrcode_id = :codeId AND e.is_bot = 0 AND e.scanned_at >= :startedAt
+       WHERE e.qrcode_id = :codeId AND e.is_bot = 0 AND e.schedule_id IS NULL AND e.scanned_at >= :startedAt
        ${endedAt ? 'AND e.scanned_at < :endedAt' : ''}`,
       { codeId, startedAt, endedAt }
     );

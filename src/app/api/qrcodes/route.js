@@ -18,8 +18,14 @@ import { getPackage } from '@/lib/packages';
 // getQRCodesByUserId already returns camelCase fields, so re-mapping them reads
 // undefined for every field (the cause of URLs/styling vanishing on refresh).
 import { toClientQRCode, redirectUrlFor } from '@/lib/clientQRCode';
+import { scheduleSummary } from '@/lib/schedules';
 
-const { getQRCodesByUserId, createQRCodeWithinLimit, getCollectionById } = require('@/lib/db');
+const {
+  getQRCodesByUserId,
+  createQRCodeWithinLimit,
+  getCollectionById,
+  getNotEndedSchedulesByUserId,
+} = require('@/lib/db');
 
 // ── GET — list QR codes ────────────────────────
 export async function GET() {
@@ -33,11 +39,17 @@ export async function GET() {
     }
 
     // getQRCodesByUserId already returns the client shape (camelCase fields with
-    // styleConfig parsed, and scheduled changes); only the public redirect URL
-    // needs attaching.
-    const qrcodes = await getQRCodesByUserId(session.userId);
+    // styleConfig parsed, and scheduled changes); the public redirect URL and
+    // each code's schedule summary are added here.
+    const [qrcodes, schedules] = await Promise.all([
+      getQRCodesByUserId(session.userId),
+      getNotEndedSchedulesByUserId(session.userId),
+    ]);
+    const schedulesByCode = Map.groupBy(schedules, (s) => s.qrcodeId);
+    const now = Date.now();
     const clientQRCodes = qrcodes.map((qr) => ({
       ...qr,
+      ...scheduleSummary(schedulesByCode.get(qr.id) ?? [], now),
       redirectUrl: redirectUrlFor(qr.shortId),
     }));
 

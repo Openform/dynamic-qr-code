@@ -27,7 +27,9 @@ export default function DestinationHistory({ destinations, now }) {
           <h2 id="destinations-title" className={styles.cardTitle}>
             Destination history
           </h2>
-          <p className={styles.cardSub}>All time · scans while each destination was live</p>
+          <p className={styles.cardSub}>
+            All time · scans while each destination was live, not counting scans a schedule sent elsewhere
+          </p>
         </div>
       </div>
       <div className={styles.tableScroll}>

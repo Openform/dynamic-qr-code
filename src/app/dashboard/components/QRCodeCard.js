@@ -12,7 +12,8 @@ import {
   CheckIcon,
   DownloadIcon,
   ChartIcon,
-  FolderIcon
+  FolderIcon,
+  CalendarIcon
 } from "@/app/components/icons"
 import { formatChangeTime, displayUrl } from "./scheduledChanges"
 
@@ -21,7 +22,8 @@ export default function QRCodeCard({
   collections = [],
   onEdit,
   onAssignCollection,
-  onCancelChange
+  onCancelChange,
+  onOpenSchedules
 }) {
   const [copied, setCopied] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -166,6 +168,25 @@ export default function QRCodeCard({
         </div>
       </div>
 
+      {/* A schedule sending this code's scans somewhere else right now */}
+      {qrcode.liveSchedule && (
+        <div style={{ ...styles.nextChange, ...styles.liveSchedule }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div className="truncate" title={qrcode.liveSchedule.destinationUrl}>
+              Live now: {qrcode.liveSchedule.label} →{" "}
+              <span style={styles.nextChangeUrl}>
+                {displayUrl(qrcode.liveSchedule.destinationUrl)}
+              </span>
+            </div>
+            {qrcode.liveSchedule.endsAt && (
+              <div style={styles.nextChangeTime}>
+                Until {formatChangeTime(qrcode.liveSchedule.endsAt)}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* The next scheduled change to the destination */}
       {nextChange && (
         <div style={styles.nextChange}>
@@ -252,7 +273,7 @@ export default function QRCodeCard({
         {/* Meta row */}
         <div style={styles.metaRow}>
           <div style={styles.scansGroup}>
-            <span className="badge badge-cyan">
+            <span className="badge badge-cyan" style={styles.noWrap}>
               {qrcode.scanCount ?? 0} scans
             </span>
             <Link
@@ -263,6 +284,16 @@ export default function QRCodeCard({
             >
               <ChartIcon size={14} /> Analytics
             </Link>
+            <button
+              id={`schedules-qr-${qrcode.id}`}
+              type="button"
+              style={{ ...styles.analyticsLink, ...styles.linkButton }}
+              onClick={() => onOpenSchedules?.(qrcode)}
+              title="Send scans somewhere else between two dates"
+            >
+              <CalendarIcon size={14} /> Schedules
+              {qrcode.scheduleCount > 0 && ` (${qrcode.scheduleCount})`}
+            </button>
           </div>
           <span style={styles.date}>{formatDate(qrcode.createdAt)}</span>
         </div>
@@ -372,6 +403,13 @@ const styles = {
   nextChangeUrl: {
     color: "var(--cyan)"
   },
+  liveSchedule: {
+    borderLeft: "3px solid var(--success)"
+  },
+  linkButton: {
+    padding: 0,
+    whiteSpace: "nowrap"
+  },
   nextChangeTime: {
     fontSize: "0.75rem",
     color: "var(--text-tertiary)",
@@ -394,12 +432,19 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
+    // On narrow cards the date moves to its own line instead of squeezing.
+    flexWrap: "wrap",
+    gap: "8px 12px",
     marginTop: "4px"
   },
   scansGroup: {
     display: "flex",
     alignItems: "center",
-    gap: "10px"
+    flexWrap: "wrap",
+    gap: "8px 10px"
+  },
+  noWrap: {
+    whiteSpace: "nowrap"
   },
   analyticsLink: {
     display: "inline-flex",
@@ -435,7 +480,8 @@ const styles = {
   },
   date: {
     fontSize: "0.78rem",
-    color: "var(--text-tertiary)"
+    color: "var(--text-tertiary)",
+    whiteSpace: "nowrap"
   },
   iconButton: {
     padding: "4px 8px",

@@ -1,5 +1,6 @@
 /**
- * Account packages and how many QR codes each one allows.
+ * Account packages: how many QR codes each one allows, and whether it can
+ * use schedules.
  *
  * Shared by the API (to enforce limits) and the UI (to show usage), so this
  * file must stay free of server-only imports.
@@ -7,12 +8,15 @@
 
 // `yearlyPrice` is in rand, excluding VAT. It's only shown to visitors (the
 // landing page and the access request form); the app doesn't bill anyone.
+// `schedules`: whether the account can add and edit schedules (date ranges
+// and weekly windows that send scans elsewhere). Changing a destination at a
+// set time is open to every package.
 export const PACKAGES = [
-  { id: 'starter', name: 'Starter', limit: 5, yearlyPrice: 1500 },
-  { id: 'business', name: 'Business', limit: 20, yearlyPrice: 3000 },
-  { id: 'extended', name: 'Extended', limit: 50, yearlyPrice: 5000 },
+  { id: 'starter', name: 'Starter', limit: 5, yearlyPrice: 1500, schedules: false },
+  { id: 'business', name: 'Business', limit: 20, yearlyPrice: 3000, schedules: true },
+  { id: 'extended', name: 'Extended', limit: 50, yearlyPrice: 5000, schedules: true },
   // A `null` limit means unlimited; a `null` price means custom pricing.
-  { id: 'enterprise', name: 'Enterprise', limit: null, yearlyPrice: null },
+  { id: 'enterprise', name: 'Enterprise', limit: null, yearlyPrice: null, schedules: true },
 ];
 
 /** Package given to accounts created through the public sign-up page. */
@@ -30,6 +34,15 @@ export function isValidPackage(id) {
  */
 export function getPackage(id) {
   return BY_ID.get(id) ?? BY_ID.get(DEFAULT_PACKAGE);
+}
+
+/**
+ * True when an account on this package can add and edit schedules. Accounts
+ * without it can still switch off and delete schedules they already have
+ * (e.g. after a downgrade), and those keep working until they do.
+ */
+export function canUseSchedules(packageId) {
+  return getPackage(packageId).schedules === true;
 }
 
 /** True when an account on this package already has as many codes as it may. */

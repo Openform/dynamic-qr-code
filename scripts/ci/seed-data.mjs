@@ -146,6 +146,43 @@ export const SEED = {
     { id: 2, qrcode_id: 1, destination_url: LONG_URL, started_at: '2026-10-01 08:00:00' },
   ],
 
+  qrcode_schedules: [
+    {
+      id: 1,
+      qrcode_id: 1,
+      label: 'Black Friday 🛍️ — Café',
+      kind: 'range',
+      destination_url: LONG_URL,
+      time_zone: 'Africa/Johannesburg',
+      starts_at: '2026-11-27 22:00:00',
+      ends_at: '2026-11-30 22:00:00',
+      days: null,
+      start_time: null,
+      end_time: null,
+      position: 0,
+      enabled: 1,
+      created_at: '2026-11-01 08:00:00',
+      updated_at: '2026-11-01 08:00:00',
+    },
+    {
+      id: 2,
+      qrcode_id: 1,
+      label: 'B'.repeat(100),
+      kind: 'weekly',
+      destination_url: 'https://example.com/breakfast',
+      time_zone: 'America/Argentina/ComodRivadavia',
+      starts_at: null,
+      ends_at: null,
+      days: 127,
+      start_time: '07:00:00',
+      end_time: '23:59:00',
+      position: 4294967295,
+      enabled: 0,
+      created_at: '2026-11-02 08:00:00',
+      updated_at: '2026-11-03 08:00:00',
+    },
+  ],
+
   legal_pages: [
     {
       slug: 'privacy',
