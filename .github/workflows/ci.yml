@@ -1,0 +1,81 @@
+# Checks every pull request into main, and main itself after each merge.
+# Merging into main deploys to production (Hostinger redeploys on every change),
+# so both jobs should be required checks in the branch ruleset for main.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Read-only: a pull request from a fork can't read secrets or write to the repo.
+# Keep the trigger as pull_request, never pull_request_target.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint, test and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22 # keep in step with the Node.js version set on Hostinger
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      # next build directly: "npm run build" would also download the GeoIP
+      # database in "prebuild", which CI doesn't need.
+      - run: npx next build
+      # Hostinger does run prebuild, so at least check that its script parses.
+      - run: node --check scripts/update-geoip.mjs
+
+  database:
+    name: Database migration check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      db:
+        # Keep in step with production's database server (phpMyAdmin home page).
+        # For MySQL instead of MariaDB: use the mysql image, MYSQL_ROOT_PASSWORD
+        # and MYSQL_DATABASE, and "mysqladmin ping -h 127.0.0.1 -pci" as the
+        # health command.
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: ci # only exists inside this throwaway container
+          MARIADB_DATABASE: qrgo_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: 3306
+      MYSQL_USER: root
+      MYSQL_PASSWORD: ci
+      MYSQL_DATABASE: qrgo_ci
+      BASE_REF: origin/${{ github.base_ref || 'main' }}
+      # Production's sql_mode (phpMyAdmin → SQL: SELECT @@sql_mode;). Unset, the
+      # check uses the server's default, which is strict.
+      # CI_SQL_MODE: STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the check also needs main's code
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/ci/check-migrations.mjs

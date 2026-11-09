@@ -164,6 +164,31 @@ credit shown on the analytics page. Keep it if you change the page.
 3. Build and start the app (`npm run build`, then `npm run start`). The schema is created on the first request, or import `schema.sql` beforehand.
 4. Nothing extra for scan locations: the build downloads the location database (see [Location data](#location-data-db-ip)). Check the build log for "Saved …/dbip-city-lite.mmdb" or "up to date".
 
+## CI checks
+
+Hostinger redeploys whenever `main` changes, so every pull request into `main` runs two checks (`.github/workflows/ci.yml`). Make both required in the branch ruleset for `main`, so a PR can't merge until they pass.
+
+- **Lint, test and build**: `npm run lint`, `npm test` and a production build.
+- **Database migration check**: `scripts/ci/check-migrations.mjs` runs the app's own schema setup (`ensureSchema()` in `src/lib/db.js`) against a throwaway MariaDB. It fails if a change would remove a table, column or row, change an existing value, or break when it runs twice. It also checks that pruning old scans deletes exactly the scans it should.
+
+The check starts from the schema `main` builds, filled with made-up sample rows (`scripts/ci/seed-data.mjs`). Production has been migrated through older versions, so it can differ from that. To test against production's real structure too, add `scripts/ci/prod-schema.sql`:
+
+1. In phpMyAdmin, select the database, then **Export** → **Custom**. Choose format **SQL** and **Structure** only, with no data. Untick **Add AUTO_INCREMENT value** and **Add CREATE DATABASE / USE statement**.
+2. Save the file as `scripts/ci/prod-schema.sql`. Check it holds only `CREATE TABLE` and `ALTER TABLE` statements. **This repo is public: the file must never contain data.** The check refuses a file with `INSERT` statements.
+3. Export it again after every deploy that changes the schema.
+
+Keep CI in step with production: the `node-version` in the workflow should match the Node.js version on Hostinger, and the `mariadb` image should match the server version on phpMyAdmin's home page. If production's `sql_mode` isn't the default (`SELECT @@sql_mode;`), set `CI_SQL_MODE` in the workflow.
+
+To run the database check locally, start a throwaway server. The script drops and recreates the database, and refuses any name that doesn't end in `_ci`.
+
+```bash
+docker run -d --name qrgo-ci-db -e MARIADB_ROOT_PASSWORD=ci -p 3306:3306 mariadb:11.4
+```
+
+```bash
+MYSQL_HOST=127.0.0.1 MYSQL_USER=root MYSQL_PASSWORD=ci MYSQL_DATABASE=qrgo_ci node scripts/ci/check-migrations.mjs
+```
+
 ## Getting Started
 
 First, run the development server:
