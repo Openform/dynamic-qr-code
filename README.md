@@ -117,9 +117,11 @@ language, a day × hour grid of when people scan, top codes, recent scans, and
 for a single code the scans each destination URL got while it was live. Any
 range can be downloaded as CSV.
 
-What's stored per scan (`scan_events` table): time (UTC), country, region,
-city, device type, OS, browser, language, and an anonymous visitor ID (a keyed
-hash of IP + browser). **IP addresses are never stored.** Link-preview bots
+What's stored per scan (`scan_events` table): time (UTC), the destination URL
+the scan was sent to (and, once scheduled destinations arrive, the schedule
+that sent it), country, region, city, device type, OS, browser, language, and
+an anonymous visitor ID (a keyed hash of IP + browser). Scans recorded before
+the destination was stored have none. **IP addresses are never stored.** Link-preview bots
 (WhatsApp, Slack, Facebook…) and crawlers are recorded but left out of every
 chart and of each code's scan count.
 

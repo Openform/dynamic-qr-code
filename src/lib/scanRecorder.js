@@ -15,11 +15,13 @@ const PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 let lastPruneAt = 0;
 
 /**
- * Record a scan of `qrcode` (a qrcodes row) from the request details read in
- * the route: `{ ip, userAgent, acceptLanguage }`. The IP is used for location
- * and the visitor hash, then dropped.
+ * Record a scan of `qrcode` (a qrcodes row) from the details read in the
+ * route: `{ ip, userAgent, acceptLanguage, destinationUrl, scheduleId }`.
+ * `destinationUrl` and `scheduleId` say where the scan was sent and which
+ * schedule sent it (null for the main destination). The IP is used for
+ * location and the visitor hash, then dropped.
  */
-export async function recordScanFromRequest(qrcode, { ip, userAgent, acceptLanguage }) {
+export async function recordScanFromRequest(qrcode, { ip, userAgent, acceptLanguage, destinationUrl, scheduleId }) {
   const isBot = isBotUserAgent(userAgent);
   // Bots never appear in charts, so skip the location lookup for them.
   const location = isBot ? {} : await lookupLocation(ip);
@@ -27,6 +29,8 @@ export async function recordScanFromRequest(qrcode, { ip, userAgent, acceptLangu
   await recordScan({
     qrcodeId: qrcode.id,
     userId: qrcode.user_id,
+    destinationUrl,
+    scheduleId,
     ...location,
     ...parseUserAgent(userAgent),
     language: parseLanguage(acceptLanguage),
