@@ -512,65 +512,180 @@ async function updateUserPassword(userId, passwordHash) {
   );
 }
 
+// A code's main destination is the latest destination history row that has
+// started; rows that start in the future are scheduled changes. Codes with no
+// history (created before it was kept, and never changed) use the URL stored
+// on the code. Every read of a code's destination goes through this, so the
+// redirect, the dashboard and the API all agree, with nothing to run on a
+// timer when a change starts.
+const LIVE_DESTINATION_SQL = `COALESCE(
+  (SELECT d.destination_url FROM qrcode_destinations d
+    WHERE d.qrcode_id = q.id AND d.started_at <= UTC_TIMESTAMP()
+    ORDER BY d.started_at DESC, d.id DESC
+    LIMIT 1),
+  q.destination_url)`;
+
+/** "YYYY-MM-DD HH:MM:SS" (UTC, as stored) → ISO string. */
+function utcToIso(value) {
+  return `${String(value).replace(' ', 'T')}Z`;
+}
+
+/** A `SELECT q.*, … AS live_destination_url` row with destination_url set to the live one. */
+function withLiveDestination(row) {
+  if (!row) return null;
+  const { live_destination_url: live, ...rest } = row;
+  return { ...rest, destination_url: live };
+}
+
 /** Get all QR codes belonging to a user, newest first (camelCase keys). */
 async function getQRCodesByUserId(userId) {
   await ensureSchema();
   const [rows] = await pool.execute(
     `SELECT
-       id,
-       short_id AS shortId,
-       user_id AS userId,
-       collection_id AS collectionId,
-       title,
-       destination_url AS destinationUrl,
-       foreground_color AS fgColor,
-       background_color AS bgColor,
-       logo_url AS logoUrl,
-       dot_style AS dotStyle,
-       corner_square_style AS cornerSquareStyle,
-       corner_dot_style AS cornerDotStyle,
-       style_config AS styleConfig,
-       scan_count AS scanCount,
-       created_at AS createdAt,
-       updated_at AS updatedAt
-     FROM qrcodes
-     WHERE user_id = :userId
-     ORDER BY created_at DESC`,
+       q.id,
+       q.short_id AS shortId,
+       q.user_id AS userId,
+       q.collection_id AS collectionId,
+       q.title,
+       ${LIVE_DESTINATION_SQL} AS destinationUrl,
+       q.foreground_color AS fgColor,
+       q.background_color AS bgColor,
+       q.logo_url AS logoUrl,
+       q.dot_style AS dotStyle,
+       q.corner_square_style AS cornerSquareStyle,
+       q.corner_dot_style AS cornerDotStyle,
+       q.style_config AS styleConfig,
+       q.scan_count AS scanCount,
+       q.created_at AS createdAt,
+       q.updated_at AS updatedAt
+     FROM qrcodes q
+     WHERE q.user_id = :userId
+     ORDER BY q.created_at DESC`,
     { userId }
   );
-  // style_config is stored as a JSON string; expose it as a parsed object.
+  const [changes] = await pool.execute(
+    `SELECT d.id, d.qrcode_id AS qrcodeId, d.destination_url AS destinationUrl, d.started_at AS startsAt
+     FROM qrcode_destinations d
+     JOIN qrcodes q ON q.id = d.qrcode_id
+     WHERE q.user_id = :userId AND d.started_at > UTC_TIMESTAMP()
+     ORDER BY d.started_at, d.id`,
+    { userId }
+  );
+  const changesByCode = new Map();
+  for (const { qrcodeId, ...change } of changes) {
+    if (!changesByCode.has(qrcodeId)) changesByCode.set(qrcodeId, []);
+    changesByCode.get(qrcodeId).push({ ...change, startsAt: utcToIso(change.startsAt) });
+  }
   for (const row of rows) {
+    // style_config is stored as a JSON string; expose it as a parsed object.
     row.styleConfig = parseStyleConfig(row.styleConfig);
+    row.scheduledChanges = changesByCode.get(row.id) ?? [];
   }
   return rows;
 }
 
-/** Get a single QR code by ID, verifying ownership. Returns null if not found or not owned. */
+/**
+ * Get a single QR code by ID, verifying ownership. Returns null if not found
+ * or not owned. `destination_url` is the main destination that is live now.
+ */
 async function getQRCodeById(id, userId) {
   await ensureSchema();
   const [rows] = await pool.execute(
-    'SELECT * FROM qrcodes WHERE id = :id AND user_id = :userId LIMIT 1',
+    `SELECT q.*, ${LIVE_DESTINATION_SQL} AS live_destination_url
+     FROM qrcodes q
+     WHERE q.id = :id AND q.user_id = :userId
+     LIMIT 1`,
     { id, userId }
   );
-  return rows[0] || null;
+  return withLiveDestination(rows[0]);
 }
 
 /**
  * Get a QR code by its short ID (used for public redirect lookup — no auth
- * check). Includes `owner_disabled_at`, which is set when the owner's account
- * is disabled and the code should show the inactive page instead.
+ * check). `destination_url` is the main destination that is live now.
+ * Includes `owner_disabled_at`, which is set when the owner's account is
+ * disabled and the code should show the inactive page instead.
  */
 async function getQRCodeByShortId(shortId) {
   await ensureSchema();
   const [rows] = await pool.execute(
-    `SELECT q.*, u.disabled_at AS owner_disabled_at
+    `SELECT q.*, u.disabled_at AS owner_disabled_at, ${LIVE_DESTINATION_SQL} AS live_destination_url
      FROM qrcodes q
      JOIN users u ON u.id = q.user_id
      WHERE q.short_id = :shortId
      LIMIT 1`,
     { shortId }
   );
-  return rows[0] || null;
+  return withLiveDestination(rows[0]);
+}
+
+/**
+ * A code's scheduled changes to its main destination (history rows that
+ * haven't started yet), soonest first: `[{ id, destinationUrl, startsAt }]`
+ * with `startsAt` as an ISO string. The caller checks ownership.
+ */
+async function getScheduledDestinationChanges(qrcodeId) {
+  await ensureSchema();
+  const [rows] = await pool.execute(
+    `SELECT id, destination_url AS destinationUrl, started_at AS startsAt
+     FROM qrcode_destinations
+     WHERE qrcode_id = :qrcodeId AND started_at > UTC_TIMESTAMP()
+     ORDER BY started_at, id`,
+    { qrcodeId }
+  );
+  return rows.map((r) => ({ ...r, startsAt: utcToIso(r.startsAt) }));
+}
+
+/**
+ * Schedule a code's main destination to change to `destinationUrl` at
+ * `startsAt` ("YYYY-MM-DD HH:MM:SS", UTC, in the future), as a destination
+ * history row that starts then. At most `limit` changes can wait at once.
+ *
+ * Returns `{ ok: true }`, or `{ ok: false, reason: 'not_found' }` when the
+ * code isn't the user's, or `{ ok: false, reason: 'limit' }`.
+ */
+async function scheduleDestinationChange(id, userId, { destinationUrl, startsAt }, limit) {
+  await ensureSchema();
+  const existing = await getQRCodeById(id, userId);
+  if (!existing) return { ok: false, reason: 'not_found' };
+
+  const pending = await getScheduledDestinationChanges(id);
+  if (pending.length >= limit) return { ok: false, reason: 'limit' };
+
+  await ensureDestinationHistory(existing);
+  await pool.execute(
+    `INSERT INTO qrcode_destinations (qrcode_id, destination_url, started_at)
+     VALUES (:qrcodeId, :destinationUrl, :startsAt)`,
+    { qrcodeId: id, destinationUrl, startsAt }
+  );
+  return { ok: true };
+}
+
+/**
+ * Cancel a scheduled change to a code's main destination. Only a change that
+ * hasn't started can be cancelled: once it has, it's part of the history.
+ * Returns 'cancelled', 'not_found' or 'started'.
+ */
+async function cancelDestinationChange(id, userId, changeId) {
+  await ensureSchema();
+  const [rows] = await pool.execute(
+    `SELECT d.started_at > UTC_TIMESTAMP() AS pending
+     FROM qrcode_destinations d
+     JOIN qrcodes q ON q.id = d.qrcode_id
+     WHERE d.id = :changeId AND d.qrcode_id = :id AND q.user_id = :userId
+     LIMIT 1`,
+    { changeId, id, userId }
+  );
+  if (!rows[0]) return 'not_found';
+  if (!Number(rows[0].pending)) return 'started';
+
+  // Checked again in the delete, in case it started in the meantime.
+  const [result] = await pool.execute(
+    `DELETE FROM qrcode_destinations
+     WHERE id = :changeId AND qrcode_id = :id AND started_at > UTC_TIMESTAMP()`,
+    { changeId, id }
+  );
+  return result.affectedRows > 0 ? 'cancelled' : 'started';
 }
 
 /**
@@ -701,11 +816,11 @@ async function updateQRCode(id, userId, { title, destinationUrl, foregroundColor
 }
 
 /**
- * Add a destination history row when a code's destination changes. A code
- * created before history was kept gets a row for its old destination first,
- * dated from when the code was created.
+ * Give a code created before destination history was kept a history row for
+ * its current destination, dated from when the code was created, so a change
+ * doesn't hide where it pointed before.
  */
-async function recordDestinationChange(existing, newUrl) {
+async function ensureDestinationHistory(existing) {
   const [rows] = await pool.execute(
     'SELECT COUNT(*) AS count FROM qrcode_destinations WHERE qrcode_id = :qrcodeId',
     { qrcodeId: existing.id }
@@ -717,6 +832,11 @@ async function recordDestinationChange(existing, newUrl) {
       { qrcodeId: existing.id, destinationUrl: existing.destination_url, startedAt: existing.created_at }
     );
   }
+}
+
+/** Add a destination history row, starting now, when a code's destination changes. */
+async function recordDestinationChange(existing, newUrl) {
+  await ensureDestinationHistory(existing);
   await pool.execute(
     `INSERT INTO qrcode_destinations (qrcode_id, destination_url, started_at)
      VALUES (:qrcodeId, :destinationUrl, UTC_TIMESTAMP())`,
@@ -1040,6 +1160,9 @@ module.exports = {
   getQRCodesByUserId,
   getQRCodeById,
   getQRCodeByShortId,
+  getScheduledDestinationChanges,
+  scheduleDestinationChange,
+  cancelDestinationChange,
   createQRCodeWithinLimit,
   updateQRCode,
   deleteQRCode,

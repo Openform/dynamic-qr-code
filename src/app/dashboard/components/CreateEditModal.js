@@ -18,12 +18,19 @@ import {
 import { renderBwipCanvas } from "@/lib/barcode"
 import footerStyles from "./CreateEditModal.module.css"
 import { TrashIcon } from "@/app/components/icons"
+import {
+  formatChangeTime,
+  displayUrl,
+  toLocalInputValue,
+  viewerTimeZone
+} from "./scheduledChanges"
 
 export default function CreateEditModal({
   isOpen,
   onClose,
   onSave,
   onDelete,
+  onCancelChange,
   qrcode,
   collections = [],
   defaultCollectionId = null
@@ -50,6 +57,7 @@ export default function CreateEditModal({
       onClose={onClose}
       onSave={onSave}
       onDelete={onDelete}
+      onCancelChange={onCancelChange}
       qrcode={qrcode}
       collections={collections}
       defaultCollectionId={defaultCollectionId}
@@ -101,6 +109,7 @@ function QRCodeForm({
   onClose,
   onSave,
   onDelete,
+  onCancelChange,
   qrcode,
   collections = [],
   defaultCollectionId = null
@@ -118,6 +127,12 @@ function QRCodeForm({
     return v == null ? "" : String(v)
   })
   const [urlError, setUrlError] = useState("")
+  // Edit only: whether a new destination goes live now or at a set time
+  // ("YYYY-MM-DDTHH:MM" in the viewer's time zone).
+  const [when, setWhen] = useState("now")
+  const [changeAt, setChangeAt] = useState("")
+  const [minChangeAt, setMinChangeAt] = useState("")
+  const [changeAtError, setChangeAtError] = useState("")
   // Single style object — the source of truth for all visual customization.
   const [style, setStyle] = useState(() => normalizeStyle(qrcode))
   const [tab, setTab] = useState("content")
@@ -224,6 +239,23 @@ function QRCodeForm({
     }
     setUrlError("")
 
+    // A change for later needs a time in the future. datetime-local values
+    // have no time zone, so the browser reads them as the viewer's local time.
+    let changeAtIso = null
+    if (isEdit && when === "later") {
+      const ms = changeAt ? new Date(changeAt).getTime() : NaN
+      if (Number.isNaN(ms)) {
+        setChangeAtError("Choose a date and time.")
+        return
+      }
+      if (ms <= Date.now()) {
+        setChangeAtError("Choose a time in the future.")
+        return
+      }
+      changeAtIso = new Date(ms).toISOString()
+    }
+    setChangeAtError("")
+
     // Guard against saving an unscannable code (the button is also disabled).
     if (blockSave) return
 
@@ -232,12 +264,14 @@ function QRCodeForm({
       // Collection is sent on both create and edit — it's an organizational
       // label that doesn't affect the code's image, so it stays editable even
       // though the appearance is locked after creation. The server ignores any
-      // style fields on edit.
+      // style fields on edit. `changeAt` asks for the destination to change
+      // at that time instead of now.
       const payload = {
         title,
         destinationUrl: fullUrl,
         styleConfig: style,
-        collectionId: collectionId === "" ? null : Number(collectionId)
+        collectionId: collectionId === "" ? null : Number(collectionId),
+        ...(changeAtIso ? { changeAt: changeAtIso } : {})
       }
       await onSave(payload)
     } finally {
@@ -317,6 +351,22 @@ function QRCodeForm({
                     logoUrl={style.logoUrl}
                     setLogoUrl={(v) => setField("logoUrl", v)}
                     showLogo={false}
+                  />
+                  <ChangeTiming
+                    when={when}
+                    onWhenChange={(value) => {
+                      setWhen(value)
+                      setChangeAtError("")
+                      if (value === "later") setMinChangeAt(toLocalInputValue(Date.now()))
+                    }}
+                    changeAt={changeAt}
+                    setChangeAt={setChangeAt}
+                    minChangeAt={minChangeAt}
+                    error={changeAtError}
+                  />
+                  <UpcomingChanges
+                    changes={qrcode.scheduledChanges ?? []}
+                    onCancel={(change) => onCancelChange?.(qrcode, change)}
                   />
                   {collections.length > 0 && (
                     <CollectionSelect
@@ -894,6 +944,89 @@ function safeHex(v, fallback) {
 }
 
 // Collection picker shared by the create and edit forms. "" = Default Collection.
+/** Edit only: put a new destination live now, or at a set date and time. */
+function ChangeTiming({ when, onWhenChange, changeAt, setChangeAt, minChangeAt, error }) {
+  return (
+    <div className="input-group" style={{ marginTop: "16px" }}>
+      <span id="qr-when-label" className="input-label">
+        Destination change
+      </span>
+      <div className="qr-segmented" role="group" aria-labelledby="qr-when-label">
+        {[
+          { value: "now", label: "Now" },
+          { value: "later", label: "Later" }
+        ].map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            className={`qr-seg${when === o.value ? " qr-seg-active" : ""}`}
+            aria-pressed={when === o.value}
+            onClick={() => onWhenChange(o.value)}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+
+      {when === "later" && (
+        <div style={{ marginTop: "12px" }}>
+          <label htmlFor="qr-change-at" className="input-label">
+            Date and time
+          </label>
+          <input
+            id="qr-change-at"
+            type="datetime-local"
+            className="input-field"
+            value={changeAt}
+            min={minChangeAt || undefined}
+            onChange={(e) => setChangeAt(e.target.value)}
+            aria-invalid={error ? true : undefined}
+            required
+          />
+          {error ? (
+            <p style={{ ...styles.hint, color: "var(--danger, #e5484d)" }}>{error}</p>
+          ) : (
+            <p style={styles.hint}>
+              In your time zone ({viewerTimeZone()}). Until then, scans keep
+              going to the current destination.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Edit only: changes waiting to happen, soonest first, each with Cancel. */
+function UpcomingChanges({ changes, onCancel }) {
+  if (changes.length === 0) return null
+  return (
+    <div className="input-group">
+      <span className="input-label">Upcoming changes</span>
+      <ul style={styles.changeList}>
+        {changes.map((change) => (
+          <li key={change.id} style={styles.changeItem}>
+            <div style={{ minWidth: 0 }}>
+              <div className="truncate" style={styles.changeUrl} title={change.destinationUrl}>
+                {displayUrl(change.destinationUrl)}
+              </div>
+              <div style={styles.changeTime}>{formatChangeTime(change.startsAt)}</div>
+            </div>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => onCancel(change)}
+              aria-label={`Cancel the change to ${displayUrl(change.destinationUrl)}`}
+            >
+              Cancel change
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 function CollectionSelect({ collections, value, onChange }) {
   return (
     <div className="input-group">
@@ -1288,6 +1421,33 @@ const styles = {
     color: "var(--text-tertiary)",
     marginTop: "10px",
     lineHeight: 1.5
+  },
+  changeList: {
+    listStyle: "none",
+    margin: 0,
+    padding: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px"
+  },
+  changeItem: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "12px",
+    padding: "10px 12px",
+    borderRadius: "var(--radius-md)",
+    border: "1px solid var(--glass-border)",
+    background: "rgba(255,255,255,0.02)"
+  },
+  changeUrl: {
+    fontSize: "0.85rem",
+    color: "var(--cyan)"
+  },
+  changeTime: {
+    fontSize: "0.78rem",
+    color: "var(--text-tertiary)",
+    marginTop: "2px"
   },
   contrastBox: {
     marginTop: "16px",

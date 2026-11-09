@@ -103,6 +103,22 @@ the `legal_pages` table, created automatically on first run; until a page is
 saved it shows the placeholder text in
 [`src/lib/legalDefaults.js`](src/lib/legalDefaults.js).
 
+## Changing a destination later
+
+When editing a code, **Destination change** sets whether a new destination
+goes live **Now** or **Later**, at a date and time in the browser's time zone.
+Until then the code keeps sending scans to its current destination. Upcoming
+changes are listed on the edit screen and on the code's card, each with
+**Cancel**. A code can have up to 20 waiting, up to 5 years ahead. Changing the
+destination now doesn't cancel them.
+
+A change is stored as a row in `qrcode_destinations` (each code's destination
+history) that starts in the future. Wherever the app reads a code's
+destination (the redirect, the dashboard, the API), it uses the latest row that
+has started, so a change takes effect on the first scan after its time, with no
+cron job. Once a change has started it's part of the history and can't be
+cancelled; a change that hasn't started doesn't appear in analytics.
+
 ## Scan analytics
 
 Every scan of a code is recorded after the visitor has been redirected, so

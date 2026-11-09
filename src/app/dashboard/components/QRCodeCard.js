@@ -14,12 +14,14 @@ import {
   ChartIcon,
   FolderIcon
 } from "@/app/components/icons"
+import { formatChangeTime, displayUrl } from "./scheduledChanges"
 
 export default function QRCodeCard({
   qrcode,
   collections = [],
   onEdit,
-  onAssignCollection
+  onAssignCollection,
+  onCancelChange
 }) {
   const [copied, setCopied] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -126,6 +128,10 @@ export default function QRCodeCard({
 
   const safeDestinationUrl = getSafeUrl(qrcode.destinationUrl);
 
+  // Scheduled changes to the destination, soonest first.
+  const scheduledChanges = qrcode.scheduledChanges ?? []
+  const nextChange = scheduledChanges[0]
+
   return (
     <div className="glass-card animate-fadeIn" style={styles.card}>
       {/* Small code on the left (click it to edit), name and destination on the right */}
@@ -159,6 +165,33 @@ export default function QRCodeCard({
           </a>
         </div>
       </div>
+
+      {/* The next scheduled change to the destination */}
+      {nextChange && (
+        <div style={styles.nextChange}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div className="truncate" title={nextChange.destinationUrl}>
+              Changes to{" "}
+              <span style={styles.nextChangeUrl}>
+                {displayUrl(nextChange.destinationUrl)}
+              </span>
+            </div>
+            <div style={styles.nextChangeTime}>
+              {formatChangeTime(nextChange.startsAt)}
+              {scheduledChanges.length > 1 &&
+                ` · ${scheduledChanges.length - 1} more scheduled`}
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => onCancelChange?.(qrcode, nextChange)}
+            aria-label={`Cancel the change to ${displayUrl(nextChange.destinationUrl)}`}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       {/* Info */}
       <div style={styles.info}>
@@ -324,6 +357,25 @@ const styles = {
     color: "var(--cyan)",
     maxWidth: "100%",
     display: "block"
+  },
+  nextChange: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    padding: "8px 10px",
+    borderRadius: "var(--radius-md)",
+    border: "1px solid var(--glass-border)",
+    background: "rgba(255,255,255,0.02)",
+    fontSize: "0.8rem",
+    color: "var(--text-secondary)"
+  },
+  nextChangeUrl: {
+    color: "var(--cyan)"
+  },
+  nextChangeTime: {
+    fontSize: "0.75rem",
+    color: "var(--text-tertiary)",
+    marginTop: "2px"
   },
   redirectRow: {
     display: "flex",

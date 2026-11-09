@@ -8,45 +8,14 @@
 
 import { getSession } from '@/lib/auth';
 import { normalizeDestinationUrl, isValidDestinationUrl } from '@/lib/qrStyle';
-const { getQRCodeById, updateQRCode, deleteQRCode, getCollectionById } = require('@/lib/db');
-
-const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
-
-/** Safely parse a stored style_config value (string or already-parsed object). */
-function parseStyleConfig(value) {
-  if (!value) return null;
-  if (typeof value === 'object') return value;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Transform a DB record (snake_case) to a client-friendly shape (camelCase).
- */
-function toClientQRCode(qrcode) {
-  return {
-    id: qrcode.id,
-    shortId: qrcode.short_id,
-    userId: qrcode.user_id,
-    collectionId: qrcode.collection_id,
-    title: qrcode.title,
-    destinationUrl: qrcode.destination_url,
-    fgColor: qrcode.foreground_color,
-    bgColor: qrcode.background_color,
-    logoUrl: qrcode.logo_url,
-    dotStyle: qrcode.dot_style,
-    cornerSquareStyle: qrcode.corner_square_style,
-    cornerDotStyle: qrcode.corner_dot_style,
-    styleConfig: parseStyleConfig(qrcode.style_config),
-    scanCount: qrcode.scan_count,
-    createdAt: qrcode.created_at,
-    updatedAt: qrcode.updated_at,
-    redirectUrl: `${BASE_URL}/r/${qrcode.short_id}`,
-  };
-}
+import { toClientQRCode } from '@/lib/clientQRCode';
+const {
+  getQRCodeById,
+  updateQRCode,
+  deleteQRCode,
+  getCollectionById,
+  getScheduledDestinationChanges,
+} = require('@/lib/db');
 
 // ── GET — single QR code ───────────────────────
 export async function GET(request, { params }) {
@@ -68,7 +37,8 @@ export async function GET(request, { params }) {
       );
     }
 
-    return Response.json({ qrcode: toClientQRCode(qrcode) });
+    const scheduledChanges = await getScheduledDestinationChanges(qrcode.id);
+    return Response.json({ qrcode: toClientQRCode(qrcode, scheduledChanges) });
   } catch (error) {
     console.error('GET /api/qrcodes/[id] error:', error);
     return Response.json(
@@ -144,7 +114,8 @@ export async function PUT(request, { params }) {
       );
     }
 
-    return Response.json({ qrcode: toClientQRCode(updated) });
+    const scheduledChanges = await getScheduledDestinationChanges(updated.id);
+    return Response.json({ qrcode: toClientQRCode(updated, scheduledChanges) });
   } catch (error) {
     console.error('PUT /api/qrcodes/[id] error:', error);
     return Response.json(

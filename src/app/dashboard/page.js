@@ -7,6 +7,7 @@ import CreateEditModal from "./components/CreateEditModal"
 import CollectionsBar from "./components/CollectionsBar"
 import CollectionModal from "./components/CollectionModal"
 import Avatar from "./components/Avatar"
+import { formatChangeTime, displayUrl } from "./components/scheduledChanges"
 import { SearchIcon, InboxIcon } from "@/app/components/icons"
 import Link from "next/link"
 
@@ -112,14 +113,57 @@ export default function DashboardPage() {
     }
   }
 
+  // Cancel a scheduled destination change (from the card or the edit screen).
+  async function handleCancelChange(qr, change) {
+    const when = formatChangeTime(change.startsAt)
+    if (!confirm(`Cancel the change to ${displayUrl(change.destinationUrl)} on ${when}?`)) return
+
+    try {
+      const res = await fetch(
+        `/api/qrcodes/${qr.id}/destination-changes/${change.id}`,
+        { method: "DELETE" }
+      )
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.qrcode) {
+        const merge = (q) => (q?.id === qr.id ? { ...q, ...data.qrcode } : q)
+        setQrcodes((prev) => prev.map(merge))
+        setEditingQR(merge)
+        return
+      }
+      alert(data.error || "Could not cancel the change. Please try again.")
+    } catch (error) {
+      console.error("Failed to cancel the change:", error)
+      alert("Could not cancel the change. Check your connection and try again.")
+    }
+  }
+
   const handleSave = useCallback(
     async (formData) => {
       if (editingQR) {
+        const { changeAt, ...fields } = formData
+
+        // A destination change for later is scheduled first, so a bad time
+        // stops the save before anything else changes. The code keeps its
+        // current destination until then.
+        if (changeAt) {
+          const res = await fetch(`/api/qrcodes/${editingQR.id}/destination-changes`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ destinationUrl: fields.destinationUrl, startsAt: changeAt })
+          })
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}))
+            alert(data.error || "Could not schedule the change. Please try again.")
+            return
+          }
+          delete fields.destinationUrl
+        }
+
         // Update existing
         const res = await fetch(`/api/qrcodes/${editingQR.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formData)
+          body: JSON.stringify(fields)
         })
         if (res.ok) {
           const data = await res.json()
@@ -128,6 +172,9 @@ export default function DashboardPage() {
             prev.map((q) => (q.id === editingQR.id ? { ...q, ...updated } : q))
           )
           setModalOpen(false)
+        } else {
+          const data = await res.json().catch(() => ({}))
+          alert(data.error || "Could not save the QR code. Please try again.")
         }
       } else {
         // Create new
@@ -467,6 +514,7 @@ export default function DashboardPage() {
                 collections={collections}
                 onEdit={handleEdit}
                 onAssignCollection={handleAssignCollection}
+                onCancelChange={handleCancelChange}
               />
             ))}
           </div>
@@ -479,6 +527,7 @@ export default function DashboardPage() {
         onClose={() => setModalOpen(false)}
         onSave={handleSave}
         onDelete={handleDelete}
+        onCancelChange={handleCancelChange}
         qrcode={editingQR}
         collections={collections}
         defaultCollectionId={newCodeCollectionId}

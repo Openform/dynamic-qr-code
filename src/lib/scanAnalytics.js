@@ -126,11 +126,15 @@ async function breakdown(column, where, params, limit = LIST_LIMIT) {
   return result.map((r) => ({ label: r.label ?? null, scans: toNumber(r.scans) }));
 }
 
-/** Scans per destination URL for one code, over all time. */
+/**
+ * Scans per destination URL for one code, over all time. Scheduled changes
+ * that haven't started yet are left out until they do.
+ */
 async function destinationHistory(codeId) {
   let history = await rows(
     `SELECT destination_url AS url, started_at AS startedAt
-     FROM qrcode_destinations WHERE qrcode_id = :codeId
+     FROM qrcode_destinations
+     WHERE qrcode_id = :codeId AND started_at <= UTC_TIMESTAMP()
      ORDER BY started_at, id`,
     { codeId }
   );
