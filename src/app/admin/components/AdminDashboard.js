@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import Avatar from "../../dashboard/components/Avatar"
 import CreateAccountModal from "./CreateAccountModal"
 import ConfirmActionModal from "./ConfirmActionModal"
@@ -120,16 +121,23 @@ export default function AdminDashboard({ currentAdminId, openInviteCount = 0 }) 
   // { type: "disable" | "delete", account } while a confirmation is open.
   const [pending, setPending] = useState(null)
 
+  // Just `replace`: it's the same function on every render, so the effect
+  // below still loads the accounts once.
+  const { replace } = useRouter()
+
   useEffect(() => {
     async function load() {
       try {
         const res = await fetch("/api/admin/accounts")
         if (res.status === 401) {
+          // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- the session has ended, so start fresh on the login page
           window.location.href = "/login"
           return
         }
         if (res.status === 403) {
-          window.location.href = "/dashboard"
+          // Signed in but no longer an admin. replace, not push, so Back
+          // doesn't return to /admin and bounce straight here again.
+          replace("/dashboard")
           return
         }
         const data = await res.json()
@@ -142,7 +150,7 @@ export default function AdminDashboard({ currentAdminId, openInviteCount = 0 }) 
       }
     }
     load()
-  }, [])
+  }, [replace])
 
   // ---- Change package (upgrade / downgrade) ----
   async function handlePackageChange(account, packageId) {

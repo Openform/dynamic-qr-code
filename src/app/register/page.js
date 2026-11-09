@@ -29,6 +29,7 @@ export default function RegisterPage() {
         throw new Error(data.error || "Registration failed")
       }
 
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full page load, so the app starts fresh with the new session
       window.location.href = "/dashboard"
     } catch (err) {
       setError(err.message)
