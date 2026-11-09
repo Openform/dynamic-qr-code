@@ -27,14 +27,16 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: 22 # keep in step with the Node.js version set on Hostinger
+          node-version: 24 # keep in step with the Node.js version set on Hostinger
           cache: npm
       - run: npm ci
       - run: npm run lint
       - run: npm test
       # next build directly: "npm run build" would also download the GeoIP
-      # database in "prebuild", which CI doesn't need.
-      - run: npx next build
+      # database in "prebuild", which CI doesn't need. Keep the flags the same
+      # as the "build" script in package.json: Hostinger can only build with
+      # webpack (see "Deploying on Hostinger" in the README).
+      - run: npx next build --webpack
       # Hostinger does run prebuild, so at least check that its script parses.
       - run: node --check scripts/update-geoip.mjs
 
@@ -75,7 +77,7 @@ jobs:
           fetch-depth: 0 # the check also needs main's code
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - run: npm ci
       - run: node scripts/ci/check-migrations.mjs
