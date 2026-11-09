@@ -17,11 +17,8 @@
 import { NextResponse, after } from 'next/server';
 import { getClientIp } from '@/lib/rateLimit';
 import { recordScanFromRequest, pruneIfDue } from '@/lib/scanRecorder';
+import { unavailableRedirect } from '@/lib/unavailableRedirect';
 const { getQRCodeByShortId } = require('@/lib/db');
-
-function unavailable(request, reason) {
-  return NextResponse.redirect(new URL(`/code-unavailable?reason=${reason}`, request.url), 302);
-}
 
 export async function GET(request, { params }) {
   try {
@@ -29,16 +26,16 @@ export async function GET(request, { params }) {
 
     const qrcode = await getQRCodeByShortId(shortId);
     if (!qrcode) {
-      return unavailable(request, 'not-found');
+      return unavailableRedirect('not-found');
     }
 
     if (qrcode.owner_disabled_at) {
-      return unavailable(request, 'inactive');
+      return unavailableRedirect('inactive');
     }
 
     // is_expired is worked out by the database against its UTC clock.
     if (Number(qrcode.is_expired) > 0) {
-      return unavailable(request, 'expired');
+      return unavailableRedirect('expired');
     }
 
     // Ensure the destination is an absolute URL
@@ -73,6 +70,6 @@ export async function GET(request, { params }) {
     return response;
   } catch (error) {
     console.error('Redirect error:', error);
-    return unavailable(request, 'error');
+    return unavailableRedirect('error');
   }
 }
