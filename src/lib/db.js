@@ -114,6 +114,10 @@ async function initSchema() {
   // account-wide queries don't need a join. Rows go when their code does
   // (ON DELETE CASCADE), and rows older than the retention period are pruned
   // (lib/scanRecorder.js); qrcodes.scan_count keeps the all-time total.
+  // destination_url is where the scan was sent and schedule_id the schedule
+  // that sent it (NULL = the main destination); both are NULL for scans
+  // recorded before they were added. schedule_id has no foreign key, so a scan
+  // keeps it after its schedule is deleted.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS scan_events (
       id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -129,6 +133,8 @@ async function initSchema() {
       language VARCHAR(8) NULL,
       visitor_hash CHAR(16) NULL,
       is_bot TINYINT(1) NOT NULL DEFAULT 0,
+      destination_url VARCHAR(2048) NULL,
+      schedule_id INT UNSIGNED NULL,
       INDEX idx_scan_events_code_time (qrcode_id, scanned_at),
       INDEX idx_scan_events_user_time (user_id, scanned_at),
       INDEX idx_scan_events_time (scanned_at),
@@ -262,6 +268,29 @@ async function migrateUserColumns() {
   }
 }
 
+/**
+ * Idempotently add columns that may be missing on the `scan_events` table.
+ * They're nullable and added at the end, which MariaDB (10.3+) and MySQL 8 do
+ * instantly, without rewriting the table. Existing scans read NULL.
+ */
+async function migrateScanEventColumns() {
+  const [rows] = await pool.query(
+    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'scan_events'`
+  );
+  const columns = new Set(rows.map((r) => r.COLUMN_NAME));
+
+  const additions = [
+    ['destination_url', 'ADD COLUMN destination_url VARCHAR(2048) NULL'],
+    ['schedule_id', 'ADD COLUMN schedule_id INT UNSIGNED NULL'],
+  ];
+  const clausesToAdd = additions.filter(([name]) => !columns.has(name)).map(([, clause]) => clause);
+
+  if (clausesToAdd.length > 0) {
+    await pool.query(`ALTER TABLE scan_events ${clausesToAdd.join(', ')}`);
+  }
+}
+
 // Ensure the schema is set up exactly once. The shared promise means concurrent
 // first requests all wait on the same initialization rather than racing.
 let schemaReady = null;
@@ -271,6 +300,7 @@ function ensureSchema() {
       await initSchema();
       await migrateColumns();
       await migrateUserColumns();
+      await migrateScanEventColumns();
     })().catch((err) => {
       // Allow a later request to retry if init failed (e.g. transient outage).
       schemaReady = null;
@@ -707,10 +737,13 @@ async function deleteQRCode(id, userId) {
 /**
  * Record one scan: add 1 to the code's all-time total (unless it's a bot)
  * and store the scan's details for analytics. The total is updated first, so
- * it stays right even if storing the details fails.
+ * it stays right even if storing the details fails. `destinationUrl` is where
+ * the scan was sent and `scheduleId` the schedule that sent it (null for the
+ * main destination).
  */
 async function recordScan({
   qrcodeId, userId, countryCode, region, city, deviceType, os, browser, language, visitorHash, isBot,
+  destinationUrl, scheduleId,
 }) {
   await ensureSchema();
   if (!isBot) {
@@ -721,9 +754,9 @@ async function recordScan({
   }
   await pool.execute(
     `INSERT INTO scan_events
-       (qrcode_id, user_id, scanned_at, country_code, region, city, device_type, os, browser, language, visitor_hash, is_bot)
+       (qrcode_id, user_id, scanned_at, country_code, region, city, device_type, os, browser, language, visitor_hash, is_bot, destination_url, schedule_id)
      VALUES
-       (:qrcodeId, :userId, UTC_TIMESTAMP(), :countryCode, :region, :city, :deviceType, :os, :browser, :language, :visitorHash, :isBot)`,
+       (:qrcodeId, :userId, UTC_TIMESTAMP(), :countryCode, :region, :city, :deviceType, :os, :browser, :language, :visitorHash, :isBot, :destinationUrl, :scheduleId)`,
     {
       qrcodeId,
       userId,
@@ -736,6 +769,8 @@ async function recordScan({
       language: language ?? null,
       visitorHash: visitorHash ?? null,
       isBot: isBot ? 1 : 0,
+      destinationUrl: destinationUrl ?? null,
+      scheduleId: scheduleId ?? null,
     }
   );
 }

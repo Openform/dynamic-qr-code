@@ -136,9 +136,9 @@ export const SEED = {
     // Exactly on the cutoff: kept (the delete is strictly "before").
     { id: 4, qrcode_id: 1, user_id: 1, scanned_at: '2024-01-01 00:00:00', country_code: 'ZA', region: 'Gauteng', city: 'Johannesburg', device_type: 'mobile', os: 'Android', browser: 'Chrome', language: 'af', visitor_hash: '1111111111111111', is_bot: 0 },
     // After the cutoff: kept.
-    { id: 5, qrcode_id: 1, user_id: 1, scanned_at: '2026-10-01 08:30:00', country_code: 'BR', region: 'São Paulo', city: 'São Paulo', device_type: 'tablet', os: 'iPadOS', browser: 'Safari', language: 'pt', visitor_hash: '2222222222222222', is_bot: 0 },
+    { id: 5, qrcode_id: 1, user_id: 1, scanned_at: '2026-10-01 08:30:00', country_code: 'BR', region: 'São Paulo', city: 'São Paulo', device_type: 'tablet', os: 'iPadOS', browser: 'Safari', language: 'pt', visitor_hash: '2222222222222222', is_bot: 0, destination_url: LONG_URL, schedule_id: 4294967295 },
     { id: 6, qrcode_id: 3, user_id: 3, scanned_at: '2026-11-01 12:00:00', country_code: 'US', region: 'California', city: 'San José', device_type: 'desktop', os: 'macOS', browser: 'Firefox', language: 'en', visitor_hash: '3333333333333333', is_bot: 1 },
-    { id: 7, qrcode_id: 4, user_id: 2, scanned_at: '2026-11-08 18:45:00', country_code: 'JP', region: 'Tokyo', city: '東京', device_type: 'mobile', os: 'iOS', browser: 'Safari', language: 'ja', visitor_hash: '4444444444444444', is_bot: 0 },
+    { id: 7, qrcode_id: 4, user_id: 2, scanned_at: '2026-11-08 18:45:00', country_code: 'JP', region: 'Tokyo', city: '東京', device_type: 'mobile', os: 'iOS', browser: 'Safari', language: 'ja', visitor_hash: '4444444444444444', is_bot: 0, destination_url: 'https://example.com/メニュー', schedule_id: null },
   ],
 
   qrcode_destinations: [
