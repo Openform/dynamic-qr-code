@@ -5,6 +5,8 @@
  *   { userId }                one account (null = every account, admin only)
  *   { codeId }                one code
  *   { collectionId }          a collection id, or 'default' for codes in none
+ *   { destination }           with codeId: one destination of that code, from
+ *                             resolveDestinationFilter()
  * Callers must check that the code/collection belongs to the user first.
  *
  * Bots are left out everywhere except the "filtered" count. Times are stored
@@ -13,8 +15,9 @@
  * else goes through placeholders.
  */
 
-import { computePeriods, bucketKeys, toSqlDateTime, sqlToIso } from './analyticsFilters';
-import { pool, ensureSchema } from './db';
+import { computePeriods, bucketKeys, toSqlDateTime, sqlToIso, RANGES } from './analyticsFilters';
+import { destinationRows, mainPeriods, mainUrlAt } from './destinationStats';
+import { pool, ensureSchema, getSchedulesForCode } from './db';
 
 const LIST_LIMIT = 20;
 const PLACE_LIMIT = 50;
@@ -34,8 +37,8 @@ function int(value) {
 const toNumber = (value) => Number(value) || 0;
 
 /** Fill in missing scope keys so `=== null` checks are reliable. */
-function normalizeScope({ userId = null, codeId = null, collectionId = null } = {}) {
-  return { userId, codeId, collectionId };
+function normalizeScope({ userId = null, codeId = null, collectionId = null, destination = null } = {}) {
+  return { userId, codeId, collectionId, destination: codeId === null ? null : destination };
 }
 
 async function rows(sql, params) {
@@ -44,7 +47,7 @@ async function rows(sql, params) {
 }
 
 /** WHERE clauses + params for a scope (without the time range). */
-function scopeWhere({ userId = null, codeId = null, collectionId = null }) {
+function scopeWhere({ userId = null, codeId = null, collectionId = null, destination = null }) {
   const clauses = [];
   const params = {};
   if (userId !== null) {
@@ -60,6 +63,21 @@ function scopeWhere({ userId = null, codeId = null, collectionId = null }) {
   } else if (collectionId !== null) {
     clauses.push('e.qrcode_id IN (SELECT id FROM qrcodes WHERE collection_id = :collectionId)');
     params.collectionId = collectionId;
+  }
+  if (destination?.kind === 'schedule') {
+    clauses.push('e.schedule_id = :destinationScheduleId');
+    params.destinationScheduleId = int(destination.id);
+  } else if (destination) {
+    // The main destination, or one of its periods: scans no schedule sent.
+    clauses.push('e.schedule_id IS NULL');
+    if (destination.from !== undefined && destination.from !== null) {
+      clauses.push('e.scanned_at >= :destinationFrom');
+      params.destinationFrom = toSqlDateTime(destination.from);
+    }
+    if (destination.to !== undefined && destination.to !== null) {
+      clauses.push('e.scanned_at < :destinationTo');
+      params.destinationTo = toSqlDateTime(destination.to);
+    }
   }
   return { clauses, params };
 }
@@ -127,44 +145,122 @@ async function breakdown(column, where, params, limit = LIST_LIMIT) {
 }
 
 /**
- * Scans per main destination URL for one code, over all time. Scheduled
- * changes that haven't started yet are left out until they do, and so are
- * scans a schedule sent somewhere else.
+ * A code's main-destination periods (lib/destinationStats.js), from its
+ * destination history rows that have started. `code` is `{ id, url,
+ * createdAt }`, for a code with no history.
  */
-async function destinationHistory(codeId) {
-  let history = await rows(
-    `SELECT destination_url AS url, started_at AS startedAt
+async function codePeriods(code) {
+  const history = await rows(
+    `SELECT id, destination_url AS url, started_at AS startedAt
      FROM qrcode_destinations
      WHERE qrcode_id = :codeId AND started_at <= UTC_TIMESTAMP()
      ORDER BY started_at, id`,
+    { codeId: code.id }
+  );
+  return mainPeriods(
+    history.map((h) => ({ ...h, startedAt: sqlToIso(h.startedAt) })),
+    { url: code.url, createdAt: sqlToIso(code.createdAt) }
+  );
+}
+
+/**
+ * A destination filter from parseDestination(), checked against the code and
+ * ready for a scope: a period gets its time window as `from` and `to` (ms, to
+ * null while it's current). Returns null when the code has no such period. A
+ * schedule id isn't checked, so a deleted schedule's scans can still be shown;
+ * the scope keeps it to this code's scans.
+ */
+export async function resolveDestinationFilter(codeId, destination) {
+  if (!destination || destination.kind !== 'period') return destination;
+  await ensureSchema();
+  const [code] = await rows(
+    'SELECT id, destination_url AS url, created_at AS createdAt FROM qrcodes WHERE id = :codeId',
     { codeId }
   );
-  if (history.length === 0) {
-    // Code created before history was kept and never changed since.
-    history = await rows(
-      'SELECT destination_url AS url, created_at AS startedAt FROM qrcodes WHERE id = :codeId',
-      { codeId }
-    );
-  }
+  if (!code) return null;
+  const period = (await codePeriods(code)).find((p) => p.id === destination.id);
+  return period ? { ...destination, from: period.startedAt, to: period.endedAt } : null;
+}
 
-  const result = [];
-  for (let i = 0; i < history.length; i++) {
-    const startedAt = history[i].startedAt;
-    const endedAt = history[i + 1]?.startedAt ?? null;
-    const [row] = await rows(
-      `SELECT COUNT(*) AS scans FROM scan_events e
-       WHERE e.qrcode_id = :codeId AND e.is_bot = 0 AND e.schedule_id IS NULL AND e.scanned_at >= :startedAt
-       ${endedAt ? 'AND e.scanned_at < :endedAt' : ''}`,
-      { codeId, startedAt, endedAt }
-    );
-    result.push({
-      url: history[i].url,
-      startedAt: sqlToIso(startedAt),
-      endedAt: sqlToIso(endedAt),
-      scans: toNumber(row.scans),
-    });
-  }
-  return result.reverse(); // newest first
+/**
+ * SQL that puts a code's scan in its main-destination period: the index of
+ * the period it falls in (lib/destinationStats.js periodIndexAt) and that
+ * period's URL. Boundaries go in as placeholders.
+ */
+function periodSql(periods, params) {
+  const index = [];
+  const url = [];
+  periods.forEach((period, i) => {
+    params[`periodUrl${i}`] = period.url;
+    if (i === periods.length - 1) return;
+    params[`periodEnd${i}`] = toSqlDateTime(periods[i + 1].startedAt);
+    index.push(`WHEN e.scanned_at < :periodEnd${i} THEN ${i}`);
+    url.push(`WHEN e.scanned_at < :periodEnd${i} THEN :periodUrl${i}`);
+  });
+  const last = periods.length - 1;
+  return {
+    index: index.length ? `CASE ${index.join(' ')} ELSE ${last} END` : '0',
+    url: url.length ? `CASE ${url.join(' ')} ELSE :periodUrl${last} END` : `:periodUrl${last}`,
+  };
+}
+
+/**
+ * The Destinations card for one code over the selected range: scans and
+ * unique scanners per main-destination period and per schedule, by the URL
+ * they were sent to, plus every period and schedule for the filter. Scans
+ * recorded without a URL count toward the period they fall in.
+ */
+async function destinationBreakdown(code, scope, periods, range, nowMs) {
+  const [mainPeriodList, schedules] = await Promise.all([codePeriods(code), getSchedulesForCode(code.id)]);
+  const { where, params } = periodWhere({ ...scope, destination: null }, periods.from, periods.to);
+  const period = periodSql(mainPeriodList, params);
+  const counts = await rows(
+    `SELECT CASE WHEN e.schedule_id IS NULL THEN ${period.index} END AS periodIndex,
+            e.schedule_id AS scheduleId,
+            COALESCE(e.destination_url, ${period.url}) AS url,
+            COUNT(*) AS scans, COUNT(DISTINCT e.visitor_hash) AS uniques
+     FROM scan_events e ${where}
+     GROUP BY periodIndex, scheduleId, url`,
+    params
+  );
+  const allTime = RANGES[range].days === null;
+  const breakdown = destinationRows({
+    periods: mainPeriodList,
+    counts: counts.map((c) => ({
+      period: c.periodIndex === null ? null : toNumber(c.periodIndex),
+      scheduleId: c.scheduleId === null ? null : toNumber(c.scheduleId),
+      url: c.url,
+      scans: toNumber(c.scans),
+      uniques: toNumber(c.uniques),
+    })),
+    schedules,
+    from: allTime ? null : periods.from,
+    to: periods.to,
+    nowMs,
+  });
+  return {
+    ...breakdown,
+    periods: mainPeriodList.map((p) => ({
+      key: p.key,
+      url: p.url,
+      startedAt: new Date(p.startedAt).toISOString(),
+      endedAt: p.endedAt === null ? null : new Date(p.endedAt).toISOString(),
+    })),
+    scheduleList: schedules.map((s) => ({
+      id: s.id,
+      key: `schedule-${s.id}`,
+      label: s.label,
+      kind: s.kind,
+      destinationUrl: s.destinationUrl,
+      timeZone: s.timeZone,
+      startsAt: s.startsAt,
+      endsAt: s.endsAt,
+      days: s.days,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      enabled: s.enabled,
+    })),
+  };
 }
 
 /** Codes with the most scans in the period, with previous-period counts and a trend line. */
@@ -244,8 +340,9 @@ async function topAccounts(where, params) {
  * Everything the analytics dashboard shows, in one object, or null when
  * the requested code doesn't exist.
  *
- * `scope` — see the top of this file. `admin` adds Top accounts and code
- * owners. `nowMs` is injectable for tests.
+ * `scope` — see the top of this file. A destination filter narrows every
+ * panel except Destinations, which always shows them all. `admin` adds Top
+ * accounts and code owners. `nowMs` is injectable for tests.
  */
 export async function getScanAnalytics({ scope: rawScope, range, offsetMinutes, admin = false, nowMs = Date.now() }) {
   await ensureSchema();
@@ -255,15 +352,18 @@ export async function getScanAnalytics({ scope: rawScope, range, offsetMinutes, 
   let code = null;
   if (scope.codeId !== null) {
     [code] = await rows(
-      `SELECT q.id, q.title, q.short_id AS shortId, u.id AS ownerId, u.name AS ownerName, u.email AS ownerEmail
+      `SELECT q.id, q.title, q.short_id AS shortId, q.destination_url AS url, q.created_at AS createdAt,
+              u.id AS ownerId, u.name AS ownerName, u.email AS ownerEmail
        FROM qrcodes q JOIN users u ON u.id = q.user_id WHERE q.id = :codeId`,
       { codeId: scope.codeId }
     );
     if (!code) return null;
   }
 
-  // Totals across all time: how many scans have details, and since when.
-  const all = periodWhere(scope, null, null);
+  // Totals across all time: how many scans have details, and since when. Not
+  // narrowed to a destination, so the scans without details stay right.
+  const unfiltered = { ...scope, destination: null };
+  const all = periodWhere(unfiltered, null, null);
   const codeClauses = codeScopeWhere(scope);
   const [[meta], [codeTotals]] = await Promise.all([
     rows(`SELECT COUNT(*) AS tracked, MIN(e.scanned_at) AS firstScan FROM scan_events e ${all.where}`, all.params),
@@ -296,6 +396,7 @@ export async function getScanAnalytics({ scope: rawScope, range, offsetMinutes, 
     codes,
     accounts,
     destinations,
+    allDestinations,
   ] = await Promise.all([
     totals(where, params),
     periods.prevFrom === null
@@ -337,7 +438,14 @@ export async function getScanAnalytics({ scope: rawScope, range, offsetMinutes, 
     ),
     scope.codeId === null ? topCodes({ scope, periods, offsetMinutes, includeOwner: admin }) : null,
     admin && scope.userId === null ? topAccounts(where, params) : null,
-    scope.codeId !== null ? destinationHistory(scope.codeId) : null,
+    code ? destinationBreakdown(code, scope, periods, range, nowMs) : null,
+    // The Destinations card's total, when the rest of the page is narrowed.
+    code && scope.destination
+      ? (() => {
+          const any = periodWhere(unfiltered, periods.from, periods.to);
+          return totals(any.where, any.params);
+        })()
+      : null,
   ]);
 
   const seriesByKey = new Map(seriesRows.map((r) => [r.bucket, r]));
@@ -387,33 +495,92 @@ export async function getScanAnalytics({ scope: rawScope, range, offsetMinutes, 
     recent: recent.map((r) => ({ ...r, scannedAt: sqlToIso(r.scannedAt) })),
     topCodes: codes,
     topAccounts: accounts,
-    destinations,
+    destination: scope.destination?.key ?? null,
+    destinations: destinations && {
+      main: destinations.main,
+      schedules: destinations.schedules,
+      total: {
+        scans: destinations.scans,
+        uniques: scope.destination ? allDestinations.uniques : current.uniques,
+      },
+      periods: destinations.periods,
+      scheduleList: destinations.scheduleList,
+    },
   };
+}
+
+/**
+ * Main-destination periods for several codes at once, for the export:
+ * `codes` maps a code id to `{ id, url, createdAt }`. Adds to `cache`.
+ */
+async function loadPeriods(codes, cache) {
+  const ids = [...codes.keys()].filter((id) => !cache.has(id));
+  if (ids.length === 0) return;
+  const history = await rows(
+    `SELECT qrcode_id AS codeId, id, destination_url AS url, started_at AS startedAt
+     FROM qrcode_destinations
+     WHERE qrcode_id IN (${idList(ids)}) AND started_at <= UTC_TIMESTAMP()
+     ORDER BY qrcode_id, started_at, id`
+  );
+  for (const id of ids) {
+    const code = codes.get(id);
+    cache.set(
+      id,
+      mainPeriods(
+        history.filter((h) => h.codeId === id).map((h) => ({ ...h, startedAt: sqlToIso(h.startedAt) })),
+        { url: code.url, createdAt: sqlToIso(code.createdAt) }
+      )
+    );
+  }
 }
 
 /**
  * Human scans in [from, to) for the CSV export, oldest first, in batches so a
  * large export never holds every row in memory.
+ *
+ * Each row has `destinationUrl`, where the scan was sent, and `scheduleLabel`,
+ * the schedule that sent it (null for the main destination, "Deleted
+ * schedule" once it's gone). A scan recorded without a URL gets the main
+ * destination that was live at the time, as on the dashboard.
  */
 export async function* scanEventBatches({ scope, from, to, admin = false }) {
   await ensureSchema();
   const { where, params } = periodWhere(normalizeScope(scope), from, to);
+  const periodsByCode = new Map();
   let afterId = 0;
   for (;;) {
     const batch = await rows(
       `SELECT e.id, e.scanned_at AS scannedAt, e.country_code AS countryCode, e.region, e.city,
               e.device_type AS deviceType, e.os, e.browser, e.language,
-              q.title AS codeTitle, q.short_id AS shortId
+              q.title AS codeTitle, q.short_id AS shortId,
+              e.qrcode_id AS codeId, e.destination_url AS destinationUrl, e.schedule_id AS scheduleId,
+              s.label AS scheduleLabel, q.destination_url AS codeUrl, q.created_at AS codeCreatedAt
               ${admin ? ', u.name AS ownerName, u.email AS ownerEmail' : ''}
        FROM scan_events e
        JOIN qrcodes q ON q.id = e.qrcode_id
+       LEFT JOIN qrcode_schedules s ON s.id = e.schedule_id
        ${admin ? 'JOIN users u ON u.id = e.user_id' : ''}
        ${where} AND e.id > :afterId
        ORDER BY e.id LIMIT ${EXPORT_BATCH}`,
       { ...params, afterId }
     );
     if (batch.length === 0) return;
-    yield batch.map((r) => ({ ...r, scannedAt: sqlToIso(r.scannedAt) }));
+
+    const unrecorded = new Map();
+    for (const r of batch) {
+      if (r.destinationUrl === null) unrecorded.set(r.codeId, { id: r.codeId, url: r.codeUrl, createdAt: r.codeCreatedAt });
+    }
+    await loadPeriods(unrecorded, periodsByCode);
+
+    yield batch.map(({ codeId, codeUrl: _url, codeCreatedAt: _created, scheduleId, scheduleLabel, destinationUrl, ...r }) => {
+      const scannedAt = sqlToIso(r.scannedAt);
+      return {
+        ...r,
+        scannedAt,
+        destinationUrl: destinationUrl ?? mainUrlAt(periodsByCode.get(codeId), scannedAt),
+        scheduleLabel: scheduleId === null ? null : (scheduleLabel ?? 'Deleted schedule'),
+      };
+    });
     if (batch.length < EXPORT_BATCH) return;
     afterId = batch[batch.length - 1].id;
   }

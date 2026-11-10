@@ -1,6 +1,7 @@
 /**
  * GET /api/analytics/export — the signed-in user's scans as a CSV file.
- * Takes the same query as /api/analytics.
+ * Takes the same query as /api/analytics. The last two columns say where
+ * each scan was sent and which schedule sent it.
  */
 
 import { getSession } from '@/lib/auth';
