@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { resolveDestination, isScheduleLive } from '../schedules';
+import {
+  resolveDestination,
+  isScheduleLive,
+  scheduleStatus,
+  findOverlaps,
+  describeSchedules,
+  scheduleSummary,
+} from '../schedules';
 
 const MAIN = 'https://example.com/menu';
 const at = (iso) => Date.parse(iso);
@@ -170,5 +177,92 @@ describe('weekly schedules', () => {
       expect(isScheduleLive(weekly(fields), now)).toBe(false);
     }
     expect(resolveDestination({ mainUrl: MAIN, schedules: [weekly({ timeZone: 'Not/AZone' })], now }).url).toBe(MAIN);
+  });
+});
+
+describe('scheduleStatus', () => {
+  const now = at('2026-11-28T12:00:00Z');
+  it('tells live, upcoming, off and ended apart', () => {
+    expect(scheduleStatus(range(), now)).toBe('live');
+    expect(scheduleStatus(range({ startsAt: '2026-12-24 00:00:00', endsAt: '2026-12-27 00:00:00' }), now)).toBe('upcoming');
+    expect(scheduleStatus(range({ enabled: 0 }), now)).toBe('off');
+    expect(scheduleStatus(range({ endsAt: '2026-11-28 12:00:00' }), now)).toBe('ended');
+    // Ended wins over off: it's listed with the ended ones either way.
+    expect(scheduleStatus(range({ enabled: 0, endsAt: '2026-11-01 00:00:00' }), now)).toBe('ended');
+  });
+
+  it('never calls a weekly schedule ended', () => {
+    expect(scheduleStatus(weekly(), at('2026-11-30T06:00:00Z'))).toBe('live'); // Mon 08:00
+    expect(scheduleStatus(weekly(), at('2026-11-30T12:00:00Z'))).toBe('upcoming');
+  });
+});
+
+describe('findOverlaps', () => {
+  const now = at('2026-11-20T00:00:00Z');
+
+  it('pairs date ranges whose times overlap, both ways', () => {
+    const a = range({ id: 1, startsAt: '2026-11-27 22:00:00', endsAt: '2026-11-30 22:00:00' });
+    const b = range({ id: 2, startsAt: '2026-11-30 00:00:00', endsAt: '2026-12-02 00:00:00' });
+    const c = range({ id: 3, startsAt: '2026-12-24 00:00:00', endsAt: '2026-12-27 00:00:00' });
+    const overlaps = findOverlaps([a, b, c], now);
+    expect(overlaps.get(1)).toEqual([2]);
+    expect(overlaps.get(2)).toEqual([1]);
+    expect(overlaps.has(3)).toBe(false);
+  });
+
+  it('treats ranges that only touch as not overlapping', () => {
+    const a = range({ id: 1, startsAt: '2026-11-27 00:00:00', endsAt: '2026-11-28 00:00:00' });
+    const b = range({ id: 2, startsAt: '2026-11-28 00:00:00', endsAt: '2026-11-29 00:00:00' });
+    expect(findOverlaps([a, b], now).size).toBe(0);
+  });
+
+  it('ignores ranges that are off or ended, and weekly schedules', () => {
+    const a = range({ id: 1 });
+    const off = range({ id: 2, enabled: 0 });
+    const ended = range({ id: 3, startsAt: '2026-11-01 00:00:00', endsAt: '2026-11-02 00:00:00' });
+    const later = at('2026-11-29T00:00:00Z');
+    const endedByThen = range({ id: 4, startsAt: '2026-11-27 00:00:00', endsAt: '2026-11-28 00:00:00' });
+    expect(findOverlaps([a, off, ended, weekly({ id: 5 })], now).size).toBe(0);
+    expect(findOverlaps([a, endedByThen], later).size).toBe(0);
+  });
+});
+
+describe('describeSchedules', () => {
+  it('adds each status and overlap, and names the schedule that wins now', () => {
+    const now = at('2026-11-29T12:00:00Z');
+    const first = range({ id: 1, position: 0, startsAt: '2026-11-29 00:00:00', endsAt: '2026-11-30 00:00:00' });
+    const second = range({ id: 2, position: 1 });
+    const { schedules, liveScheduleId } = describeSchedules([first, second], now);
+    expect(liveScheduleId).toBe(1);
+    expect(schedules.map((s) => [s.id, s.status, s.overlapsWith])).toEqual([
+      [1, 'live', [2]],
+      [2, 'live', [1]],
+    ]);
+  });
+
+  it('has no live schedule when none is live', () => {
+    expect(describeSchedules([range()], at('2026-11-01T00:00:00Z')).liveScheduleId).toBeNull();
+    expect(describeSchedules([], at('2026-11-01T00:00:00Z'))).toEqual({ schedules: [], liveScheduleId: null });
+  });
+});
+
+describe('scheduleSummary', () => {
+  it('names the live schedule and counts those that haven’t ended', () => {
+    const now = at('2026-11-28T12:00:00Z');
+    const ended = range({ id: 3, startsAt: '2026-11-01 00:00:00', endsAt: '2026-11-02 00:00:00' });
+    const off = range({ id: 4, enabled: 0, startsAt: '2026-12-01 00:00:00', endsAt: '2026-12-02 00:00:00' });
+    expect(scheduleSummary([range({ label: 'Black Friday' }), ended, off], now)).toEqual({
+      liveSchedule: {
+        id: 1,
+        label: 'Black Friday',
+        destinationUrl: 'https://example.com/black-friday',
+        endsAt: '2026-11-30 22:00:00',
+      },
+      scheduleCount: 2,
+    });
+  });
+
+  it('is empty without schedules', () => {
+    expect(scheduleSummary()).toEqual({ liveSchedule: null, scheduleCount: 0 });
   });
 });

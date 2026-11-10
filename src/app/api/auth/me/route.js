@@ -33,8 +33,9 @@ export async function GET() {
       email: user.email,
       name: user.name,
       avatar: user.avatar ?? null,
-      // { id, name, limit } — limit is null for unlimited packages.
-      package: { id: pkg.id, name: pkg.name, limit: pkg.limit },
+      // { id, name, limit, schedules } — limit is null for unlimited packages;
+      // schedules says whether the account can add and edit schedules.
+      package: { id: pkg.id, name: pkg.name, limit: pkg.limit, schedules: pkg.schedules },
       isAdmin: isAdminEmail(user.email),
     });
   } catch (error) {

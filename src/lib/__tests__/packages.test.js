@@ -4,6 +4,7 @@ import {
   DEFAULT_PACKAGE,
   isValidPackage,
   getPackage,
+  canUseSchedules,
   hasReachedLimit,
   describeLimit,
   describePrice,
@@ -36,6 +37,18 @@ describe('packages', () => {
     expect(getPackage('enterprise').limit).toBeNull();
     expect(getPackage('nonsense').id).toBe('starter');
     expect(getPackage(undefined).id).toBe('starter');
+  });
+
+  it('allows schedules from Business up', () => {
+    expect(PACKAGES.map((p) => [p.id, canUseSchedules(p.id)])).toEqual([
+      ['starter', false],
+      ['business', true],
+      ['extended', true],
+      ['enterprise', true],
+    ]);
+    // An unknown package falls back to Starter, so no schedules.
+    expect(canUseSchedules('nonsense')).toBe(false);
+    expect(canUseSchedules(undefined)).toBe(false);
   });
 });
 

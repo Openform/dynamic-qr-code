@@ -6,6 +6,7 @@ import QRCodeCard from "./components/QRCodeCard"
 import CreateEditModal from "./components/CreateEditModal"
 import CollectionsBar from "./components/CollectionsBar"
 import CollectionModal from "./components/CollectionModal"
+import SchedulesModal from "./components/SchedulesModal"
 import Avatar from "./components/Avatar"
 import { formatChangeTime, displayUrl } from "./components/scheduledChanges"
 import { SearchIcon, InboxIcon } from "@/app/components/icons"
@@ -113,6 +114,19 @@ export default function DashboardPage() {
     }
   }
 
+  // Schedules open in their own panel, from the card or on top of the edit
+  // screen (so unsaved edits there are kept).
+  const [schedulesFor, setSchedulesFor] = useState(null)
+  const closeSchedules = useCallback(() => setSchedulesFor(null), [])
+
+  // Put an updated code (from an API response) into the list, and into the
+  // edit screen if it's open on that code.
+  const mergeCode = useCallback((updated) => {
+    const merge = (q) => (q?.id === updated.id ? { ...q, ...updated } : q)
+    setQrcodes((prev) => prev.map(merge))
+    setEditingQR(merge)
+  }, [])
+
   // Cancel a scheduled destination change (from the card or the edit screen).
   async function handleCancelChange(qr, change) {
     const when = formatChangeTime(change.startsAt)
@@ -125,9 +139,7 @@ export default function DashboardPage() {
       )
       const data = await res.json().catch(() => ({}))
       if (res.ok && data.qrcode) {
-        const merge = (q) => (q?.id === qr.id ? { ...q, ...data.qrcode } : q)
-        setQrcodes((prev) => prev.map(merge))
-        setEditingQR(merge)
+        mergeCode(data.qrcode)
         return
       }
       alert(data.error || "Could not cancel the change. Please try again.")
@@ -515,6 +527,7 @@ export default function DashboardPage() {
                 onEdit={handleEdit}
                 onAssignCollection={handleAssignCollection}
                 onCancelChange={handleCancelChange}
+                onOpenSchedules={setSchedulesFor}
               />
             ))}
           </div>
@@ -528,10 +541,21 @@ export default function DashboardPage() {
         onSave={handleSave}
         onDelete={handleDelete}
         onCancelChange={handleCancelChange}
+        onOpenSchedules={setSchedulesFor}
         qrcode={editingQR}
         collections={collections}
         defaultCollectionId={newCodeCollectionId}
       />
+
+      {/* ---- Schedules ---- */}
+      {schedulesFor && (
+        <SchedulesModal
+          key={schedulesFor.id}
+          qrcode={schedulesFor}
+          onClose={closeSchedules}
+          onCodeUpdate={mergeCode}
+        />
+      )}
 
       {/* ---- Collection Create / Rename Modal ---- */}
       {collectionModal && (

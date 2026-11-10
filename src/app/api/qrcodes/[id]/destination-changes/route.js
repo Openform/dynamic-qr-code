@@ -12,9 +12,9 @@
  */
 
 import { getSession } from '@/lib/auth';
-import { toClientQRCode } from '@/lib/clientQRCode';
+import { loadClientQRCode } from '@/lib/qrcodeApi';
 import { parseScheduledChange, MAX_SCHEDULED_CHANGES } from '@/lib/destinationChanges';
-const { getQRCodeById, scheduleDestinationChange, getScheduledDestinationChanges } = require('@/lib/db');
+const { scheduleDestinationChange } = require('@/lib/db');
 
 export async function POST(request, { params }) {
   try {
@@ -49,9 +49,7 @@ export async function POST(request, { params }) {
       );
     }
 
-    const qrcode = await getQRCodeById(codeId, session.userId);
-    const scheduledChanges = await getScheduledDestinationChanges(codeId);
-    return Response.json({ qrcode: toClientQRCode(qrcode, scheduledChanges) }, { status: 201 });
+    return Response.json({ qrcode: await loadClientQRCode(codeId, session.userId) }, { status: 201 });
   } catch (error) {
     console.error('POST /api/qrcodes/[id]/destination-changes error:', error);
     return Response.json({ error: 'Internal server error' }, { status: 500 });

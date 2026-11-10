@@ -1,10 +1,14 @@
 /**
  * The shape the API sends a QR code in: a `SELECT q.*` row (snake_case, from
- * getQRCodeById) turned into camelCase, with the public redirect URL and the
- * code's scheduled destination changes.
+ * getQRCodeById) turned into camelCase, with the public redirect URL, the
+ * code's scheduled destination changes, and its schedule summary
+ * (`liveSchedule`, `scheduleCount`).
  *
- * Not for the code list: getQRCodesByUserId already returns this shape.
+ * Not for the code list: getQRCodesByUserId already returns this shape (the
+ * list route adds the schedule summary).
  */
+
+import { scheduleSummary } from './schedules';
 
 export const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 
@@ -24,7 +28,11 @@ function parseStyleConfig(value) {
   }
 }
 
-export function toClientQRCode(qrcode, scheduledChanges = []) {
+/**
+ * `scheduledChanges` from getScheduledDestinationChanges; `schedules` from
+ * getSchedulesForCode (pass them, or the card loses its schedule line).
+ */
+export function toClientQRCode(qrcode, { scheduledChanges = [], schedules = [] } = {}) {
   return {
     id: qrcode.id,
     shortId: qrcode.short_id,
@@ -33,6 +41,7 @@ export function toClientQRCode(qrcode, scheduledChanges = []) {
     title: qrcode.title,
     destinationUrl: qrcode.destination_url,
     scheduledChanges,
+    ...scheduleSummary(schedules),
     fgColor: qrcode.foreground_color,
     bgColor: qrcode.background_color,
     logoUrl: qrcode.logo_url,

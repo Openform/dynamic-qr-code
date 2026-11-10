@@ -23,7 +23,20 @@ import { NextResponse, after } from 'next/server';
 import { getClientIp } from '@/lib/rateLimit';
 import { recordScanFromRequest, pruneIfDue } from '@/lib/scanRecorder';
 import { resolveDestination } from '@/lib/schedules';
-const { getQRCodeByShortId } = require('@/lib/db');
+const { getQRCodeByShortId, getLiveCandidateSchedules } = require('@/lib/db');
+
+/**
+ * The code's schedules that could be live. If they can't be loaded, the scan
+ * still goes to the main destination rather than failing.
+ */
+async function loadSchedules(qrcodeId) {
+  try {
+    return await getLiveCandidateSchedules(qrcodeId);
+  } catch (error) {
+    console.error('Schedule lookup error:', error);
+    return [];
+  }
+}
 
 function redirect(url) {
   const response = NextResponse.redirect(url, 302);
@@ -48,9 +61,9 @@ export async function GET(request, { params }) {
       return unavailable(request, 'inactive');
     }
 
-    // The main destination, or a schedule's while one is live. Schedules
-    // aren't stored yet, so for now this is always the main destination.
-    const { url, scheduleId } = resolveDestination({ mainUrl: qrcode.destination_url });
+    // The main destination, or a schedule's while one is live.
+    const schedules = await loadSchedules(qrcode.id);
+    const { url, scheduleId } = resolveDestination({ mainUrl: qrcode.destination_url, schedules });
 
     // Ensure the destination is an absolute URL
     let destination = url;

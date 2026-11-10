@@ -158,6 +158,35 @@ async function initSchema() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
+  // Schedules: while one is live, a code's scans go to its URL instead of the
+  // main destination (lib/schedules.js decides, at every scan). kind 'range'
+  // uses starts_at/ends_at (UTC); kind 'weekly' uses days (a bit per day,
+  // 1 = Monday … 64 = Sunday) and start_time/end_time on the local clock in
+  // time_zone. position orders the list: when several are live, the lowest
+  // position wins within a kind. Rows go when their code does.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS qrcode_schedules (
+      id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      qrcode_id INT UNSIGNED NOT NULL,
+      label VARCHAR(100) NOT NULL,
+      kind VARCHAR(16) NOT NULL,
+      destination_url VARCHAR(2048) NOT NULL,
+      time_zone VARCHAR(64) NOT NULL,
+      starts_at DATETIME NULL,
+      ends_at DATETIME NULL,
+      days TINYINT UNSIGNED NULL,
+      start_time TIME NULL,
+      end_time TIME NULL,
+      position INT UNSIGNED NOT NULL DEFAULT 0,
+      enabled TINYINT(1) NOT NULL DEFAULT 1,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_qrcode_schedules_code (qrcode_id, enabled),
+      CONSTRAINT fk_qrcode_schedules_qrcode FOREIGN KEY (qrcode_id)
+        REFERENCES qrcodes(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
   // Text of the legal pages (slug 'privacy' or 'terms'), edited from
   // /admin/legal. No row means the page still shows its placeholder text
   // (lib/legalDefaults.js). last_updated is the date shown on the page;
@@ -915,6 +944,214 @@ async function pruneScanEvents(cutoff, batchSize = 5000) {
 }
 
 // ──────────────────────────────────────────────
+// Schedules
+// ──────────────────────────────────────────────
+// Callers are API routes, which check the account's package; these helpers
+// check that the code belongs to the user.
+
+// A schedule that can still be live: date ranges whose end hasn't passed, and
+// every weekly schedule. Ended date ranges are kept (listed under "Ended")
+// but never loaded for a scan and don't count toward the per-code limit.
+const NOT_ENDED_SQL = '(s.ends_at IS NULL OR s.ends_at > UTC_TIMESTAMP())';
+
+/** A qrcode_schedules row → the shape lib/schedules.js and the API use. */
+function toSchedule(row) {
+  return {
+    id: row.id,
+    qrcodeId: row.qrcode_id,
+    label: row.label,
+    kind: row.kind,
+    destinationUrl: row.destination_url,
+    timeZone: row.time_zone,
+    startsAt: row.starts_at ? utcToIso(row.starts_at) : null,
+    endsAt: row.ends_at ? utcToIso(row.ends_at) : null,
+    days: row.days,
+    // TIME comes back as "HH:MM:SS"; the minutes are all that's set.
+    startTime: row.start_time ? String(row.start_time).slice(0, 5) : null,
+    endTime: row.end_time ? String(row.end_time).slice(0, 5) : null,
+    position: row.position,
+    enabled: Boolean(Number(row.enabled)),
+  };
+}
+
+/** Every schedule of a code, in list order. The caller checks ownership. */
+async function getSchedulesForCode(qrcodeId) {
+  await ensureSchema();
+  const [rows] = await pool.execute(
+    `SELECT s.* FROM qrcode_schedules s
+     WHERE s.qrcode_id = :qrcodeId
+     ORDER BY s.position, s.id`,
+    { qrcodeId }
+  );
+  return rows.map(toSchedule);
+}
+
+/**
+ * The schedules a scan of this code has to check: switched on and not ended.
+ * Used by the public redirect, so it's one small indexed query.
+ */
+async function getLiveCandidateSchedules(qrcodeId) {
+  await ensureSchema();
+  const [rows] = await pool.execute(
+    `SELECT s.* FROM qrcode_schedules s
+     WHERE s.qrcode_id = :qrcodeId AND s.enabled = 1 AND ${NOT_ENDED_SQL}
+     ORDER BY s.position, s.id`,
+    { qrcodeId }
+  );
+  return rows.map(toSchedule);
+}
+
+/** All of a user's schedules that haven't ended, across their codes, in list order. */
+async function getNotEndedSchedulesByUserId(userId) {
+  await ensureSchema();
+  const [rows] = await pool.execute(
+    `SELECT s.* FROM qrcode_schedules s
+     JOIN qrcodes q ON q.id = s.qrcode_id
+     WHERE q.user_id = :userId AND ${NOT_ENDED_SQL}
+     ORDER BY s.qrcode_id, s.position, s.id`,
+    { userId }
+  );
+  return rows.map(toSchedule);
+}
+
+/** One schedule, if it belongs to this code and the code to this user. */
+async function getSchedule(qrcodeId, userId, scheduleId) {
+  await ensureSchema();
+  const [rows] = await pool.execute(
+    `SELECT s.* FROM qrcode_schedules s
+     JOIN qrcodes q ON q.id = s.qrcode_id
+     WHERE s.id = :scheduleId AND s.qrcode_id = :qrcodeId AND q.user_id = :userId
+     LIMIT 1`,
+    { scheduleId, qrcodeId, userId }
+  );
+  return rows[0] ? toSchedule(rows[0]) : null;
+}
+
+/**
+ * Add a schedule to the end of a code's list. `schedule` has `label`, `kind`,
+ * `destinationUrl`, `timeZone` and the fields for its kind (`startsAt` and
+ * `endsAt` as UTC "YYYY-MM-DD HH:MM:SS"; `days`, `startTime`, `endTime`).
+ * At most `limit` schedules that haven't ended can exist per code.
+ *
+ * Returns `{ ok: true, id }`, or `{ ok: false, reason: 'not_found' | 'limit' }`.
+ */
+async function createSchedule(qrcodeId, userId, schedule, limit) {
+  await ensureSchema();
+  const [codes] = await pool.execute(
+    'SELECT id FROM qrcodes WHERE id = :qrcodeId AND user_id = :userId LIMIT 1',
+    { qrcodeId, userId }
+  );
+  if (!codes[0]) return { ok: false, reason: 'not_found' };
+
+  const [counts] = await pool.execute(
+    `SELECT COUNT(*) AS count, (SELECT COALESCE(MAX(position) + 1, 0) FROM qrcode_schedules WHERE qrcode_id = :qrcodeId) AS nextPosition
+     FROM qrcode_schedules s
+     WHERE s.qrcode_id = :qrcodeId AND ${NOT_ENDED_SQL}`,
+    { qrcodeId }
+  );
+  if (Number(counts[0].count) >= limit) return { ok: false, reason: 'limit' };
+
+  const [result] = await pool.execute(
+    `INSERT INTO qrcode_schedules
+       (qrcode_id, label, kind, destination_url, time_zone, starts_at, ends_at, days, start_time, end_time, position, enabled)
+     VALUES
+       (:qrcodeId, :label, :kind, :destinationUrl, :timeZone, :startsAt, :endsAt, :days, :startTime, :endTime, :position, 1)`,
+    {
+      qrcodeId,
+      label: schedule.label,
+      kind: schedule.kind,
+      destinationUrl: schedule.destinationUrl,
+      timeZone: schedule.timeZone,
+      startsAt: schedule.startsAt ?? null,
+      endsAt: schedule.endsAt ?? null,
+      days: schedule.days ?? null,
+      startTime: schedule.startTime ?? null,
+      endTime: schedule.endTime ?? null,
+      position: Number(counts[0].nextPosition),
+    }
+  );
+  return { ok: true, id: result.insertId };
+}
+
+// Fields a schedule update may set, and their columns.
+const SCHEDULE_COLUMNS = {
+  label: 'label',
+  destinationUrl: 'destination_url',
+  timeZone: 'time_zone',
+  startsAt: 'starts_at',
+  endsAt: 'ends_at',
+  days: 'days',
+  startTime: 'start_time',
+  endTime: 'end_time',
+  enabled: 'enabled',
+};
+
+/**
+ * Change some of a schedule's fields (keys of SCHEDULE_COLUMNS; times as UTC
+ * "YYYY-MM-DD HH:MM:SS"). Returns false if the schedule isn't the user's.
+ */
+async function updateSchedule(qrcodeId, userId, scheduleId, fields) {
+  if (!(await getSchedule(qrcodeId, userId, scheduleId))) return false;
+
+  const sets = [];
+  const params = { scheduleId };
+  for (const [key, column] of Object.entries(SCHEDULE_COLUMNS)) {
+    if (fields[key] === undefined) continue;
+    sets.push(`${column} = :${key}`);
+    params[key] = key === 'enabled' ? (fields[key] ? 1 : 0) : fields[key];
+  }
+  if (sets.length > 0) {
+    await pool.execute(
+      `UPDATE qrcode_schedules SET ${sets.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = :scheduleId`,
+      params
+    );
+  }
+  return true;
+}
+
+/** Delete a schedule. Returns false if it isn't the user's. */
+async function deleteSchedule(qrcodeId, userId, scheduleId) {
+  if (!(await getSchedule(qrcodeId, userId, scheduleId))) return false;
+  await pool.execute('DELETE FROM qrcode_schedules WHERE id = :scheduleId', { scheduleId });
+  return true;
+}
+
+/**
+ * Put a code's schedules in the order given by `ids`, which must list every
+ * one of them exactly once. Returns 'ok', 'not_found' (not the user's code)
+ * or 'mismatch' (the ids aren't exactly the code's schedules).
+ */
+async function reorderSchedules(qrcodeId, userId, ids) {
+  await ensureSchema();
+  const [codes] = await pool.execute(
+    'SELECT id FROM qrcodes WHERE id = :qrcodeId AND user_id = :userId LIMIT 1',
+    { qrcodeId, userId }
+  );
+  if (!codes[0]) return 'not_found';
+
+  const [rows] = await pool.execute('SELECT id FROM qrcode_schedules WHERE qrcode_id = :qrcodeId', { qrcodeId });
+  const existing = new Set(rows.map((r) => r.id));
+  if (ids.length !== existing.size || new Set(ids).size !== ids.length || !ids.every((id) => existing.has(id))) {
+    return 'mismatch';
+  }
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    for (const [position, id] of ids.entries()) {
+      await conn.execute('UPDATE qrcode_schedules SET position = :position WHERE id = :id', { position, id });
+    }
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+  return 'ok';
+}
+
+// ──────────────────────────────────────────────
 // Collections
 // ──────────────────────────────────────────────
 
@@ -1163,6 +1400,14 @@ module.exports = {
   getScheduledDestinationChanges,
   scheduleDestinationChange,
   cancelDestinationChange,
+  getSchedulesForCode,
+  getLiveCandidateSchedules,
+  getNotEndedSchedulesByUserId,
+  getSchedule,
+  createSchedule,
+  updateSchedule,
+  deleteSchedule,
+  reorderSchedules,
   createQRCodeWithinLimit,
   updateQRCode,
   deleteQRCode,

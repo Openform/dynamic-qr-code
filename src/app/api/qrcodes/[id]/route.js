@@ -8,14 +8,8 @@
 
 import { getSession } from '@/lib/auth';
 import { normalizeDestinationUrl, isValidDestinationUrl } from '@/lib/qrStyle';
-import { toClientQRCode } from '@/lib/clientQRCode';
-const {
-  getQRCodeById,
-  updateQRCode,
-  deleteQRCode,
-  getCollectionById,
-  getScheduledDestinationChanges,
-} = require('@/lib/db');
+import { loadClientQRCode } from '@/lib/qrcodeApi';
+const { updateQRCode, deleteQRCode, getCollectionById } = require('@/lib/db');
 
 // ── GET — single QR code ───────────────────────
 export async function GET(request, { params }) {
@@ -29,7 +23,7 @@ export async function GET(request, { params }) {
       );
     }
 
-    const qrcode = await getQRCodeById(Number(id), session.userId);
+    const qrcode = await loadClientQRCode(Number(id), session.userId);
     if (!qrcode) {
       return Response.json(
         { error: 'QR code not found' },
@@ -37,8 +31,7 @@ export async function GET(request, { params }) {
       );
     }
 
-    const scheduledChanges = await getScheduledDestinationChanges(qrcode.id);
-    return Response.json({ qrcode: toClientQRCode(qrcode, scheduledChanges) });
+    return Response.json({ qrcode });
   } catch (error) {
     console.error('GET /api/qrcodes/[id] error:', error);
     return Response.json(
@@ -114,8 +107,7 @@ export async function PUT(request, { params }) {
       );
     }
 
-    const scheduledChanges = await getScheduledDestinationChanges(updated.id);
-    return Response.json({ qrcode: toClientQRCode(updated, scheduledChanges) });
+    return Response.json({ qrcode: await loadClientQRCode(updated.id, session.userId) });
   } catch (error) {
     console.error('PUT /api/qrcodes/[id] error:', error);
     return Response.json(

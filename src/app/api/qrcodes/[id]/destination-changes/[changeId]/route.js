@@ -8,8 +8,8 @@
  */
 
 import { getSession } from '@/lib/auth';
-import { toClientQRCode } from '@/lib/clientQRCode';
-const { getQRCodeById, cancelDestinationChange, getScheduledDestinationChanges } = require('@/lib/db');
+import { loadClientQRCode } from '@/lib/qrcodeApi';
+const { cancelDestinationChange } = require('@/lib/db');
 
 export async function DELETE(request, { params }) {
   try {
@@ -36,9 +36,7 @@ export async function DELETE(request, { params }) {
       );
     }
 
-    const qrcode = await getQRCodeById(codeId, session.userId);
-    const scheduledChanges = await getScheduledDestinationChanges(codeId);
-    return Response.json({ qrcode: toClientQRCode(qrcode, scheduledChanges) });
+    return Response.json({ qrcode: await loadClientQRCode(codeId, session.userId) });
   } catch (error) {
     console.error('DELETE /api/qrcodes/[id]/destination-changes/[changeId] error:', error);
     return Response.json({ error: 'Internal server error' }, { status: 500 });
