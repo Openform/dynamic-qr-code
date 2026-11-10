@@ -2,7 +2,8 @@
  * GET /api/admin/analytics — scan analytics across every account.
  *
  * Admins only (see ADMIN_EMAILS). Query: range, tz, and optionally accountId
- * to look at one account.
+ * to look at one account, codeId for one code, and with it destination
+ * ("main", "period-<id>" or "schedule-<id>") for one of its destinations.
  */
 
 import { getAdminUser, adminOnlyResponse } from '@/lib/admin';

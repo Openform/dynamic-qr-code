@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseAnalyticsFilters,
+  parseDestination,
+  initialFiltersFromPageParams,
   parseOffsetMinutes,
   computePeriods,
   bucketForDays,
@@ -25,14 +27,27 @@ describe('parseAnalyticsFilters', () => {
       codeId: null,
       collectionId: null,
       accountId: null,
+      destination: null,
     });
   });
 
   it('reads every filter', () => {
     expect(
       parseAnalyticsFilters(params('range=7d&tz=-120&codeId=12&collectionId=default&accountId=3'))
-    ).toEqual({ range: '7d', offsetMinutes: 120, codeId: 12, collectionId: 'default', accountId: 3 });
+    ).toEqual({ range: '7d', offsetMinutes: 120, codeId: 12, collectionId: 'default', accountId: 3, destination: null });
     expect(parseAnalyticsFilters(params('collectionId=4')).collectionId).toBe(4);
+    expect(parseAnalyticsFilters(params('codeId=12&destination=schedule-5')).destination).toEqual({
+      key: 'schedule-5',
+      kind: 'schedule',
+      id: 5,
+    });
+  });
+
+  it('only filters by destination within one code', () => {
+    expect(parseAnalyticsFilters(params('destination=main'))).toEqual({
+      error: 'Choose a QR code to filter by destination',
+    });
+    expect(parseAnalyticsFilters(params('codeId=1&destination=nowhere'))).toEqual({ error: 'Invalid destination' });
   });
 
   it('rejects bad values', () => {
@@ -43,6 +58,33 @@ describe('parseAnalyticsFilters', () => {
     expect(parseAnalyticsFilters(params('codeId=-1'))).toHaveProperty('error');
     expect(parseAnalyticsFilters(params('collectionId=1.5'))).toHaveProperty('error');
     expect(parseAnalyticsFilters(params('accountId=x'))).toHaveProperty('error');
+  });
+});
+
+describe('parseDestination', () => {
+  it('reads the main destination, a period or a schedule', () => {
+    expect(parseDestination('main')).toEqual({ key: 'main', kind: 'main', id: null });
+    expect(parseDestination('period-12')).toEqual({ key: 'period-12', kind: 'period', id: 12 });
+    expect(parseDestination('schedule-3')).toEqual({ key: 'schedule-3', kind: 'schedule', id: 3 });
+    expect(parseDestination(null)).toBeNull();
+    expect(parseDestination('')).toBeNull();
+  });
+
+  it('rejects anything else', () => {
+    for (const bad of ['schedule-0', 'schedule-', 'schedule-1.5', 'period-x', 'Main', 'schedule-12345678901', 'url-1']) {
+      expect(parseDestination(bad), bad).toBeNaN();
+    }
+  });
+});
+
+describe('initialFiltersFromPageParams', () => {
+  it('keeps a destination only with a code', () => {
+    expect(initialFiltersFromPageParams({ code: '4', destination: 'schedule-2' })).toMatchObject({
+      codeId: 4,
+      destination: 'schedule-2',
+    });
+    expect(initialFiltersFromPageParams({ destination: 'schedule-2' }).destination).toBeNull();
+    expect(initialFiltersFromPageParams({ code: '4', destination: 'bad' }).destination).toBeNull();
   });
 });
 

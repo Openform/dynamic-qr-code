@@ -163,8 +163,8 @@ More about how they behave:
 Schedules are stored in `qrcode_schedules`, created automatically on first
 run. The redirect checks a code's switched-on schedules that haven't ended at
 every scan (lib/schedules.js), so no cron job is needed, and each scan records
-which schedule sent it (`scan_events.schedule_id`). A code's destination
-history in analytics counts only scans that went to the main destination.
+which schedule sent it (`scan_events.schedule_id`). Analytics shows each
+schedule's scans under [Destinations](#destinations).
 
 Weekly schedules are sent to the API (`POST /api/qrcodes/[id]/schedules`) as
 `{ kind: 'weekly', label, destinationUrl, timeZone, days, startTime,
@@ -182,8 +182,10 @@ from the **📈 Analytics** link on its card. Admins see every account at
 The dashboard shows scans and unique scanners over time (with the change vs.
 the previous period), countries and cities, device type, OS, browser or app,
 language, a day × hour grid of when people scan, top codes, recent scans, and
-for a single code the scans each destination URL got while it was live. Any
-range can be downloaded as CSV.
+for a single code where its scans were sent (see
+[Destinations](#destinations)). Any range can be downloaded as CSV; the last
+two columns, **Destination** and **Schedule**, say where each scan was sent
+and which schedule sent it (empty for the main destination).
 
 What's stored per scan (`scan_events` table): time (UTC), the destination URL
 the scan was sent to and the [schedule](#schedules) that sent it (if any),
@@ -198,6 +200,36 @@ chart and of each code's scan count.
 - **Retention:** rows older than `ANALYTICS_RETENTION_MONTHS` are deleted
   automatically (checked once a day). Each code's total scan count is kept.
 - **Deleting** a code or account deletes its scan records too.
+
+### Destinations
+
+For a single code, **Destinations** lists where its scans in the selected
+range went, with scans, unique scanners and, for the main destination, scans
+per day while it was live:
+
+- **Main destination**: one row for each destination the code has had, while
+  it was live. Changes that haven't started yet aren't shown.
+- **Schedules**: one row for each schedule that sent scans, plus switched-on
+  schedules that could have. If a schedule's URL was edited, its scans to the
+  earlier URL get their own row. A deleted schedule's scans stay, as
+  "Deleted schedule".
+
+Every scan lands in exactly one row, so the rows add up to the code's total;
+the total's unique scanners count someone who reached two destinations once.
+Scans recorded since destinations were stored use the URL and schedule they
+were actually sent to. Older scans (before schedules existed) count toward
+the main destination that was live at the time.
+
+Selecting a row, or choosing from the **Destination** filter next to the code,
+narrows the whole page and the CSV export to those scans. The filter is in the
+page URL, so it can be bookmarked: `?code=12&destination=schedule-5`, where the
+value is `main`, `period-<id>` (one row of the main destination's history,
+`qrcode_destinations.id`) or `schedule-<id>`. The API takes the same
+`destination` parameter alongside `codeId`.
+
+The SQL is in `src/lib/scanAnalytics.js` and the grouping in
+`src/lib/destinationStats.js`. `src/lib/__tests__/destinationAnalytics.db.test.js`
+checks the totals against a real database (see [CI checks](#ci-checks)).
 
 ### Location data (DB-IP)
 
@@ -241,7 +273,7 @@ credit shown on the analytics page. Keep it if you change the page.
 Hostinger redeploys whenever `main` changes, so every pull request into `main` runs two checks (`.github/workflows/ci.yml`). Make both required in the branch ruleset for `main`, so a PR can't merge until they pass.
 
 - **Lint, test and build**: `npm run lint`, `npm test` and a production build with webpack, as on Hostinger.
-- **Database migration check**: `scripts/ci/check-migrations.mjs` runs the app's own schema setup (`ensureSchema()` in `src/lib/db.js`) against a throwaway MariaDB. It fails if a change would remove a table, column or row, change an existing value, or break when it runs twice. It also checks that pruning old scans deletes exactly the scans it should.
+- **Database migration check**: `scripts/ci/check-migrations.mjs` runs the app's own schema setup (`ensureSchema()` in `src/lib/db.js`) against a throwaway MariaDB. It fails if a change would remove a table, column or row, change an existing value, or break when it runs twice. It also checks that pruning old scans deletes exactly the scans it should. Then the same job runs the tests that need a database (`*.db.test.js`, skipped by `npm test` elsewhere): scans per destination must add up to each code's total, and narrowing to a destination must match its row.
 
 The check starts from the schema `main` builds, filled with made-up sample rows (`scripts/ci/seed-data.mjs`). Production has been migrated through older versions, so it can differ from that. To test against production's real structure too, add `scripts/ci/prod-schema.sql`:
 
@@ -259,6 +291,12 @@ docker run -d --name qrgo-ci-db -e MARIADB_ROOT_PASSWORD=ci -p 3306:3306 mariadb
 
 ```bash
 MYSQL_HOST=127.0.0.1 MYSQL_USER=root MYSQL_PASSWORD=ci MYSQL_DATABASE=qrgo_ci node scripts/ci/check-migrations.mjs
+```
+
+The database tests also drop and recreate their database, with the same rule about `_ci`:
+
+```bash
+ANALYTICS_DB_TEST=1 MYSQL_HOST=127.0.0.1 MYSQL_USER=root MYSQL_PASSWORD=ci MYSQL_DATABASE=qrgo_ci npx vitest run db.test
 ```
 
 ## Getting Started

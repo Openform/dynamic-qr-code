@@ -6,7 +6,7 @@
  */
 
 import { parseAnalyticsFilters, computePeriods, RANGES } from './analyticsFilters';
-import { getScanAnalytics, scanEventBatches } from './scanAnalytics';
+import { getScanAnalytics, scanEventBatches, resolveDestinationFilter } from './scanAnalytics';
 import { retentionMonths } from './retention';
 import { csvRow } from './csv';
 import { getQRCodeById, getCollectionById } from './db';
@@ -23,26 +23,32 @@ function notFound(error) {
  * Validate the query string and work out which scans to include. For a user,
  * a requested code or collection must be theirs. For an admin, the scope is
  * every account, or one via `accountId`, optionally narrowed to any code.
+ * Either can narrow a code to one of its destinations.
  * Returns `{ filters, scope }` or `{ response }` (an error to send back).
  */
 async function resolveScope(request, { userId, admin }) {
   const filters = parseAnalyticsFilters(new URL(request.url).searchParams);
   if (filters.error) return { response: badRequest(filters.error) };
 
+  let scope;
   if (admin) {
-    return { filters, scope: { userId: filters.accountId, codeId: filters.codeId } };
+    scope = { userId: filters.accountId, codeId: filters.codeId };
+  } else {
+    if (filters.codeId !== null && !(await getQRCodeById(filters.codeId, userId))) {
+      return { response: notFound('QR code not found') };
+    }
+    if (typeof filters.collectionId === 'number' && !(await getCollectionById(filters.collectionId, userId))) {
+      return { response: notFound('Collection not found') };
+    }
+    scope = { userId, codeId: filters.codeId, collectionId: filters.collectionId };
   }
 
-  if (filters.codeId !== null && !(await getQRCodeById(filters.codeId, userId))) {
-    return { response: notFound('QR code not found') };
+  if (filters.destination) {
+    const destination = await resolveDestinationFilter(filters.codeId, filters.destination);
+    if (!destination) return { response: notFound('Destination not found') };
+    scope.destination = destination;
   }
-  if (typeof filters.collectionId === 'number' && !(await getCollectionById(filters.collectionId, userId))) {
-    return { response: notFound('Collection not found') };
-  }
-  return {
-    filters,
-    scope: { userId, codeId: filters.codeId, collectionId: filters.collectionId },
-  };
+  return { filters, scope };
 }
 
 /** GET handler body: every dashboard panel as JSON. */
@@ -81,16 +87,20 @@ export async function analyticsCsvResponse(request, { userId = null, admin = fal
       ? { from: null, to: null }
       : computePeriods(filters.range, Date.now(), filters.offsetMinutes);
 
+  // Destination and Schedule come last, so spreadsheets built on the earlier
+  // columns keep working. An empty Schedule means the main destination.
   const header = [
     'Scanned at (UTC)', 'QR code', 'Short ID', 'Country code', 'Country', 'Region', 'City',
     'Device', 'OS', 'Browser', 'Language',
     ...(admin ? ['Account name', 'Account email'] : []),
+    'Destination', 'Schedule',
   ];
   const toLine = (r) =>
     csvRow([
       r.scannedAt, r.codeTitle, r.shortId, r.countryCode, countryName(r.countryCode), r.region, r.city,
       r.deviceType, r.os, r.browser, r.language,
       ...(admin ? [r.ownerName, r.ownerEmail] : []),
+      r.destinationUrl, r.scheduleLabel,
     ]);
 
   const encoder = new TextEncoder();

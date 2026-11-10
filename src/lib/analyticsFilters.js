@@ -29,6 +29,20 @@ function parseId(value) {
   return /^\d{1,10}$/.test(value) && Number(value) > 0 ? Number(value) : NaN;
 }
 
+/**
+ * A destination filter value: "main" (every scan the main destination got),
+ * "period-<id>" (one main-destination period: a destination history row and
+ * the time until the next one) or "schedule-<id>" (the scans a schedule sent).
+ * Returns `{ key, kind, id }`, null when absent, or NaN when invalid.
+ */
+export function parseDestination(value) {
+  if (value === null || value === undefined || value === '') return null;
+  if (value === 'main') return { key: 'main', kind: 'main', id: null };
+  const match = /^(period|schedule)-(\d{1,10})$/.exec(value);
+  if (!match || Number(match[2]) <= 0) return NaN;
+  return { key: value, kind: match[1], id: Number(match[2]) };
+}
+
 /** Browser `getTimezoneOffset()` value → minutes to add to UTC. Bad input → 0 (UTC). */
 export function parseOffsetMinutes(tz) {
   if (tz === null || tz === undefined || !/^-?\d{1,4}$/.test(String(tz))) return 0;
@@ -72,8 +86,9 @@ export function computePeriods(range, nowMs, offsetMinutes, firstScanMs = null) 
 
 /**
  * Validate the dashboard's query string. Returns `{ error }` or
- * `{ range, offsetMinutes, codeId, collectionId, accountId }` where
- * collectionId is a number, 'default' (codes in no collection) or null.
+ * `{ range, offsetMinutes, codeId, collectionId, accountId, destination }`
+ * where collectionId is a number, 'default' (codes in no collection) or null,
+ * and destination is from parseDestination() (one code's only).
  */
 export function parseAnalyticsFilters(searchParams) {
   const range = searchParams.get('range') || DEFAULT_RANGE;
@@ -89,19 +104,25 @@ export function parseAnalyticsFilters(searchParams) {
   const accountId = parseId(searchParams.get('accountId'));
   if (Number.isNaN(accountId)) return { error: 'Invalid account' };
 
+  const destination = parseDestination(searchParams.get('destination'));
+  if (Number.isNaN(destination)) return { error: 'Invalid destination' };
+  if (destination && codeId === null) return { error: 'Choose a QR code to filter by destination' };
+
   return {
     range,
     offsetMinutes: parseOffsetMinutes(searchParams.get('tz')),
     codeId,
     collectionId,
     accountId,
+    destination,
   };
 }
 
 /**
  * Starting filters for the analytics pages from their own URL
- * (?range=30d&code=12&collection=default&account=3), as a plain object from
- * Next's `searchParams`. Anything invalid is dropped.
+ * (?range=30d&code=12&collection=default&account=3&destination=schedule-5),
+ * as a plain object from Next's `searchParams`. Anything invalid is dropped,
+ * and so is a destination without a code.
  */
 export function initialFiltersFromPageParams(params = {}) {
   const one = (v) => (Array.isArray(v) ? v[0] : v);
@@ -111,11 +132,14 @@ export function initialFiltersFromPageParams(params = {}) {
   };
   const range = one(params.range);
   const collection = one(params.collection);
+  const codeId = id(params.code);
+  const destination = codeId === null ? null : parseDestination(one(params.destination) ?? null);
   return {
     range: range && Object.hasOwn(RANGES, range) ? range : DEFAULT_RANGE,
-    codeId: id(params.code),
+    codeId,
     collectionId: collection === 'default' ? 'default' : id(collection),
     accountId: id(params.account),
+    destination: destination ? destination.key : null,
   };
 }
 

@@ -603,6 +603,150 @@
   vertical-align: middle;
 }
 
+/* ---- Destinations ---- */
+.destinationName {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.destinationName > button {
+  min-width: 0;
+}
+.openLink {
+  flex: none;
+  margin-left: 6px;
+  padding: 0 2px;
+  border-radius: 4px;
+  color: var(--text-tertiary);
+}
+.openLink:hover {
+  color: var(--cyan);
+}
+.scheduleUrl {
+  color: var(--text-tertiary);
+  font-size: 0.78rem;
+}
+.scheduleUrl:hover {
+  color: var(--cyan);
+}
+.sectionRow th {
+  padding-top: 16px;
+  border-bottom: none;
+  color: var(--text-secondary);
+}
+.selectedRow td {
+  background: rgba(0, 212, 255, 0.07);
+}
+.selectedRow td:first-child {
+  box-shadow: inset 3px 0 0 var(--cyan);
+  padding-left: 10px;
+}
+.clickableRow:hover.selectedRow td {
+  background: rgba(0, 212, 255, 0.1);
+}
+.totalRow th,
+.totalRow td {
+  padding: 10px 12px 0 0;
+  border-top: 1px solid var(--glass-border);
+  border-bottom: none;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.85rem;
+}
+.cardFoot {
+  margin-top: 12px;
+  font-size: 0.78rem;
+  color: var(--text-tertiary);
+}
+.openLink:focus-visible,
+.scheduleUrl:focus-visible,
+.codeTitle:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+/* On a phone each destination stacks: name, when it was live, then its
+   numbers side by side with their labels, so nothing needs a sideways scroll. */
+@media (max-width: 560px) {
+  .destinationsTable thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .destinationsTable,
+  .destinationsTable tbody,
+  .destinationsTable tfoot {
+    display: block;
+  }
+  .destinationsTable tr {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  }
+  .destinationsTable td,
+  .destinationsTable th {
+    padding: 0;
+    border: none;
+    max-width: none !important;
+  }
+  .destinationsTable td:nth-child(-n + 2),
+  .destinationsTable th {
+    grid-column: 1 / -1;
+  }
+  .destinationsTable td:nth-child(2) {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    white-space: normal !important;
+  }
+  .destinationsTable td:empty {
+    display: none;
+  }
+  .destinationsTable .num {
+    text-align: left !important;
+    margin-top: 4px;
+  }
+  .destinationsTable .num::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 500;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .destinationsTable .sectionRow {
+    padding: 16px 0 0;
+    border-bottom: none;
+  }
+  .destinationsTable .selectedRow {
+    background: rgba(0, 212, 255, 0.07);
+    box-shadow: inset 3px 0 0 var(--cyan);
+    padding-left: 12px;
+    padding-right: 8px;
+  }
+  .destinationsTable .selectedRow td,
+  .destinationsTable .selectedRow td:first-child {
+    background: none;
+    box-shadow: none;
+    padding-left: 0;
+  }
+  .destinationsTable .totalRow {
+    border-top: 1px solid var(--glass-border);
+    border-bottom: none;
+  }
+  .destinationsTable .totalRow th,
+  .destinationsTable .totalRow td {
+    border-top: none;
+  }
+}
+
 /* ---- Notes ---- */
 .notes {
   display: flex;

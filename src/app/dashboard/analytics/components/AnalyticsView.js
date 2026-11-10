@@ -11,9 +11,10 @@ import Devices from "./Devices"
 import ScanHeatmap from "./ScanHeatmap"
 import RankedBars from "./RankedBars"
 import TopCodesTable from "./TopCodesTable"
-import DestinationHistory from "./DestinationHistory"
+import Destinations, { destinationName } from "./Destinations"
 import RecentScans from "./RecentScans"
 import { formatDate, formatDateTime, formatExact, languageName } from "./format"
+import { displayUrl } from "../../components/scheduledChanges"
 
 // How often to refresh while the page is open and visible, and how stale the
 // data must be before coming back to the tab triggers a refresh.
@@ -58,6 +59,8 @@ export default function AnalyticsView({ mode = "user", initial }) {
   const [codeId, setCodeId] = useState(initial.codeId)
   const [collectionId, setCollectionId] = useState(admin ? null : initial.collectionId)
   const [accountId, setAccountId] = useState(admin ? initial.accountId : null)
+  // One of the code's destinations ("main", "period-…", "schedule-…"), or null.
+  const [destination, setDestination] = useState(initial.codeId ? initial.destination : null)
 
   const [codes, setCodes] = useState([])
   const [collections, setCollections] = useState([])
@@ -99,16 +102,24 @@ export default function AnalyticsView({ mode = "user", initial }) {
     if (codeId) p.set("codeId", codeId)
     else if (collectionId !== null) p.set("collectionId", collectionId)
     if (accountId) p.set("accountId", accountId)
+    if (codeId && destination) p.set("destination", destination)
     return p
-  }, [range, codeId, collectionId, accountId])
+  }, [range, codeId, collectionId, accountId, destination])
 
   useEffect(() => {
     const page = new URLSearchParams({ range })
     if (codeId) page.set("code", codeId)
     else if (collectionId !== null) page.set("collection", collectionId)
     if (accountId) page.set("account", accountId)
+    if (codeId && destination) page.set("destination", destination)
     window.history.replaceState(null, "", `?${page}`)
-  }, [range, codeId, collectionId, accountId])
+  }, [range, codeId, collectionId, accountId, destination])
+
+  /** Show one code (or all, with null); its destination filter starts over. */
+  function chooseCode(id) {
+    setCodeId(id)
+    setDestination(null)
+  }
 
   // The current filters as one key. While the data on screen is for other
   // filters (or there's none yet), the page is loading: it stays dimmed until
@@ -213,10 +224,14 @@ export default function AnalyticsView({ mode = "user", initial }) {
     collectionId === null ? true : collectionId === "default" ? c.collectionId == null : c.collectionId === collectionId
   )
 
+  // The loaded code's destinations, for the destination filter.
+  const destinations = codeId && data?.code?.id === codeId ? data.destinations : null
+  const destinationLabel = destination && destinations ? destinationName(destination, destinations) : null
+
   const scopeLabel = code
-    ? admin && code.owner
-      ? `${code.title} · ${code.owner.name}`
-      : code.title
+    ? [admin && code.owner ? `${code.title} · ${code.owner.name}` : code.title, destinationLabel]
+        .filter(Boolean)
+        .join(" · ")
     : admin
       ? account
         ? account.name
@@ -226,7 +241,7 @@ export default function AnalyticsView({ mode = "user", initial }) {
         : "All codes"
 
   function selectCode(id) {
-    setCodeId(id)
+    chooseCode(id)
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
@@ -303,7 +318,7 @@ export default function AnalyticsView({ mode = "user", initial }) {
               value={accountId ?? ""}
               onChange={(e) => {
                 setAccountId(e.target.value ? Number(e.target.value) : null)
-                setCodeId(null)
+                chooseCode(null)
               }}
             >
               <option value="">All accounts</option>
@@ -323,7 +338,7 @@ export default function AnalyticsView({ mode = "user", initial }) {
                   onChange={(e) => {
                     const v = e.target.value
                     setCollectionId(v === "" ? null : v === "default" ? "default" : Number(v))
-                    setCodeId(null)
+                    chooseCode(null)
                   }}
                 >
                   <option value="">All collections</option>
@@ -339,7 +354,7 @@ export default function AnalyticsView({ mode = "user", initial }) {
                 className={`input-field ${styles.select}`}
                 aria-label="QR code"
                 value={codeId ?? ""}
-                onChange={(e) => setCodeId(e.target.value ? Number(e.target.value) : null)}
+                onChange={(e) => chooseCode(e.target.value ? Number(e.target.value) : null)}
               >
                 <option value="">All codes</option>
                 {codeOptions.map((c) => (
@@ -352,9 +367,13 @@ export default function AnalyticsView({ mode = "user", initial }) {
           )}
 
           {admin && codeId && (
-            <button type="button" className="badge badge-cyan" onClick={() => setCodeId(null)} title="Show all codes">
+            <button type="button" className="badge badge-cyan" onClick={() => chooseCode(null)} title="Show all codes">
               {code ? code.title : "One code"} ✕
             </button>
+          )}
+
+          {destinations && (
+            <DestinationSelect destinations={destinations} value={destination} onChange={setDestination} />
           )}
 
           <a href={exportHref} className={`btn btn-ghost btn-sm ${styles.exportButton}`} download>
@@ -365,10 +384,16 @@ export default function AnalyticsView({ mode = "user", initial }) {
         {error && (
           <div className="error-message" role="alert" style={{ marginBottom: 20 }}>
             {error}
-            {codeId && (
-              <button type="button" className={styles.linkButton} onClick={() => setCodeId(null)}>
-                Show all codes
+            {codeId && destination ? (
+              <button type="button" className={styles.linkButton} onClick={() => setDestination(null)}>
+                Show all destinations
               </button>
+            ) : (
+              codeId && (
+                <button type="button" className={styles.linkButton} onClick={() => chooseCode(null)}>
+                  Show all codes
+                </button>
+              )
             )}
           </div>
         )}
@@ -410,7 +435,15 @@ export default function AnalyticsView({ mode = "user", initial }) {
             </div>
 
             {data.destinations ? (
-              <DestinationHistory destinations={data.destinations} now={data.loadedAt} />
+              <Destinations
+                destinations={data.destinations}
+                rangeLabel={RANGES[data.range].label}
+                selected={data.destination}
+                onSelect={(key) => {
+                  setDestination(key)
+                  window.scrollTo({ top: 0, behavior: "smooth" })
+                }}
+              />
             ) : (
               <TopCodesTable
                 codes={data.topCodes ?? []}
@@ -444,6 +477,55 @@ export default function AnalyticsView({ mode = "user", initial }) {
         )}
       </main>
     </div>
+  )
+}
+
+/**
+ * Narrows a code's analytics to one destination: the main destination (or
+ * one of its links, when it has had more than one), or a schedule.
+ */
+function DestinationSelect({ destinations, value, onChange }) {
+  const periods = [...destinations.periods].reverse() // newest first
+  const schedules = destinations.scheduleList.map((s) => ({
+    key: s.key,
+    label: s.enabled ? s.label : `${s.label} (off)`
+  }))
+  // Deleted schedules with scans in the period, and the one chosen, if missing.
+  const known = new Set(["main", ...periods.map((p) => p.key), ...schedules.map((s) => s.key)])
+  for (const key of new Set([...destinations.schedules.map((r) => r.key), value])) {
+    if (key && !known.has(key)) {
+      schedules.push({ key, label: destinationName(key, destinations) })
+      known.add(key)
+    }
+  }
+  return (
+    <select
+      className={`input-field ${styles.select}`}
+      aria-label="Destination"
+      value={value ?? ""}
+      onChange={(e) => onChange(e.target.value || null)}
+    >
+      <option value="">All destinations</option>
+      <option value="main">{periods.length > 1 ? "Main destination (every link)" : "Main destination"}</option>
+      {periods.length > 1 && (
+        <optgroup label="Main destination, one link">
+          {periods.map((p) => (
+            <option key={p.key} value={p.key}>
+              {displayUrl(p.url)} · {p.endedAt ? `${formatDate(p.startedAt)} – ${formatDate(p.endedAt)}` : `since ${formatDate(p.startedAt)}`}
+            </option>
+          ))}
+        </optgroup>
+      )}
+      {schedules.length > 0 && (
+        <optgroup label="Schedules">
+          {schedules.map((s) => (
+            <option key={s.key} value={s.key}>
+              {s.label}
+            </option>
+          ))}
+        </optgroup>
+      )}
+    </select>
   )
 }
 

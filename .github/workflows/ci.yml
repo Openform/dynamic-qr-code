@@ -81,3 +81,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: node scripts/ci/check-migrations.mjs
+      # Analytics queries against the real database: scans per destination add
+      # up to each code's total (src/lib/__tests__/*.db.test.js; skipped by
+      # "npm test" in the other job, which has no database).
+      - run: npx vitest run db.test
+        env:
+          ANALYTICS_DB_TEST: '1'
