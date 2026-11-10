@@ -76,6 +76,39 @@ export default function DashboardPage() {
     loadData()
   }, [])
 
+  // Keep the cards current as schedules and destination changes start and
+  // end: re-read the code list every minute while the page is visible, and
+  // as soon as it's shown again. A card whose code didn't change keeps the
+  // same object, so it doesn't redraw.
+  useEffect(() => {
+    let stopped = false
+    async function refresh() {
+      if (document.visibilityState !== "visible") return
+      try {
+        const res = await fetch("/api/qrcodes")
+        if (!res.ok || stopped) return
+        const data = await res.json()
+        if (stopped || !Array.isArray(data.qrcodes)) return
+        setQrcodes((prev) => {
+          const before = new Map(prev.map((q) => [q.id, q]))
+          return data.qrcodes.map((fresh) => {
+            const old = before.get(fresh.id)
+            return old && JSON.stringify(old) === JSON.stringify(fresh) ? old : fresh
+          })
+        })
+      } catch {
+        // Offline for a moment: the next refresh tries again.
+      }
+    }
+    const timer = setInterval(refresh, 60_000)
+    document.addEventListener("visibilitychange", refresh)
+    return () => {
+      stopped = true
+      clearInterval(timer)
+      document.removeEventListener("visibilitychange", refresh)
+    }
+  }, [])
+
   // ---- Package limit ----
   // `limit` is null on unlimited packages. The server enforces this too; the
   // check here just stops the user filling in a code they can't save.

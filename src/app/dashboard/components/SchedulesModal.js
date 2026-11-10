@@ -1,24 +1,32 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { isValidDestinationUrl } from "@/lib/qrStyle"
 import {
   formatChangeTime,
   displayUrl,
+  describeLength,
   toLocalInputValue,
   viewerTimeZone
 } from "./scheduledChanges"
 import styles from "./SchedulesModal.module.css"
 
 const HOUR_MS = 60 * 60 * 1000
-const DAY_MS = 24 * HOUR_MS
+
+// How often the open panel re-reads its schedules, so they move from
+// upcoming to live to ended on their own.
+const REFRESH_MS = 30_000
 
 /** The URL field shows a fixed "https://" prefix, so it holds the rest. */
 function stripScheme(value) {
   return String(value ?? "").trim().replace(/^https?:\/\//i, "")
 }
 
-/** A form for a new schedule: from the next full hour, for a day. */
+/**
+ * A form for a new schedule: from the next full hour, for an hour. (A day
+ * used to be the default, and changing only the end's time then left its
+ * date on the next day without anyone noticing.)
+ */
 function newForm() {
   const start = Math.ceil(Date.now() / HOUR_MS) * HOUR_MS
   return {
@@ -26,8 +34,13 @@ function newForm() {
     label: "",
     url: "",
     from: toLocalInputValue(start),
-    until: toLocalInputValue(start + DAY_MS)
+    until: toLocalInputValue(start + HOUR_MS)
   }
+}
+
+/** A datetime-local value (the viewer's local time) → ms, or NaN. */
+function localMs(value) {
+  return value ? new Date(value).getTime() : NaN
 }
 
 function editForm(schedule) {
@@ -52,25 +65,35 @@ export default function SchedulesModal({ qrcode, onClose, onCodeUpdate }) {
   const [form, setForm] = useState(null)
   const [formError, setFormError] = useState("")
   const [busy, setBusy] = useState(false)
+  // Counts the changes sent from this panel, so a refresh that was already
+  // on its way when one was made doesn't put older data back on screen.
+  const changesSent = useRef(0)
 
+  // Load on open, then refresh while open. Each refresh also passes the
+  // code up, so its card changes when a schedule starts or ends.
   useEffect(() => {
     let cancelled = false
-    fetch(`/api/qrcodes/${qrcode.id}/schedules`)
-      .then(async (res) => {
+    async function load(first) {
+      const seen = changesSent.current
+      try {
+        const res = await fetch(`/api/qrcodes/${qrcode.id}/schedules`)
         const data = await res.json().catch(() => ({}))
         if (!res.ok) throw new Error(data.error || "Could not load the schedules.")
-        return data
-      })
-      .then((data) => {
-        if (!cancelled) setPanel(data)
-      })
-      .catch((error) => {
-        if (!cancelled) setLoadError(error.message || "Could not load the schedules.")
-      })
+        if (cancelled || changesSent.current !== seen) return
+        setPanel(data)
+        if (!first) onCodeUpdate?.(data.qrcode)
+      } catch (error) {
+        // A failed refresh keeps what's on screen; only the first load says so.
+        if (!cancelled && first) setLoadError(error.message || "Could not load the schedules.")
+      }
+    }
+    load(true)
+    const timer = setInterval(() => load(false), REFRESH_MS)
     return () => {
       cancelled = true
+      clearInterval(timer)
     }
-  }, [qrcode.id])
+  }, [qrcode.id, onCodeUpdate])
 
   // Escape closes this panel only: it can open on top of the edit screen,
   // which would otherwise close as well.
@@ -87,6 +110,7 @@ export default function SchedulesModal({ qrcode, onClose, onCodeUpdate }) {
   /** Send a change; on success the response is the whole panel again. */
   async function send(method, path, body) {
     setBusy(true)
+    changesSent.current += 1
     try {
       const res = await fetch(`/api/qrcodes/${qrcode.id}/schedules${path}`, {
         method,
@@ -429,6 +453,42 @@ function ScheduleRow({
 
 function ScheduleForm({ form, setForm, error, busy, onSubmit, onCancel }) {
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
+
+  // Moving the start moves the end with it, keeping the schedule's length,
+  // as calendars do, so the end can't be left behind on another day.
+  function setFrom(e) {
+    const value = e.target.value
+    setForm((f) => {
+      const oldStart = localMs(f.from)
+      const oldEnd = localMs(f.until)
+      const newStart = localMs(value)
+      const keepLength = [oldStart, oldEnd, newStart].every((n) => !Number.isNaN(n)) && oldEnd > oldStart
+      return {
+        ...f,
+        from: value,
+        until: keepLength ? toLocalInputValue(newStart + (oldEnd - oldStart)) : f.until
+      }
+    })
+  }
+
+  // The length and both dates in words, so an end on the wrong day stands out.
+  const startMs = localMs(form.from)
+  const endMs = localMs(form.until)
+  let summary = null
+  if (!Number.isNaN(startMs) && !Number.isNaN(endMs)) {
+    summary =
+      endMs > startMs ? (
+        <p className={styles.hint} id="schedule-length">
+          Runs for <strong>{describeLength(endMs - startMs)}</strong>: from{" "}
+          {formatChangeTime(startMs)} to {formatChangeTime(endMs)}.
+        </p>
+      ) : (
+        <p className={styles.error} id="schedule-length">
+          The end is before the start.
+        </p>
+      )
+  }
+
   return (
     <form className={styles.form} onSubmit={onSubmit} noValidate>
       <div className={styles.formTitle}>{form.id ? "Edit schedule" : "New schedule"}</div>
@@ -478,7 +538,7 @@ function ScheduleForm({ form, setForm, error, busy, onSubmit, onCancel }) {
             type="datetime-local"
             className="input-field"
             value={form.from}
-            onChange={set("from")}
+            onChange={setFrom}
             required
           />
         </div>
@@ -492,11 +552,13 @@ function ScheduleForm({ form, setForm, error, busy, onSubmit, onCancel }) {
             className="input-field"
             value={form.until}
             onChange={set("until")}
+            aria-describedby="schedule-length"
             required
           />
         </div>
       </div>
 
+      {summary}
       {error && <p className={styles.error}>{error}</p>}
 
       <div className={styles.formActions}>
