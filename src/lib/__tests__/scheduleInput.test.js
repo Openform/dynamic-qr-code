@@ -50,8 +50,7 @@ describe('parseScheduleInput: a new schedule', () => {
     }
   });
 
-  it('refuses weekly schedules for now, and unknown kinds', () => {
-    expect(parseScheduleInput({ ...valid, kind: 'weekly' }, { nowMs: NOW }).error).toMatch(/Weekly/);
+  it('refuses unknown kinds', () => {
     expect(parseScheduleInput({ ...valid, kind: 'monthly' }, { nowMs: NOW }).error).toMatch(/Unknown kind/);
   });
 
@@ -79,6 +78,82 @@ describe('parseScheduleInput: a new schedule', () => {
   });
 });
 
+// Monday to Friday, 07:00–11:00 in London.
+const validWeekly = {
+  kind: 'weekly',
+  label: 'Breakfast',
+  destinationUrl: 'example.com/breakfast',
+  timeZone: 'Europe/London',
+  days: 1 | 2 | 4 | 8 | 16,
+  startTime: '07:00',
+  endTime: '11:00',
+};
+
+const existingWeekly = {
+  id: 6,
+  kind: 'weekly',
+  label: 'Breakfast',
+  destinationUrl: 'https://example.com/breakfast',
+  timeZone: 'Europe/London',
+  days: 31,
+  startTime: '07:00',
+  endTime: '11:00',
+  enabled: true,
+};
+
+describe('parseScheduleInput: a new weekly schedule', () => {
+  it('accepts days, times and a time zone', () => {
+    expect(parseScheduleInput(validWeekly, { nowMs: NOW })).toEqual({
+      fields: {
+        kind: 'weekly',
+        label: 'Breakfast',
+        destinationUrl: 'https://example.com/breakfast',
+        timeZone: 'Europe/London',
+        days: 31,
+        startTime: '07:00',
+        endTime: '11:00',
+      },
+    });
+  });
+
+  it('accepts windows past midnight and all day, and times with :00 seconds', () => {
+    const late = parseScheduleInput({ ...validWeekly, startTime: '22:00', endTime: '02:00' }, { nowMs: NOW });
+    expect(late.fields).toMatchObject({ startTime: '22:00', endTime: '02:00' });
+    const allDay = parseScheduleInput({ ...validWeekly, startTime: '00:00', endTime: '00:00' }, { nowMs: NOW });
+    expect(allDay.fields).toMatchObject({ startTime: '00:00', endTime: '00:00' });
+    const seconds = parseScheduleInput({ ...validWeekly, startTime: '07:30:00', endTime: '23:59' }, { nowMs: NOW });
+    expect(seconds.fields).toMatchObject({ startTime: '07:30', endTime: '23:59' });
+  });
+
+  it('needs every field', () => {
+    for (const key of Object.keys(validWeekly).filter((k) => k !== 'kind')) {
+      const body = { ...validWeekly };
+      delete body[key];
+      expect(parseScheduleInput(body, { nowMs: NOW }), key).toHaveProperty('error');
+    }
+  });
+
+  it('checks the days and times', () => {
+    const check = (fields) => parseScheduleInput({ ...validWeekly, ...fields }, { nowMs: NOW }).error;
+    expect(check({ days: 0 })).toBe('Choose at least one day.');
+    for (const days of [128, -1, 1.5, '31', null]) expect(check({ days }), String(days)).toMatch(/1 to 127/);
+    expect(check({ days: 127 })).toBeUndefined();
+    for (const startTime of ['24:00', '7:00', '07:60', '07:00:30', 'noon', null]) {
+      expect(check({ startTime }), String(startTime)).toBe('Choose when the schedule starts each day.');
+    }
+    expect(check({ endTime: '' })).toBe('Choose when the schedule ends each day.');
+    expect(check({ timeZone: 'Mars/Olympus' })).toBe('Unknown time zone.');
+  });
+
+  it('refuses dates on a weekly schedule, and days or times on a date range', () => {
+    expect(parseScheduleInput({ ...validWeekly, endsAt: valid.endsAt }, { nowMs: NOW }).error).toMatch(/no dates/);
+    expect(parseScheduleInput({ ...valid, days: 31 }, { nowMs: NOW }).error).toMatch(/no days or times/);
+    expect(parseScheduleInput({ ...valid, kind: 'range', startTime: '07:00' }, { nowMs: NOW }).error).toMatch(
+      /no days or times/
+    );
+  });
+});
+
 describe('parseScheduleInput: an edit', () => {
   it('returns only what changes', () => {
     expect(parseScheduleInput({ label: 'Cyber Monday' }, { existing, nowMs: NOW })).toEqual({
@@ -103,6 +178,18 @@ describe('parseScheduleInput: an edit', () => {
     expect(parseScheduleInput({ startsAt: '2026-11-26T00:00:00Z' }, { existing, nowMs: later }).error).toBe(
       'The end must be in the future.'
     );
+  });
+
+  it('changes a weekly schedule’s days, times and time zone', () => {
+    const body = { days: 96, startTime: '22:00', endTime: '02:00', timeZone: 'Africa/Johannesburg' };
+    expect(parseScheduleInput(body, { existing: existingWeekly, nowMs: NOW })).toEqual({ fields: body });
+    expect(parseScheduleInput({ days: 0 }, { existing: existingWeekly, nowMs: NOW }).error).toBe(
+      'Choose at least one day.'
+    );
+    expect(parseScheduleInput({ startsAt: valid.startsAt }, { existing: existingWeekly, nowMs: NOW }).error).toMatch(
+      /no dates/
+    );
+    expect(parseScheduleInput({ days: 31 }, { existing, nowMs: NOW }).error).toMatch(/no days or times/);
   });
 
   it('refuses a change of kind, a bad switch value, or nothing to change', () => {

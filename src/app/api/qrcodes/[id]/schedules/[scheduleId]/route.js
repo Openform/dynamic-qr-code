@@ -2,8 +2,10 @@
  * One of a code's schedules.
  *
  * PATCH  /api/qrcodes/[id]/schedules/[scheduleId] — change any of label,
- *        destinationUrl, timeZone, startsAt, endsAt, enabled. Needs a
- *        package with schedules, except switching one off.
+ *        destinationUrl, timeZone, enabled, and the timing fields of the
+ *        schedule's kind (startsAt, endsAt for a date range; days,
+ *        startTime, endTime for a weekly one). Needs a package with
+ *        schedules, except switching one off.
  * DELETE /api/qrcodes/[id]/schedules/[scheduleId] — delete it (any package).
  *
  * Switching off and deleting work on every package, so an account that can

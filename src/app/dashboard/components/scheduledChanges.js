@@ -51,3 +51,48 @@ export function describeLength(ms) {
 export function viewerTimeZone() {
   return Intl.DateTimeFormat().resolvedOptions().timeZone
 }
+
+const DAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+/** "a, b and c". */
+function listInWords(items) {
+  return items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`
+}
+
+/**
+ * A weekly schedule's days (bits: 1 = Monday … 64 = Sunday) in words:
+ * "every day", "Mon–Fri", "Sat and Sun", "Mon, Wed and Fri". Three or more
+ * days in a row become a span.
+ */
+export function describeDays(days) {
+  if (days === 127) return "every day"
+  const parts = []
+  let day = 0
+  while (day < 7) {
+    if (!(days & (1 << day))) {
+      day++
+      continue
+    }
+    let end = day
+    while (end + 1 < 7 && days & (1 << (end + 1))) end++
+    if (end - day >= 2) parts.push(`${DAY_SHORT[day]}–${DAY_SHORT[end]}`)
+    else for (let d = day; d <= end; d++) parts.push(DAY_SHORT[d])
+    day = end + 1
+  }
+  return listInWords(parts)
+}
+
+/**
+ * A weekly schedule's times in words: "07:00–11:00", "22:00–02:00 the next
+ * day" (past midnight), "all day" (00:00 to 00:00), or "24 hours from 09:00".
+ */
+export function describeDailyTimes(startTime, endTime) {
+  if (startTime === endTime) return startTime === "00:00" ? "all day" : `24 hours from ${startTime}`
+  return endTime < startTime ? `${startTime}–${endTime} the next day` : `${startTime}–${endTime}`
+}
+
+/** "Mon–Fri, 07:00–11:00", with a capital first letter. */
+export function describeWeekly({ days, startTime, endTime }) {
+  const text = `${describeDays(days)}, ${describeDailyTimes(startTime, endTime)}`
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}

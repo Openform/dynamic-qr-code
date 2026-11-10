@@ -1,0 +1,263 @@
+/* The week preview: one bar per day, coloured by where scans go. */
+
+.preview {
+  margin-top: 20px;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 14px;
+}
+
+.title {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.note {
+  font-size: 0.78rem;
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}
+
+.zonePicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  font-size: 0.78rem;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.zonePicker select {
+  width: auto;
+  min-width: 0;
+  max-width: 240px;
+  padding: 4px 8px;
+  font-size: 0.8rem;
+}
+
+.grid {
+  --label-width: 92px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Hour labels, above the bars and lined up with them. */
+.axis {
+  position: relative;
+  height: 14px;
+  margin-left: var(--label-width);
+  font-size: 0.7rem;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.axis span {
+  position: absolute;
+  transform: translateX(-50%);
+}
+
+.axis span:first-child {
+  transform: none;
+}
+
+.axis span:last-child {
+  transform: translateX(-100%);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+}
+
+.dayLabel {
+  flex: none;
+  width: var(--label-width);
+  padding-right: 10px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.25;
+}
+
+.shortDay {
+  display: none;
+}
+
+.clockNote {
+  display: block;
+  font-size: 0.68rem;
+  color: var(--text-tertiary);
+}
+
+/* The day: its background is the main destination. */
+.track {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 18px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.gridLine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  pointer-events: none;
+}
+
+/* A stretch of the day; the coloured part inside leaves a 2px gap to its neighbours. */
+.segmentHit {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  padding: 4px 1px;
+  cursor: default;
+}
+
+.segment {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 4px;
+}
+
+/* Earlier today: already happened. */
+.past {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 4px 0 0 4px;
+  background: rgba(18, 18, 42, 0.6);
+  pointer-events: none;
+}
+
+.nowLine {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--text-primary);
+  pointer-events: none;
+}
+
+.tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  z-index: 2;
+  width: max-content;
+  max-width: 260px;
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border-hover);
+  background: var(--bg-surface);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  pointer-events: none;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.tooltip strong {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.tooltipUrl {
+  display: block;
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.legend {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.key {
+  flex: none;
+  width: 14px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.mainKey {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--glass-border-hover);
+}
+
+.asList {
+  margin-top: 12px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.asList summary {
+  cursor: pointer;
+  color: var(--text-tertiary);
+}
+
+.asList ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 560px) {
+  .preview {
+    padding: 12px;
+  }
+
+  .grid {
+    --label-width: 64px;
+  }
+
+  .dayLabel {
+    font-size: 0.72rem;
+  }
+
+  .longDay {
+    display: none;
+  }
+
+  .shortDay {
+    display: inline;
+  }
+}

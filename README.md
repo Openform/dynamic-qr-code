@@ -122,15 +122,38 @@ cancelled; a change that hasn't started doesn't appear in analytics.
 ## Schedules
 
 A schedule sends a code's scans somewhere else for a while, without changing
-its main destination: for example a Black Friday page from Friday to Monday.
-Open **Schedules** on a code's card (or from its edit screen) to add one with
-a name, a URL and the dates it starts and ends, in the browser's time zone.
+its main destination. Open **Schedules** on a code's card (or from its edit
+screen) to add one with a name and a URL, and either:
+
+- **On dates**: a start and end date and time, in the browser's time zone.
+  For example a Black Friday page from Friday to Monday.
+- **Every week**: days of the week, a from and to time, and a time zone (the
+  browser's by default). For example Monday to Friday, 07:00–11:00, goes to
+  the breakfast menu. An end before the start runs past midnight, so Friday
+  22:00–02:00 covers the early hours of Saturday; the same start and end
+  means 24 hours. Times follow the local clock in the chosen zone, so they
+  stay put when the clocks change: on the night clocks go forward, a window
+  starting in the skipped hour goes live when the clock jumps past its
+  start; when they go back, a window in the repeated hour is live both times.
+
+More about how they behave:
 
 - **Live, upcoming, off, ended.** The card shows the schedule sending scans
-  right now. Schedules can be switched off without deleting them. Ended ones
-  are kept under **Ended** until deleted, and can be edited to run again.
-- **Overlaps are allowed.** When two are live at once, the one higher in the
-  list wins; move them with the arrows. The panel warns about overlaps.
+  right now and until when. Each weekly schedule says when it's next live, or
+  until when it's live. Schedules can be switched off without deleting them.
+  Ended date ranges are kept under **Ended** until deleted, and can be edited
+  to run again. Weekly schedules never end.
+- **Overlaps are allowed.** When two are live at once, a date range wins over
+  a weekly schedule (it's the exception to the routine); otherwise the one
+  higher in the list wins; move them with the arrows. The panel warns when
+  two date ranges, or two weekly schedules, overlap.
+- **Week preview.** Below the list, the next 7 days are drawn as bars
+  coloured by where scans go, with gaps for the main destination (including
+  any change to it that's waiting). It's worked out with the same function as
+  the redirect (`src/lib/schedulePreview.js` asks `resolveDestination` about
+  every minute), so it can't disagree with real scans. While a schedule is
+  being added or edited, the preview includes the unsaved changes. It can be
+  shown in the time zone of any weekly schedule, and as a list.
 - **Limits.** A code can have up to 20 schedules that haven't ended.
 - **Packages.** Business, Extended and Enterprise can add and edit schedules
   (`schedules` in [`src/lib/packages.js`](src/lib/packages.js)). Starter
@@ -142,8 +165,11 @@ run. The redirect checks a code's switched-on schedules that haven't ended at
 every scan (lib/schedules.js), so no cron job is needed, and each scan records
 which schedule sent it (`scan_events.schedule_id`). A code's destination
 history in analytics counts only scans that went to the main destination.
-The table also has the columns for weekly schedules, which come in a later
-release.
+
+Weekly schedules are sent to the API (`POST /api/qrcodes/[id]/schedules`) as
+`{ kind: 'weekly', label, destinationUrl, timeZone, days, startTime,
+endTime }`, with `days` as bits (1 = Monday, 2 = Tuesday … 64 = Sunday, so
+31 is Monday to Friday) and the times as `"HH:MM"`.
 
 ## Scan analytics
 
