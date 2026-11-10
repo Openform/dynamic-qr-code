@@ -3,9 +3,12 @@
  * code's main destination (see lib/schedules.js).
  *
  * GET  /api/qrcodes/[id]/schedules — the schedules panel's data
- * POST /api/qrcodes/[id]/schedules — add a date-range schedule to the end of
- *      the list. Body: { label, destinationUrl, timeZone, startsAt, endsAt }
- *      with the times as ISO strings with an offset.
+ * POST /api/qrcodes/[id]/schedules — add a schedule to the end of the list.
+ *      A date range: { label, destinationUrl, timeZone, startsAt, endsAt }
+ *      with the times as ISO strings with an offset. A weekly schedule:
+ *      { kind: 'weekly', label, destinationUrl, timeZone, days, startTime,
+ *      endTime } with days as bits (1 = Monday … 64 = Sunday) and the times
+ *      as "HH:MM" in timeZone. See lib/scheduleInput.js.
  * PUT  /api/qrcodes/[id]/schedules — reorder. Body: { order: [ids] } listing
  *      every schedule once, highest priority first.
  *

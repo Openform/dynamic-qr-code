@@ -178,9 +178,9 @@ export default function QRCodeCard({
                 {displayUrl(qrcode.liveSchedule.destinationUrl)}
               </span>
             </div>
-            {qrcode.liveSchedule.endsAt && (
+            {qrcode.liveSchedule.until && (
               <div style={styles.nextChangeTime}>
-                Until {formatChangeTime(qrcode.liveSchedule.endsAt)}
+                Until {formatChangeTime(qrcode.liveSchedule.until)}
               </div>
             )}
           </div>

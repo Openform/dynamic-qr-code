@@ -70,6 +70,14 @@
   overflow-wrap: anywhere;
 }
 
+/* The schedule's colour in the week preview. */
+.swatch {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
 .url {
   font-size: 0.85rem;
   color: var(--cyan);
@@ -134,6 +142,97 @@
   margin-bottom: 12px;
 }
 
+/* "On dates" or "Every week", for a new schedule. */
+.kindSwitch {
+  display: inline-flex;
+  padding: 3px;
+  margin-bottom: 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.kindButton,
+.dayButton,
+.presetButton {
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--text-secondary);
+}
+
+.kindButton {
+  padding: 6px 14px;
+  border-radius: calc(var(--radius-md) - 3px);
+  font-size: 0.85rem;
+}
+
+.kindButton:hover,
+.dayButton:hover {
+  color: var(--text-primary);
+}
+
+.kindOn,
+.kindOn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--glass-border-hover);
+}
+
+.daysField {
+  border: 0;
+  margin: 0 0 12px;
+  padding: 0;
+  min-width: 0;
+}
+
+.dayButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dayButton {
+  width: 40px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  border-color: var(--glass-border);
+  font-size: 0.85rem;
+}
+
+.dayOn,
+.dayOn:hover {
+  color: var(--text-inverse);
+  background: var(--cyan);
+  border-color: var(--cyan);
+  font-weight: 600;
+}
+
+.dayPresets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 8px;
+}
+
+.presetButton {
+  padding: 2px 0;
+  font-size: 0.78rem;
+  color: var(--cyan);
+}
+
+.presetButton:hover {
+  text-decoration: underline;
+}
+
+.kindButton:focus-visible,
+.dayButton:focus-visible,
+.presetButton:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
 .formRow {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -193,6 +292,14 @@
 
   .formRow {
     grid-template-columns: 1fr;
+  }
+
+  .dayButtons {
+    gap: 4px;
+  }
+
+  .dayButton {
+    width: 34px;
   }
 
   .footer :global(.btn) {
