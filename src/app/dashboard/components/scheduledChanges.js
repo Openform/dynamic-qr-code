@@ -27,6 +27,26 @@ export function toLocalInputValue(ms) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`
+
+/**
+ * A length of time in words, to the minute: "3 minutes", "1 hour and 30
+ * minutes", "2 days, 4 hours and 5 minutes". Zero parts are left out.
+ */
+export function describeLength(ms) {
+  const totalMinutes = Math.max(0, Math.round(ms / 60_000))
+  const days = Math.floor(totalMinutes / 1440)
+  const hours = Math.floor((totalMinutes % 1440) / 60)
+  const minutes = totalMinutes % 60
+  const parts = [
+    days && plural(days, "day"),
+    hours && plural(hours, "hour"),
+    minutes && plural(minutes, "minute")
+  ].filter(Boolean)
+  if (parts.length === 0) return "0 minutes"
+  return parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`
+}
+
 /** The viewer's time zone, e.g. "Africa/Johannesburg". */
 export function viewerTimeZone() {
   return Intl.DateTimeFormat().resolvedOptions().timeZone
