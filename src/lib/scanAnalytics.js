@@ -318,6 +318,33 @@ async function topCodes({ scope, periods, offsetMinutes, includeOwner }) {
   });
 }
 
+/**
+ * Showings of password pages in [from, to) within a scope (one row per time
+ * someone was asked; never bots), and how many got through. Not narrowed to
+ * a destination: people are asked before they're sent anywhere.
+ */
+async function passwordPromptTotals(scope, from, to) {
+  // qrcode_password_prompts has the same qrcode_id and user_id columns as
+  // scan_events, so the scope's clauses work on it as `e` too.
+  const { clauses, params } = scopeWhere({ ...scope, destination: null });
+  if (from !== null) {
+    clauses.push('e.shown_at >= :from');
+    params.from = toSqlDateTime(from);
+  }
+  if (to !== null) {
+    clauses.push('e.shown_at < :to');
+    params.to = toSqlDateTime(to);
+  }
+  const [row] = await rows(
+    `SELECT COUNT(*) AS shown, COUNT(e.unlocked_at) AS unlocked
+     FROM qrcode_password_prompts e ${clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''}`,
+    params
+  );
+  const shown = toNumber(row.shown);
+  const unlocked = toNumber(row.unlocked);
+  return { shown, unlocked, stopped: shown - unlocked };
+}
+
 async function topAccounts(where, params) {
   const top = await rows(
     `SELECT e.user_id AS id, COUNT(*) AS scans
@@ -353,6 +380,7 @@ export async function getScanAnalytics({ scope: rawScope, range, offsetMinutes, 
   if (scope.codeId !== null) {
     [code] = await rows(
       `SELECT q.id, q.title, q.short_id AS shortId, q.destination_url AS url, q.created_at AS createdAt,
+              q.access_password IS NOT NULL AS hasPassword,
               u.id AS ownerId, u.name AS ownerName, u.email AS ownerEmail
        FROM qrcodes q JOIN users u ON u.id = q.user_id WHERE q.id = :codeId`,
       { codeId: scope.codeId }
@@ -397,6 +425,7 @@ export async function getScanAnalytics({ scope: rawScope, range, offsetMinutes, 
     accounts,
     destinations,
     allDestinations,
+    prompts,
   ] = await Promise.all([
     totals(where, params),
     periods.prevFrom === null
@@ -446,6 +475,7 @@ export async function getScanAnalytics({ scope: rawScope, range, offsetMinutes, 
           return totals(any.where, any.params);
         })()
       : null,
+    scope.destination ? null : passwordPromptTotals(scope, periods.from, periods.to),
   ]);
 
   const seriesByKey = new Map(seriesRows.map((r) => [r.bucket, r]));
@@ -458,6 +488,7 @@ export async function getScanAnalytics({ scope: rawScope, range, offsetMinutes, 
           id: code.id,
           title: code.title,
           shortId: code.shortId,
+          hasPassword: Boolean(Number(code.hasPassword)),
           owner: admin ? { id: code.ownerId, name: code.ownerName, email: code.ownerEmail } : undefined,
         }
       : null,
@@ -495,6 +526,10 @@ export async function getScanAnalytics({ scope: rawScope, range, offsetMinutes, 
     recent: recent.map((r) => ({ ...r, scannedAt: sqlToIso(r.scannedAt) })),
     topCodes: codes,
     topAccounts: accounts,
+    // Password pages in the period: { shown, unlocked, stopped }, or null
+    // when narrowed to a destination. A scan is only counted once someone
+    // gets through, so `unlocked` of these are also in `summary.scans`.
+    passwordPrompts: prompts,
     destination: scope.destination?.key ?? null,
     destinations: destinations && {
       main: destinations.main,

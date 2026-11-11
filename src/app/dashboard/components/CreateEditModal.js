@@ -16,6 +16,7 @@ import {
   evaluateContrast
 } from "@/lib/qrStyle"
 import { renderBwipCanvas } from "@/lib/barcode"
+import { parseAccessPassword, UNLOCK_DAYS } from "@/lib/accessPassword"
 import footerStyles from "./CreateEditModal.module.css"
 import { TrashIcon } from "@/app/components/icons"
 import {
@@ -34,7 +35,8 @@ export default function CreateEditModal({
   onOpenSchedules,
   qrcode,
   collections = [],
-  defaultCollectionId = null
+  defaultCollectionId = null,
+  canUsePasswords = false
 }) {
   // Close on Escape
   useEffect(() => {
@@ -63,6 +65,7 @@ export default function CreateEditModal({
       qrcode={qrcode}
       collections={collections}
       defaultCollectionId={defaultCollectionId}
+      canUsePasswords={canUsePasswords}
     />
   )
 }
@@ -115,7 +118,8 @@ function QRCodeForm({
   onOpenSchedules,
   qrcode,
   collections = [],
-  defaultCollectionId = null
+  defaultCollectionId = null,
+  canUsePasswords = false
 }) {
   const isEdit = Boolean(qrcode)
 
@@ -130,6 +134,11 @@ function QRCodeForm({
     return v == null ? "" : String(v)
   })
   const [urlError, setUrlError] = useState("")
+  // The password people must enter after scanning (null = none).
+  const initialPassword = qrcode?.accessPassword ?? null
+  const [passwordOn, setPasswordOn] = useState(initialPassword !== null)
+  const [accessPassword, setAccessPassword] = useState(initialPassword ?? "")
+  const [passwordError, setPasswordError] = useState("")
   // Edit only: whether a new destination goes live now or at a set time
   // ("YYYY-MM-DDTHH:MM" in the viewer's time zone).
   const [when, setWhen] = useState("now")
@@ -201,6 +210,24 @@ function QRCodeForm({
     }
   }, [destinationUrl, style, qrcode])
 
+  const passwordProps = {
+    on: passwordOn,
+    onToggle(on) {
+      setPasswordOn(on)
+      setPasswordError("")
+      // Without the package, it can only go back to the password it had.
+      if (on && !canUsePasswords) setAccessPassword(initialPassword ?? "")
+    },
+    password: accessPassword,
+    setPassword(value) {
+      setAccessPassword(value)
+      if (passwordError) setPasswordError("")
+    },
+    error: passwordError,
+    canUse: canUsePasswords,
+    hadPassword: initialPassword !== null
+  }
+
   // QR-only controls (gradients, shapes, logo) are hidden for other symbologies,
   // but a foreground color picker is kept (the "Body" tab, relabeled "Color").
   const isQR = style.codeType === "qr"
@@ -242,6 +269,21 @@ function QRCodeForm({
     }
     setUrlError("")
 
+    // Only sent when it changes, so saving other fields never touches it.
+    let passwordField = {}
+    if (passwordOn) {
+      const parsed = parseAccessPassword(accessPassword)
+      if (parsed.error || parsed.value === null) {
+        setPasswordError(parsed.error || "Enter a password, or turn password protection off.")
+        setTab("content")
+        return
+      }
+      if (parsed.value !== initialPassword) passwordField = { accessPassword: parsed.value }
+    } else if (initialPassword !== null) {
+      passwordField = { accessPassword: null }
+    }
+    setPasswordError("")
+
     // A change for later needs a time in the future. datetime-local values
     // have no time zone, so the browser reads them as the viewer's local time.
     let changeAtIso = null
@@ -274,6 +316,7 @@ function QRCodeForm({
         destinationUrl: fullUrl,
         styleConfig: style,
         collectionId: collectionId === "" ? null : Number(collectionId),
+        ...passwordField,
         ...(changeAtIso ? { changeAt: changeAtIso } : {})
       }
       await onSave(payload)
@@ -389,6 +432,7 @@ function QRCodeForm({
                       </p>
                     </div>
                   )}
+                  <PasswordProtection {...passwordProps} />
                   {collections.length > 0 && (
                     <CollectionSelect
                       collections={collections}
@@ -399,7 +443,7 @@ function QRCodeForm({
                   <p style={styles.hint}>
                     The code&apos;s appearance is locked after creation so codes
                     already printed or shared keep scanning. Only the title,
-                    destination URL, and collection can be changed.
+                    destination URL, password and collection can be changed.
                   </p>
                 </div>
               ) : (
@@ -474,17 +518,23 @@ function QRCodeForm({
 
                   <div style={styles.tabPanel}>
                     {activeTab === "content" && (
-                      <ContentTab
-                        title={title}
-                        setTitle={setTitle}
-                        destinationUrl={destinationUrl}
-                        setDestinationUrl={setDestinationUrl}
-                        onUrlBlur={handleUrlBlur}
-                        urlError={urlError}
-                        logoUrl={style.logoUrl}
-                        setLogoUrl={(v) => setField("logoUrl", v)}
-                        showLogo={isQR}
-                      />
+                      <>
+                        <ContentTab
+                          title={title}
+                          setTitle={setTitle}
+                          destinationUrl={destinationUrl}
+                          setDestinationUrl={setDestinationUrl}
+                          onUrlBlur={handleUrlBlur}
+                          urlError={urlError}
+                          logoUrl={style.logoUrl}
+                          setLogoUrl={(v) => setField("logoUrl", v)}
+                          showLogo={isQR}
+                        />
+                        <PasswordProtection
+                          {...passwordProps}
+                          style={{ marginTop: "24px", marginBottom: 0 }}
+                        />
+                      </>
                     )}
 
                     {activeTab === "body" && (
@@ -1119,17 +1169,84 @@ function ColorRow({ value, onChange }) {
   )
 }
 
-function ToggleField({ id, label, checked, onChange }) {
+function ToggleField({ id, label, checked, onChange, disabled = false, describedBy }) {
   return (
-    <label htmlFor={id} className="qr-toggle">
+    <label
+      htmlFor={id}
+      className="qr-toggle"
+      style={disabled ? { opacity: 0.55, cursor: "not-allowed" } : undefined}
+    >
       <input
         id={id}
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
+        disabled={disabled}
+        aria-describedby={describedBy}
       />
       <span>{label}</span>
     </label>
+  )
+}
+
+/**
+ * Whether people must enter a password after scanning, and which. Shown to
+ * the owner as plain text so they can share it. Without a package that has
+ * passwords, a code's existing password can be turned off but not changed.
+ */
+function PasswordProtection({ on, onToggle, password, setPassword, error, canUse, hadPassword, style }) {
+  const hintId = "qr-access-password-hint"
+  let hint
+  if (!canUse) {
+    hint = hadPassword
+      ? "Your package can’t change this password, but you can turn it off."
+      : "Available on the Business package and up. Contact us to upgrade your package."
+  } else if (on) {
+    hint = `People who scan this code must enter this password before they’re sent on; their browser then remembers it for ${UNLOCK_DAYS} days. Anyone you share it with will know it, so don’t reuse a password you use elsewhere.`
+  } else {
+    hint = "Ask people for a password after they scan, before sending them on."
+  }
+
+  return (
+    <div className="input-group" style={style}>
+      <span className="input-label">Password protection</span>
+      <ToggleField
+        id="qr-password-on"
+        label="Ask for a password after scanning"
+        checked={on}
+        onChange={onToggle}
+        disabled={!canUse && !hadPassword}
+        describedBy={hintId}
+      />
+      {on && (
+        <div style={{ marginTop: "12px" }}>
+          <label htmlFor="qr-access-password" className="input-label">
+            Password
+          </label>
+          <input
+            id="qr-access-password"
+            type="text"
+            className="input-field"
+            placeholder="At least 4 characters"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            readOnly={!canUse}
+            autoComplete="off"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={hintId}
+          />
+        </div>
+      )}
+      <p
+        id={hintId}
+        style={error ? { ...styles.hint, color: "var(--danger, #e5484d)" } : styles.hint}
+      >
+        {error || hint}
+      </p>
+    </div>
   )
 }
 

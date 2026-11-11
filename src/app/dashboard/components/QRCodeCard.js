@@ -13,7 +13,8 @@ import {
   DownloadIcon,
   ChartIcon,
   FolderIcon,
-  CalendarIcon
+  CalendarIcon,
+  LockIcon
 } from "@/app/components/icons"
 import { formatChangeTime, displayUrl } from "./scheduledChanges"
 
@@ -165,6 +166,11 @@ export default function QRCodeCard({
           >
             {qrcode.destinationUrl}
           </a>
+          {qrcode.accessPassword && (
+            <span style={styles.locked}>
+              <LockIcon size={13} /> Password protected
+            </span>
+          )}
         </div>
       </div>
 
@@ -388,6 +394,13 @@ const styles = {
     color: "var(--cyan)",
     maxWidth: "100%",
     display: "block"
+  },
+  locked: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "6px",
+    fontSize: "0.78rem",
+    color: "var(--text-secondary)"
   },
   nextChange: {
     display: "flex",

@@ -12,9 +12,10 @@
  *   2. Upgrade from main: main's code builds the schema, sample rows are added
  *      (seed-data.mjs), then this checkout's ensureSchema() runs. No table,
  *      column or row may disappear and no value may change. A second run (an
- *      app restart) must change nothing. Then pruneScanEvents(), the app's
- *      only automatic delete, must remove exactly the sample scans dated
- *      before the cutoff and nothing else.
+ *      app restart) must change nothing. Then pruneScanEvents() and
+ *      prunePasswordPrompts(), the app's only automatic deletes, must each
+ *      remove exactly the sample rows dated before the cutoff and nothing
+ *      else.
  *   3. Upgrade from production: the same as 2, starting from production's own
  *      table structure in scripts/ci/prod-schema.sql. Skipped with a warning
  *      until that file exists (see "CI checks" in the README).
@@ -39,7 +40,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import mysql from 'mysql2/promise';
-import { OLD_SCAN_IDS, PRUNE_CUTOFF, SEED } from './seed-data.mjs';
+import { OLD_PROMPT_IDS, OLD_SCAN_IDS, PRUNE_CUTOFF, SEED } from './seed-data.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../..');
@@ -388,17 +389,38 @@ async function checkUpgrade(buildStartingSchema, { checkPrune = false } = {}) {
   const restarted = await snapshot();
   checkUnchanged(upgraded, restarted, 'A second ensureSchema() run (an app restart)');
 
-  if (checkPrune) await checkPruneScanEvents(restarted);
+  if (checkPrune) {
+    for (const prune of PRUNES) await checkAutomaticDelete(prune);
+  }
 }
 
-async function checkPruneScanEvents(before) {
-  if (!before.data.scan_events) {
-    fail('There is no scan_events table to prune');
+// The app's automatic deletes: each must remove exactly the sample rows dated
+// before PRUNE_CUTOFF. A table the starting schema didn't have yet has no
+// sample rows, so nothing may be deleted from it.
+const PRUNES = [
+  { fn: 'pruneScanEvents', table: 'scan_events', column: 'scanned_at', oldIds: OLD_SCAN_IDS, rows: 'scans', required: true },
+  {
+    fn: 'prunePasswordPrompts',
+    table: 'qrcode_password_prompts',
+    column: 'shown_at',
+    oldIds: OLD_PROMPT_IDS,
+    rows: 'password page rows',
+    required: false,
+  },
+];
+
+async function checkAutomaticDelete({ fn, table, column, oldIds, rows: noun, required }) {
+  const before = await snapshot();
+  if (!before.data[table]) {
+    fail(`There is no ${table} table to prune`);
     return;
   }
-  const expectedGone = new Set(OLD_SCAN_IDS.map(String));
+  if (!required && before.data[table].size === 0) {
+    note(`${table} had no sample rows to start with (the starting schema has no such table)`);
+  }
+  const expectedGone = new Set(oldIds.map(String).filter((id) => before.data[table].has(id)));
   // Batches of 2 make the delete loop run more than once.
-  const deleted = callDb('pruneScanEvents()', CHECKOUT_DB, 'pruneScanEvents', PRUNE_CUTOFF, 2);
+  const deleted = callDb(`${fn}()`, CHECKOUT_DB, fn, PRUNE_CUTOFF, 2);
   const after = await snapshot();
 
   const problems = [];
@@ -406,23 +428,23 @@ async function checkPruneScanEvents(before) {
     problems.push(`it reported ${deleted} rows deleted, expected ${expectedGone.size}`);
   }
   const kept = new Map();
-  for (const [key, row] of before.data.scan_events) {
-    const isGone = !after.data.scan_events?.has(key);
+  for (const [key, row] of before.data[table]) {
+    const isGone = !after.data[table]?.has(key);
     if (expectedGone.has(key)) {
-      if (!isGone) problems.push(`scan ${key} (${row.scanned_at}) is before ${PRUNE_CUTOFF} but wasn't deleted`);
+      if (!isGone) problems.push(`row ${key} (${row[column]}) is before ${PRUNE_CUTOFF} but wasn't deleted`);
     } else if (isGone) {
-      problems.push(`scan ${key} (${row.scanned_at}) was deleted, but it isn't before ${PRUNE_CUTOFF}`);
+      problems.push(`row ${key} (${row[column]}) was deleted, but it isn't before ${PRUNE_CUTOFF}`);
     } else {
       kept.set(key, row);
     }
   }
-  const { scan_events: _scans, ...otherTables } = before.data;
-  problems.push(...compareData({ ...otherTables, scan_events: kept }, after.data));
+  const { [table]: _pruned, ...otherTables } = before.data;
+  problems.push(...compareData({ ...otherTables, [table]: kept }, after.data));
 
   if (problems.length === 0) {
-    pass(`pruneScanEvents() deleted exactly the ${deleted} scans before ${PRUNE_CUTOFF} and changed nothing else`);
+    pass(`${fn}() deleted exactly the ${deleted} ${noun} before ${PRUNE_CUTOFF} and changed nothing else`);
   } else {
-    for (const problem of problems) fail(`pruneScanEvents(): ${problem}`);
+    for (const problem of problems) fail(`${fn}(): ${problem}`);
   }
 }
 

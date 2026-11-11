@@ -13,6 +13,7 @@ import RankedBars from "./RankedBars"
 import TopCodesTable from "./TopCodesTable"
 import Destinations, { destinationName } from "./Destinations"
 import RecentScans from "./RecentScans"
+import PasswordPrompts from "./PasswordPrompts"
 import { formatDate, formatDateTime, formatExact, languageName } from "./format"
 import { displayUrl } from "../../components/scheduledChanges"
 
@@ -409,6 +410,10 @@ export default function AnalyticsView({ mode = "user", initial }) {
             <KpiRow data={data} rangeLabel={RANGES[data.range].label} />
 
             <ScansOverTime series={data.series} bucket={data.bucket} />
+
+            {data.passwordPrompts && (data.passwordPrompts.shown > 0 || data.code?.hasPassword) && (
+              <PasswordPrompts prompts={data.passwordPrompts} rangeLabel={RANGES[data.range].label} />
+            )}
 
             <div className={styles.grid2}>
               <Locations countries={data.countries} cities={data.cities} total={total} />
