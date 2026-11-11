@@ -1,7 +1,7 @@
 /**
- * Turn a scan request into a scan_events row, and keep the table within the
- * retention period. Called from the public redirect route after the redirect
- * has been sent, so none of this slows down the person scanning.
+ * Turn a scan request into a scan_events row, and keep the analytics tables
+ * within the retention period. Called from the public redirect route after
+ * the redirect has been sent, so none of this slows down the person scanning.
  */
 
 import { parseUserAgent, isBotUserAgent, parseLanguage } from './userAgent';
@@ -9,7 +9,7 @@ import { visitorHash } from './visitor';
 import { lookupLocation } from './geo';
 import { retentionMonths, retentionCutoff } from './retention';
 import { toSqlDateTime } from './analyticsFilters';
-import { recordScan, pruneScanEvents } from './db';
+import { recordScan, pruneScanEvents, prunePasswordPrompts } from './db';
 
 const PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 let lastPruneAt = 0;
@@ -40,9 +40,9 @@ export async function recordScanFromRequest(qrcode, { ip, userAgent, acceptLangu
 }
 
 /**
- * Delete scan rows older than ANALYTICS_RETENTION_MONTHS, at most once a day
- * per process. The first scan after a restart triggers it, so no cron job is
- * needed.
+ * Delete scan rows, and password-page rows, older than
+ * ANALYTICS_RETENTION_MONTHS, at most once a day per process. The first scan
+ * after a restart triggers it, so no cron job is needed.
  */
 export async function pruneIfDue(nowMs = Date.now()) {
   if (nowMs - lastPruneAt < PRUNE_INTERVAL_MS) return;
@@ -50,8 +50,13 @@ export async function pruneIfDue(nowMs = Date.now()) {
 
   const cutoff = retentionCutoff(nowMs, retentionMonths());
   if (cutoff === null) return;
-  const deleted = await pruneScanEvents(toSqlDateTime(cutoff));
+  const before = toSqlDateTime(cutoff);
+  const deleted = await pruneScanEvents(before);
   if (deleted > 0) {
-    console.log(`Analytics retention: deleted ${deleted} scan rows from before ${toSqlDateTime(cutoff)} UTC`);
+    console.log(`Analytics retention: deleted ${deleted} scan rows from before ${before} UTC`);
+  }
+  const prompts = await prunePasswordPrompts(before);
+  if (prompts > 0) {
+    console.log(`Analytics retention: deleted ${prompts} password page rows from before ${before} UTC`);
   }
 }

@@ -2,7 +2,8 @@
  * The shape the API sends a QR code in: a `SELECT q.*` row (snake_case, from
  * getQRCodeById) turned into camelCase, with the public redirect URL, the
  * code's scheduled destination changes, and its schedule summary
- * (`liveSchedule`, `scheduleCount`).
+ * (`liveSchedule`, `scheduleCount`). `accessPassword` is the password people
+ * must enter after scanning (null for none); only the owner gets this shape.
  *
  * Not for the code list: getQRCodesByUserId already returns this shape (the
  * list route adds the schedule summary).
@@ -49,6 +50,7 @@ export function toClientQRCode(qrcode, { scheduledChanges = [], schedules = [] }
     cornerSquareStyle: qrcode.corner_square_style,
     cornerDotStyle: qrcode.corner_dot_style,
     styleConfig: parseStyleConfig(qrcode.style_config),
+    accessPassword: qrcode.access_password ?? null,
     scanCount: qrcode.scan_count,
     createdAt: qrcode.created_at,
     updatedAt: qrcode.updated_at,

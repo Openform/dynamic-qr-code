@@ -1,6 +1,9 @@
 /**
  * GET    /api/qrcodes/[id]  — Get a single QR code
- * PUT    /api/qrcodes/[id]  — Update a QR code
+ * PUT    /api/qrcodes/[id]  — Update a QR code. `accessPassword` sets or
+ *                            changes the code's password (Business package
+ *                            and up); null or "" removes it (any package);
+ *                            leaving it out keeps it.
  * DELETE /api/qrcodes/[id]  — Delete a QR code
  *
  * NOTE: In Next.js 16, `params` is a Promise and must be awaited.
@@ -8,8 +11,8 @@
 
 import { getSession } from '@/lib/auth';
 import { normalizeDestinationUrl, isValidDestinationUrl } from '@/lib/qrStyle';
-import { loadClientQRCode } from '@/lib/qrcodeApi';
-const { updateQRCode, deleteQRCode, getCollectionById } = require('@/lib/db');
+import { loadClientQRCode, accessPasswordFromBody } from '@/lib/qrcodeApi';
+const { updateQRCode, deleteQRCode, getCollectionById, getQRCodeById } = require('@/lib/db');
 
 // ── GET — single QR code ───────────────────────
 export async function GET(request, { params }) {
@@ -63,7 +66,8 @@ export async function PUT(request, { params }) {
     // the codes already in the wild. Only the title (an internal label), the
     // destination URL, and the collection (an organizational label that doesn't
     // affect the image) may change — any style fields in the body are ignored,
-    // so the lock holds even against a hand-crafted request.
+    // so the lock holds even against a hand-crafted request. The password
+    // doesn't change the image either, so it can change too.
 
     // Validate destination URL if provided: autofill https:// when the scheme
     // is omitted, then require https — plain http URLs are rejected.
@@ -94,10 +98,24 @@ export async function PUT(request, { params }) {
       }
     }
 
+    // The password: compared with the current one, so saving it unchanged
+    // works on any package.
+    let accessPassword; // undefined → unchanged
+    if ('accessPassword' in body) {
+      const existing = await getQRCodeById(Number(id), session.userId);
+      if (!existing) {
+        return Response.json({ error: 'QR code not found' }, { status: 404 });
+      }
+      const password = await accessPasswordFromBody(body, session.userId, existing.access_password);
+      if (password.response) return password.response;
+      accessPassword = password.value;
+    }
+
     const updated = await updateQRCode(Number(id), session.userId, {
       title,
       destinationUrl,
       collectionId,
+      accessPassword,
     });
 
     if (!updated) {

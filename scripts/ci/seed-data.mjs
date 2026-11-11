@@ -28,6 +28,12 @@ export const PRUNE_CUTOFF = '2024-01-01 00:00:00';
 /** The sample scans dated before PRUNE_CUTOFF. */
 export const OLD_SCAN_IDS = [1, 2, 3];
 
+/** The sample password page rows dated before PRUNE_CUTOFF. */
+export const OLD_PROMPT_IDS = [1, 2];
+
+// The longest password a code can have: 64 characters, the last a 4-byte emoji.
+const LONG_PASSWORD = 'P'.repeat(63) + '🔑';
+
 export const SEED = {
   users: [
     {
@@ -100,6 +106,7 @@ export const SEED = {
       corner_square_style: 'square',
       corner_dot_style: 'square',
       style_config: null,
+      access_password: 'Café 1234 ☕',
       scan_count: 0,
       created_at: '2024-05-01 09:00:00',
       updated_at: '2024-05-01 09:00:00',
@@ -122,6 +129,7 @@ export const SEED = {
       collection_id: null,
       title: '😀 Emoji title — ünïcödé',
       destination_url: 'https://example.com/ñ?q=😀',
+      access_password: LONG_PASSWORD,
       scan_count: 12,
       created_at: '2025-03-01 09:00:00',
       updated_at: '2025-03-01 09:00:00',
@@ -139,6 +147,15 @@ export const SEED = {
     { id: 5, qrcode_id: 1, user_id: 1, scanned_at: '2026-10-01 08:30:00', country_code: 'BR', region: 'São Paulo', city: 'São Paulo', device_type: 'tablet', os: 'iPadOS', browser: 'Safari', language: 'pt', visitor_hash: '2222222222222222', is_bot: 0, destination_url: LONG_URL, schedule_id: 4294967295 },
     { id: 6, qrcode_id: 3, user_id: 3, scanned_at: '2026-11-01 12:00:00', country_code: 'US', region: 'California', city: 'San José', device_type: 'desktop', os: 'macOS', browser: 'Firefox', language: 'en', visitor_hash: '3333333333333333', is_bot: 1 },
     { id: 7, qrcode_id: 4, user_id: 2, scanned_at: '2026-11-08 18:45:00', country_code: 'JP', region: 'Tokyo', city: '東京', device_type: 'mobile', os: 'iOS', browser: 'Safari', language: 'ja', visitor_hash: '4444444444444444', is_bot: 0, destination_url: 'https://example.com/メニュー', schedule_id: null },
+  ],
+
+  qrcode_password_prompts: [
+    // Before PRUNE_CUTOFF: pruned.
+    { id: 1, qrcode_id: 2, user_id: 1, shown_at: '2023-06-01 10:00:00', unlocked_at: null },
+    { id: 2, qrcode_id: 2, user_id: 1, shown_at: '2023-12-31 23:59:59', unlocked_at: '2024-01-01 00:00:05' },
+    // Exactly on the cutoff, and after it: kept.
+    { id: 3, qrcode_id: 2, user_id: 1, shown_at: '2024-01-01 00:00:00', unlocked_at: null },
+    { id: 4, qrcode_id: 4, user_id: 2, shown_at: '2026-11-08 18:44:00', unlocked_at: '2026-11-08 18:44:30' },
   ],
 
   qrcode_destinations: [

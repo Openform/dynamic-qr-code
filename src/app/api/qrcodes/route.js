@@ -1,6 +1,8 @@
 /**
  * GET  /api/qrcodes       — List all QR codes for the authenticated user
- * POST /api/qrcodes       — Create a new QR code
+ * POST /api/qrcodes       — Create a new QR code. An optional
+ *                           `accessPassword` makes people enter it after
+ *                           scanning (Business package and up).
  */
 
 import { getSession } from '@/lib/auth';
@@ -19,6 +21,7 @@ import { getPackage } from '@/lib/packages';
 // undefined for every field (the cause of URLs/styling vanishing on refresh).
 import { toClientQRCode, redirectUrlFor } from '@/lib/clientQRCode';
 import { scheduleSummary } from '@/lib/schedules';
+import { accessPasswordFromBody } from '@/lib/qrcodeApi';
 
 const {
   getQRCodesByUserId,
@@ -120,6 +123,11 @@ export async function POST(request) {
       );
     }
 
+    // A password people must enter after scanning: needs a package with
+    // password protection.
+    const password = await accessPasswordFromBody(body, session.userId);
+    if (password.response) return password.response;
+
     const shortId = nanoid(10);
 
     // Prefer the full style config; sanitize untrusted input and derive the
@@ -159,6 +167,7 @@ export async function POST(request) {
         destinationUrl: normalizedUrl,
         ...legacy,
         styleConfig: sanitizedStyle,
+        accessPassword: password.value ?? null,
       },
       (packageId) => getPackage(packageId).limit
     );
