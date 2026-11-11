@@ -331,15 +331,32 @@ password signs everyone out. Every page also tells search engines not to
 index it, and `robots.txt` turns them all away. Production doesn't set
 `STAGING_PASSWORD`, so none of this happens there.
 
-### Using it
+### How changes reach production
 
-1. To try a feature, open a pull request from its branch into `staging` and
-   merge it. Hostinger redeploys staging.
-2. When it's ready, open a pull request from the same feature branch into
-   `main`.
-3. Now and then, merge `main` into `staging` so staging doesn't drift from
-   production. If it gets messy, reset it: `git checkout staging`,
-   `git reset --hard origin/main`, `git push --force-with-lease`.
+Every change goes through staging first: feature branch → `staging` → `main`.
+
+1. **Start from `staging`.** Create each feature's branch from `staging`.
+2. **Test on staging.** Open a pull request into `staging`. CI checks it.
+   Merge it with **Squash and merge**, so the feature becomes one commit.
+   Hostinger redeploys staging; try the change there.
+3. **Keep staging releasable.** A release ships everything on `staging`. If a
+   feature there isn't ready when you want to release, undo it first with
+   the **Revert** button on its merged pull request.
+4. **Release.** Open a pull request from `staging` into `main` and merge it
+   with **Create a merge commit**, never Squash or Rebase. Hostinger
+   redeploys production. Squash and Rebase put new copies of staging's
+   commits on `main`, so Git can't tell that `main` already has them. The
+   next release would then show those changes again and can hit conflicts.
+   A merge commit keeps both branches' histories the same.
+5. **Urgent fixes** that can't wait for a release: branch from `main`, open a
+   pull request into `main`, then merge `main` into `staging` so staging
+   has the fix too.
+
+Database changes run on staging's database first, so by the time a release
+reaches production, the same update has already run once on real hosting.
+
+In the repository's **Settings → General → Pull Requests**, keep both
+**Allow merge commits** and **Allow squash merging** turned on.
 
 Codes created on staging point to `staging.qrgo.co.za`. Don't print them or
 hand them out.
