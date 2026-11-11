@@ -13,6 +13,7 @@ The app uses **MySQL/MariaDB** (via [`mysql2`](https://github.com/sidorares/node
 - `ADMIN_EMAILS` — comma-separated emails of the accounts allowed into the admin dashboard
 - `ANALYTICS_SECRET` — secret for the anonymous visitor IDs used to count unique scanners (falls back to `JWT_SECRET`)
 - `ANALYTICS_RETENTION_MONTHS` — how long detailed scan records are kept (default `24`; `0` keeps them forever)
+- `STAGING_PASSWORD` — staging site only, never production: puts the whole site behind this password (see [Staging site](#staging-site))
 
 Tables are created automatically on first run.
 
@@ -268,9 +269,65 @@ credit shown on the analytics page. Keep it if you change the page.
 
 `npm run build` uses webpack (`next build --webpack`), not Next's default bundler, Turbopack. From Next.js 16.3, Next's native compiler (`@next/swc-linux-x64-gnu`) needs glibc 2.30, and Hostinger's servers have an older one. The build log shows ``version `GLIBC_2.29' not found``, then Next falls back to its WebAssembly compiler, which only works with webpack. Keep `--webpack` until Hostinger's glibc is 2.30 or newer (check with `ldd --version` over SSH). `npm run dev` still uses Turbopack.
 
+## Staging site
+
+A second copy of the app on Hostinger, at `staging.qrgo.co.za`, for trying
+changes before they go live. It deploys from the `staging` branch, just as
+production deploys from `main`, and has its own database, so nothing done on
+staging touches live codes or scans.
+
+Only people with the staging password get in. With `STAGING_PASSWORD` set,
+`src/proxy.js` sends every visitor to a sign-in page first
+(`/staging-access`, see `src/lib/stagingAccess.js`). The right password keeps
+that browser signed in for 30 days, then sends it on to where it was going.
+That includes a scanned code's link, so codes can be tested on a phone. Wrong
+passwords are limited to 10 per connection every 15 minutes. Changing the
+password signs everyone out. Every page also tells search engines not to
+index it, and `robots.txt` turns them all away. Production doesn't set
+`STAGING_PASSWORD`, so none of this happens there.
+
+### Using it
+
+1. To try a feature, open a pull request from its branch into `staging` and
+   merge it. Hostinger redeploys staging.
+2. When it's ready, open a pull request from the same feature branch into
+   `main`.
+3. Now and then, merge `main` into `staging` so staging doesn't drift from
+   production. If it gets messy, reset it: `git checkout staging`,
+   `git reset --hard origin/main`, `git push --force-with-lease`.
+
+Codes created on staging point to `staging.qrgo.co.za`. Don't print them or
+hand them out.
+
+### Setting it up in hPanel
+
+1. **Databases → MySQL**: create a new database and user just for staging.
+   Never point staging at production's database: the app updates its database
+   structure on startup, so unreleased changes would reach live data.
+2. **Websites → Add website → Node.js web app**: deploy from GitHub, using
+   this repository and the `staging` branch. Use the same build and start
+   commands and Node.js version as production.
+3. **Environment variables**: the same names as production, with these
+   values:
+   - `MYSQL_*`: the staging database from step 1.
+   - `JWT_SECRET`, `ANALYTICS_SECRET`, `SIGNUP_INVITE_CODE`: new values, not
+     production's.
+   - `BASE_URL`: `https://staging.qrgo.co.za`.
+   - `ADMIN_EMAILS`: whoever should see the admin pages on staging.
+   - `STAGING_PASSWORD`: the password testers enter.
+   - `RESEND_API_KEY`: leave unset. Invite requests are still saved, but no
+     emails go out.
+4. **Domain**: from the new website's own dashboard, connect
+   `staging.qrgo.co.za`. Don't create it under the `qrgo.co.za` website's
+   **Domains → Subdomains** page: that page belongs to the production website.
+
+The staging app shares the hosting plan's memory and process limits with
+production, so a staging build can briefly slow the live site. Deploy to
+staging at quiet times.
+
 ## CI checks
 
-Hostinger redeploys whenever `main` changes, so every pull request into `main` runs two checks (`.github/workflows/ci.yml`). Make both required in the branch ruleset for `main`, so a PR can't merge until they pass.
+Hostinger redeploys whenever `main` or `staging` changes, so every pull request into either branch runs two checks (`.github/workflows/ci.yml`). Make both required in the branch rulesets for `main` and `staging`, so a PR can't merge until they pass.
 
 - **Lint, test and build**: `npm run lint`, `npm test` and a production build with webpack, as on Hostinger.
 - **Database migration check**: `scripts/ci/check-migrations.mjs` runs the app's own schema setup (`ensureSchema()` in `src/lib/db.js`) against a throwaway MariaDB. It fails if a change would remove a table, column or row, change an existing value, or break when it runs twice. It also checks that pruning old scans deletes exactly the scans it should. Then the same job runs the tests that need a database (`*.db.test.js`, skipped by `npm test` elsewhere): scans per destination must add up to each code's total, and narrowing to a destination must match its row.

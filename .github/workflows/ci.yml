@@ -1,13 +1,14 @@
-# Checks every pull request into main, and main itself after each merge.
-# Merging into main deploys to production (Hostinger redeploys on every change),
-# so both jobs should be required checks in the branch ruleset for main.
+# Checks every pull request into main or staging, and both branches after each
+# merge. Merging into main deploys to production and merging into staging
+# deploys the staging site (Hostinger redeploys on every change), so both jobs
+# should be required checks in the branch rulesets for main and staging.
 name: CI
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, staging]
   push:
-    branches: [main]
+    branches: [main, staging]
 
 # Read-only: a pull request from a fork can't read secrets or write to the repo.
 # Keep the trigger as pull_request, never pull_request_target.
