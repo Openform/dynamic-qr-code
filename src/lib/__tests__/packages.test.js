@@ -5,6 +5,7 @@ import {
   isValidPackage,
   getPackage,
   canUseSchedules,
+  canUsePasswords,
   hasReachedLimit,
   describeLimit,
   describePrice,
@@ -49,6 +50,17 @@ describe('packages', () => {
     // An unknown package falls back to Starter, so no schedules.
     expect(canUseSchedules('nonsense')).toBe(false);
     expect(canUseSchedules(undefined)).toBe(false);
+  });
+  it('allows passwords on codes from Business up', () => {
+    expect(PACKAGES.map((p) => [p.id, canUsePasswords(p.id)])).toEqual([
+      ['starter', false],
+      ['business', true],
+      ['extended', true],
+      ['enterprise', true],
+    ]);
+    // An unknown package falls back to Starter, so no passwords.
+    expect(canUsePasswords('nonsense')).toBe(false);
+    expect(canUsePasswords(undefined)).toBe(false);
   });
 });
 

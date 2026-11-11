@@ -578,6 +578,7 @@ export default function DashboardPage() {
         qrcode={editingQR}
         collections={collections}
         defaultCollectionId={newCodeCollectionId}
+        canUsePasswords={user?.package?.passwords === true}
       />
 
       {/* ---- Schedules ---- */}

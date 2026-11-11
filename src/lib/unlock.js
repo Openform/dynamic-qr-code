@@ -13,9 +13,9 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { SignJWT, jwtVerify } from 'jose';
 import { getJwtSecret } from './token';
+import { UNLOCK_DAYS } from './accessPassword';
 
 export const UNLOCK_COOKIE = 'qr-unlock';
-export const UNLOCK_DAYS = 30;
 const UNLOCK_SECONDS = UNLOCK_DAYS * 24 * 60 * 60;
 
 // Wrong passwords are throttled like failed logins: only failures count. Per

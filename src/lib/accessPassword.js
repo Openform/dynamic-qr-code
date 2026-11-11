@@ -10,6 +10,9 @@ export const ACCESS_PASSWORD_MIN = 4;
 // Matches the qrcodes.access_password column (VARCHAR(64), counted in characters).
 export const ACCESS_PASSWORD_MAX = 64;
 
+/** How long a browser that entered the right password can skip the page. */
+export const UNLOCK_DAYS = 30;
+
 // Tabs, newlines and other control characters can't be typed into the
 // password page's single-line field.
 const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;

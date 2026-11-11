@@ -53,12 +53,12 @@ import {
   unlockLimitKeys,
   unlockPagePath,
 } from '@/lib/unlock';
-const {
+import {
   getQRCodeByShortId,
   getLiveCandidateSchedules,
   recordPasswordPrompt,
   markPasswordPromptUnlocked,
-} = require('@/lib/db');
+} from '@/lib/db';
 
 /**
  * The code's schedules that could be live. If they can't be loaded, the scan
