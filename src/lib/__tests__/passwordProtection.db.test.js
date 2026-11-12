@@ -35,6 +35,17 @@ async function runLater() {
 }
 
 const BASE = 'http://localhost:3000';
+
+/**
+ * A redirect to a page on this site, read as a URL. It must be just the path:
+ * behind Hostinger's proxy, one built from request.url would be
+ * http://0.0.0.0:3000/… (see lib/siteRedirect.js).
+ */
+function sitePath(response) {
+  const location = response.headers.get('location');
+  expect(location).toMatch(/^\/(?!\/)/);
+  return new URL(location, BASE);
+}
 const PHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1';
 const MENU = 'https://example.com/staff-menu';
 
@@ -127,7 +138,7 @@ describe.skipIf(!enabled)('password-protected codes (database)', () => {
     const response = await scan('locked1');
     expect(response.status).toBe(302);
     expect(response.headers.get('cache-control')).toBe('no-store');
-    const location = new URL(response.headers.get('location'));
+    const location = sitePath(response);
     expect(location.pathname).toBe('/r/locked1/unlock');
     const promptId = Number(location.searchParams.get('p'));
     expect(promptId).toBeGreaterThan(0);
@@ -140,7 +151,7 @@ describe.skipIf(!enabled)('password-protected codes (database)', () => {
   it('doesn’t note showings for bots or HEAD requests', async () => {
     const before = await count('SELECT COUNT(*) AS n FROM qrcode_password_prompts');
     const bot = await scan('locked1', { ua: 'WhatsApp/2.23.20.0' });
-    expect(new URL(bot.headers.get('location')).search).toBe('');
+    expect(sitePath(bot).search).toBe('');
     const head = await scan('locked1', { method: 'HEAD' });
     expect(head.status).toBe(302);
     expect(await count('SELECT COUNT(*) AS n FROM qrcode_password_prompts')).toBe(before);
@@ -154,14 +165,14 @@ describe.skipIf(!enabled)('password-protected codes (database)', () => {
 
     const plain = await submit('locked1', 'nope', { ua: 'wrong-test', json: false, prompt: 5 });
     expect(plain.status).toBe(303);
-    expect(new URL(plain.headers.get('location')).pathname + new URL(plain.headers.get('location')).search).toBe(
+    expect(sitePath(plain).pathname + sitePath(plain).search).toBe(
       '/r/locked1/unlock?p=5&error=wrong'
     );
   });
 
   it('sends the right password on, counts one scan and remembers the browser', async () => {
     const shown = await scan('locked1');
-    const promptId = Number(new URL(shown.headers.get('location')).searchParams.get('p'));
+    const promptId = Number(sitePath(shown).searchParams.get('p'));
     await runLater();
 
     const response = await submit('locked1', ' tea4two ', { prompt: promptId });
@@ -186,7 +197,7 @@ describe.skipIf(!enabled)('password-protected codes (database)', () => {
 
   it('only counts the first right answer for a showing, and only on its own code', async () => {
     const shown = await scan('locked1');
-    const promptId = Number(new URL(shown.headers.get('location')).searchParams.get('p'));
+    const promptId = Number(sitePath(shown).searchParams.get('p'));
     expect(await db.markPasswordPromptUnlocked(promptId, code.id + 1)).toBe(false);
     expect(await db.markPasswordPromptUnlocked(promptId, code.id)).toBe(true);
     expect(await db.markPasswordPromptUnlocked(promptId, code.id)).toBe(false);
@@ -209,7 +220,7 @@ describe.skipIf(!enabled)('password-protected codes (database)', () => {
 
     await db.updateQRCode(code.id, owner.id, { accessPassword: 'coffee4u' });
     const response = await scan('locked1', { cookie });
-    expect(new URL(response.headers.get('location')).pathname).toBe('/r/locked1/unlock');
+    expect(sitePath(response).pathname).toBe('/r/locked1/unlock');
     expect((await submit('locked1', 'tea4two', { ua: 'changes' })).status).toBe(401);
     expect((await submit('locked1', 'coffee4u', { ua: 'changes' })).status).toBe(200);
     await runLater();

@@ -50,6 +50,7 @@ import { getClientIp, rateLimit, isRateLimited } from '@/lib/rateLimit';
 import { recordScanFromRequest, pruneIfDue } from '@/lib/scanRecorder';
 import { resolveDestination } from '@/lib/schedules';
 import { getContentType, supportsSchedules } from '@/lib/contentTypes';
+import { isSitePath, redirectToSitePath } from '@/lib/siteRedirect';
 import { isBotUserAgent } from '@/lib/userAgent';
 import {
   UNLOCK_COOKIE,
@@ -87,33 +88,41 @@ function noStore(response) {
   return response;
 }
 
-function redirect(url) {
-  return noStore(NextResponse.redirect(url, 302));
+/**
+ * A redirect: to a page on this site when `href` is a path ("/r/…"), sent as
+ * just the path, or to another site (a code's destination). Same-site
+ * redirects are never built from `request.url`: in a route handler it's the
+ * server's own address (http://0.0.0.0:3000 behind Hostinger's proxy), not
+ * the one the phone used (see lib/siteRedirect.js).
+ */
+function redirect(href) {
+  return noStore(isSitePath(href) ? redirectToSitePath(href) : NextResponse.redirect(href, 302));
 }
 
 function unavailablePath(reason) {
   return `/code-unavailable?reason=${reason}`;
 }
 
-function unavailable(request, reason) {
-  return redirect(new URL(unavailablePath(reason), request.url));
+function unavailable(reason) {
+  return redirect(unavailablePath(reason));
 }
 
 /**
  * Where a scan of this code goes now: `url` as stored (it matches the code's
  * destination history), the schedule sending it there (null for the main
- * destination), and `href`, the absolute URL to send the browser to. Only
+ * destination), and `href`, where to send the browser: an absolute URL, or
+ * for an action page the path on this site ("/r/…/open"). Only
  * website codes have schedules. Email, phone and text message codes go to
  * their action page, which reads and checks the destination itself. Anything
  * else gets https:// in front unless it starts with http(s)://, so a redirect
  * can only ever go to a web link (a bad row fails to parse instead).
  */
-async function destinationFor(qrcode, request) {
+async function destinationFor(qrcode) {
   const type = getContentType(qrcode.content_type);
   const schedules = supportsSchedules(type.id) ? await loadSchedules(qrcode.id) : [];
   const { url, scheduleId } = resolveDestination({ mainUrl: qrcode.destination_url, schedules });
   if (type.kind === 'action') {
-    return { url, scheduleId, href: new URL(`/r/${encodeURIComponent(qrcode.short_id)}/open`, request.url).href };
+    return { url, scheduleId, href: `/r/${encodeURIComponent(qrcode.short_id)}/open` };
   }
   const absolute = /^https?:\/\//i.test(url) ? url : `https://${url}`;
   return { url, scheduleId, href: new URL(absolute).href };
@@ -173,7 +182,7 @@ async function askForPassword(request, qrcode) {
       console.error('Password prompt recording error:', error);
     }
   }
-  return redirect(new URL(unlockPagePath(qrcode.short_id, { promptId }), request.url));
+  return redirect(unlockPagePath(qrcode.short_id, { promptId }));
 }
 
 export async function GET(request, { params }) {
@@ -182,11 +191,11 @@ export async function GET(request, { params }) {
 
     const qrcode = await getQRCodeByShortId(shortId);
     if (!qrcode || isStaticCode(qrcode)) {
-      return unavailable(request, 'not-found');
+      return unavailable('not-found');
     }
 
     if (qrcode.owner_disabled_at) {
-      return unavailable(request, 'inactive');
+      return unavailable('inactive');
     }
 
     if (qrcode.access_password && !(await isUnlocked(request.cookies.get(UNLOCK_COOKIE)?.value, qrcode))) {
@@ -194,13 +203,13 @@ export async function GET(request, { params }) {
     }
 
     // The main destination, or a schedule's while one is live.
-    const destination = await destinationFor(qrcode, request);
+    const destination = await destinationFor(qrcode);
     const response = redirect(destination.href);
     if (request.method !== 'HEAD') recordScanLater(request, qrcode, destination);
     return response;
   } catch (error) {
     console.error('Redirect error:', error);
-    return unavailable(request, 'error');
+    return unavailable('error');
   }
 }
 
@@ -243,7 +252,7 @@ export async function POST(request, { params }) {
     noStore(
       json
         ? NextResponse.json(body, { status, headers })
-        : NextResponse.redirect(new URL(location, request.url), 303)
+        : redirectToSitePath(location, 303)
     );
 
   try {
@@ -289,7 +298,7 @@ export async function POST(request, { params }) {
 
     // The right password, or the code no longer has one (it was removed while
     // the page was open): send them on, and remember it for next time.
-    const destination = await destinationFor(qrcode, request);
+    const destination = await destinationFor(qrcode);
     const response = noStore(json ? NextResponse.json({ url: destination.href }) : continuePage(destination.href));
     if (qrcode.access_password) {
       response.cookies.set(UNLOCK_COOKIE, await createUnlockToken(qrcode), unlockCookieOptions(qrcode.short_id));

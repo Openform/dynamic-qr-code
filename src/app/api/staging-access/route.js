@@ -14,6 +14,7 @@
  */
 
 import { NextResponse } from 'next/server';
+import { redirectToSitePath } from '@/lib/siteRedirect';
 import { getClientIp, isRateLimited, rateLimit } from '@/lib/rateLimit';
 import {
   STAGING_COOKIE,
@@ -67,7 +68,8 @@ export async function POST(request) {
     noStore(
       json
         ? NextResponse.json({ error }, { status, headers })
-        : NextResponse.redirect(new URL(stagingAccessPath(next, error), request.url), 303)
+        : // Relative: request.url is the server's own address (lib/siteRedirect.js).
+          redirectToSitePath(stagingAccessPath(next, error), 303)
     );
 
   // Count only wrong answers, and check the limit first, so even the right
