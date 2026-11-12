@@ -13,6 +13,9 @@ const { getUserById, getQRCodeById, getScheduledDestinationChanges, getSchedules
 export const SCHEDULES_PACKAGE_ERROR =
   'Schedules are available on the Business package and up. Contact us to upgrade your package.';
 
+/** Shown when a schedule is added to a code that isn't a website code. */
+export const SCHEDULES_TYPE_ERROR = 'Only website codes can have schedules.';
+
 /**
  * A code in the API shape, with its scheduled destination changes and its
  * schedule summary, or null when it isn't the user's.

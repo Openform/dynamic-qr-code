@@ -40,6 +40,12 @@ export async function POST(request, { params }) {
       if (result.reason === 'not_found') {
         return Response.json({ error: 'QR code not found' }, { status: 404 });
       }
+      if (result.reason === 'unsupported') {
+        return Response.json(
+          { error: 'Only website codes can change to another link later.', code: 'CONTENT_TYPE_UNSUPPORTED' },
+          { status: 400 }
+        );
+      }
       return Response.json(
         {
           error: `A code can have at most ${MAX_SCHEDULED_CHANGES} changes waiting. Cancel one first.`,

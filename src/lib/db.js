@@ -94,6 +94,8 @@ async function initSchema() {
       corner_square_style VARCHAR(32) NOT NULL DEFAULT 'square',
       corner_dot_style VARCHAR(32) NOT NULL DEFAULT 'square',
       style_config LONGTEXT NULL,
+      content_type VARCHAR(16) NOT NULL DEFAULT 'url',
+      content_data TEXT NULL,
       scan_count INT UNSIGNED NOT NULL DEFAULT 0,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -249,6 +251,12 @@ async function migrateColumns() {
     // deleted collection's codes to Default in app code, so integrity holds
     // without relying on ON DELETE SET NULL.
     ['collection_id', 'ADD COLUMN collection_id INT UNSIGNED NULL, ADD INDEX idx_qrcodes_collection_id (collection_id)'],
+    // What the code does (lib/contentTypes.js). Every code that already
+    // exists is a website code, the only kind there was, so the default fills
+    // them in. content_data is only used by static types (Wi-Fi), and holds
+    // their content encrypted (lib/codeContent.js).
+    ['content_type', "ADD COLUMN content_type VARCHAR(16) NOT NULL DEFAULT 'url'"],
+    ['content_data', 'ADD COLUMN content_data TEXT NULL'],
   ];
 
   const clausesToAdd = [];
@@ -584,6 +592,8 @@ async function getQRCodesByUserId(userId) {
        q.corner_square_style AS cornerSquareStyle,
        q.corner_dot_style AS cornerDotStyle,
        q.style_config AS styleConfig,
+       q.content_type AS contentType,
+       q.content_data AS contentData,
        q.scan_count AS scanCount,
        q.created_at AS createdAt,
        q.updated_at AS updatedAt
@@ -671,12 +681,15 @@ async function getScheduledDestinationChanges(qrcodeId) {
  * history row that starts then. At most `limit` changes can wait at once.
  *
  * Returns `{ ok: true }`, or `{ ok: false, reason: 'not_found' }` when the
- * code isn't the user's, or `{ ok: false, reason: 'limit' }`.
+ * code isn't the user's, `{ ok: false, reason: 'unsupported' }` when it isn't
+ * a website code, or `{ ok: false, reason: 'limit' }`.
  */
 async function scheduleDestinationChange(id, userId, { destinationUrl, startsAt }, limit) {
   await ensureSchema();
   const existing = await getQRCodeById(id, userId);
   if (!existing) return { ok: false, reason: 'not_found' };
+  // Only website codes can change to another link later (lib/contentTypes.js).
+  if (existing.content_type !== 'url') return { ok: false, reason: 'unsupported' };
 
   const pending = await getScheduledDestinationChanges(id);
   if (pending.length >= limit) return { ok: false, reason: 'limit' };
@@ -731,7 +744,7 @@ async function cancelDestinationChange(id, userId, changeId) {
  * when the limit is reached, or `{ ok: false, reason: 'no_user' }`.
  */
 async function createQRCodeWithinLimit(
-  { shortId, userId, collectionId, title, destinationUrl, foregroundColor, backgroundColor, logoUrl, dotStyle, cornerSquareStyle, cornerDotStyle, styleConfig },
+  { shortId, userId, collectionId, title, destinationUrl, contentType, contentData, foregroundColor, backgroundColor, logoUrl, dotStyle, cornerSquareStyle, cornerDotStyle, styleConfig },
   getLimit
 ) {
   await ensureSchema();
@@ -763,15 +776,17 @@ async function createQRCodeWithinLimit(
 
     const [result] = await conn.execute(
       `INSERT INTO qrcodes
-         (short_id, user_id, collection_id, title, destination_url, foreground_color, background_color, logo_url, dot_style, corner_square_style, corner_dot_style, style_config)
+         (short_id, user_id, collection_id, title, destination_url, content_type, content_data, foreground_color, background_color, logo_url, dot_style, corner_square_style, corner_dot_style, style_config)
        VALUES
-         (:shortId, :userId, :collectionId, :title, :destinationUrl, :foregroundColor, :backgroundColor, :logoUrl, :dotStyle, :cornerSquareStyle, :cornerDotStyle, :styleConfig)`,
+         (:shortId, :userId, :collectionId, :title, :destinationUrl, :contentType, :contentData, :foregroundColor, :backgroundColor, :logoUrl, :dotStyle, :cornerSquareStyle, :cornerDotStyle, :styleConfig)`,
       {
         shortId,
         userId,
         collectionId: collectionId ?? null,
         title,
         destinationUrl,
+        contentType: contentType || 'url',
+        contentData: contentData ?? null,
         foregroundColor: foregroundColor || '#000000',
         backgroundColor: backgroundColor || '#ffffff',
         logoUrl: logoUrl || null,
@@ -781,11 +796,14 @@ async function createQRCodeWithinLimit(
         styleConfig: styleConfig != null ? JSON.stringify(styleConfig) : null,
       }
     );
-    await conn.execute(
-      `INSERT INTO qrcode_destinations (qrcode_id, destination_url, started_at)
-       VALUES (:qrcodeId, :destinationUrl, UTC_TIMESTAMP())`,
-      { qrcodeId: result.insertId, destinationUrl }
-    );
+    // Static codes (destination '') have no destination to keep a history of.
+    if (destinationUrl) {
+      await conn.execute(
+        `INSERT INTO qrcode_destinations (qrcode_id, destination_url, started_at)
+         VALUES (:qrcodeId, :destinationUrl, UTC_TIMESTAMP())`,
+        { qrcodeId: result.insertId, destinationUrl }
+      );
+    }
     await conn.commit();
     insertId = result.insertId;
   } catch (err) {
@@ -1033,15 +1051,18 @@ async function getSchedule(qrcodeId, userId, scheduleId) {
  * `endsAt` as UTC "YYYY-MM-DD HH:MM:SS"; `days`, `startTime`, `endTime`).
  * At most `limit` schedules that haven't ended can exist per code.
  *
- * Returns `{ ok: true, id }`, or `{ ok: false, reason: 'not_found' | 'limit' }`.
+ * Returns `{ ok: true, id }`, or `{ ok: false, reason: 'not_found' | 'unsupported' | 'limit' }`
+ * ('unsupported': not a website code).
  */
 async function createSchedule(qrcodeId, userId, schedule, limit) {
   await ensureSchema();
   const [codes] = await pool.execute(
-    'SELECT id FROM qrcodes WHERE id = :qrcodeId AND user_id = :userId LIMIT 1',
+    'SELECT id, content_type FROM qrcodes WHERE id = :qrcodeId AND user_id = :userId LIMIT 1',
     { qrcodeId, userId }
   );
   if (!codes[0]) return { ok: false, reason: 'not_found' };
+  // Schedules send scans to another website, so only website codes have them.
+  if (codes[0].content_type !== 'url') return { ok: false, reason: 'unsupported' };
 
   const [counts] = await pool.execute(
     `SELECT COUNT(*) AS count, (SELECT COALESCE(MAX(position) + 1, 0) FROM qrcode_schedules WHERE qrcode_id = :qrcodeId) AS nextPosition

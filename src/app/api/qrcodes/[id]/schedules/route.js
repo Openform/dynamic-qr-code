@@ -20,17 +20,21 @@
  */
 
 import { getSession } from '@/lib/auth';
+import { PRIVATE_HEADERS } from '@/lib/clientQRCode';
 import { parseScheduleInput, MAX_SCHEDULES_PER_CODE } from '@/lib/scheduleInput';
 import {
   loadSchedulesPanel,
   userCanUseSchedules,
   idParam,
   SCHEDULES_PACKAGE_ERROR,
+  SCHEDULES_TYPE_ERROR,
 } from '@/lib/qrcodeApi';
 const { createSchedule, reorderSchedules } = require('@/lib/db');
 
 const notFound = () => Response.json({ error: 'QR code not found' }, { status: 404 });
 const unauthenticated = () => Response.json({ error: 'Authentication required' }, { status: 401 });
+const unsupported = () =>
+  Response.json({ error: SCHEDULES_TYPE_ERROR, code: 'CONTENT_TYPE_UNSUPPORTED' }, { status: 400 });
 const packageRefused = () =>
   Response.json({ error: SCHEDULES_PACKAGE_ERROR, code: 'PACKAGE_FEATURE' }, { status: 403 });
 
@@ -43,7 +47,7 @@ export async function GET(request, { params }) {
 
     const canEdit = await userCanUseSchedules(session.userId);
     const panel = await loadSchedulesPanel(codeId, session.userId, canEdit);
-    return panel ? Response.json(panel) : notFound();
+    return panel ? Response.json(panel, { headers: PRIVATE_HEADERS }) : notFound();
   } catch (error) {
     console.error('GET /api/qrcodes/[id]/schedules error:', error);
     return Response.json({ error: 'Internal server error' }, { status: 500 });
@@ -65,6 +69,7 @@ export async function POST(request, { params }) {
     const result = await createSchedule(codeId, session.userId, input.fields, MAX_SCHEDULES_PER_CODE);
     if (!result.ok) {
       if (result.reason === 'not_found') return notFound();
+      if (result.reason === 'unsupported') return unsupported();
       return Response.json(
         {
           error: `A code can have at most ${MAX_SCHEDULES_PER_CODE} schedules that haven’t ended. Delete one first.`,

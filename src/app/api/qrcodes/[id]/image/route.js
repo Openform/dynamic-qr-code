@@ -8,10 +8,11 @@
 
 import { getSession } from '@/lib/auth';
 import QRCode from 'qrcode';
+import { encodedDataFor } from '@/lib/contentTypes';
+import { clientContent } from '@/lib/codeContent';
+import { redirectUrlFor } from '@/lib/clientQRCode';
 
 const { getQRCodeById } = require('@/lib/db');
-
-const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 
 export async function GET(request, { params }) {
   try {
@@ -32,10 +33,25 @@ export async function GET(request, { params }) {
       );
     }
 
-    // The QR code encodes the redirect URL (not the raw destination)
-    const redirectUrl = `${BASE_URL}/r/${qrcode.short_id}`;
+    // The QR code encodes the redirect URL (not the raw destination), or a
+    // static code's own content (Wi-Fi details), decrypted just for this.
+    const data = encodedDataFor(qrcode.content_type, {
+      redirectUrl: redirectUrlFor(qrcode.short_id),
+      content: clientContent({
+        contentType: qrcode.content_type,
+        destinationUrl: qrcode.destination_url,
+        contentData: qrcode.content_data,
+        shortId: qrcode.short_id,
+      }),
+    });
+    if (!data) {
+      return Response.json(
+        { error: 'This code’s saved details can’t be read, so it can’t be drawn. Create the code again.' },
+        { status: 409 }
+      );
+    }
 
-    const pngBuffer = await QRCode.toBuffer(redirectUrl, {
+    const pngBuffer = await QRCode.toBuffer(data, {
       type: 'png',
       width: 400,
       margin: 2,
@@ -49,6 +65,8 @@ export async function GET(request, { params }) {
       status: 200,
       headers: {
         'Content-Type': 'image/png',
+        // A Wi-Fi code's image holds its password: never keep it in a cache.
+        'Cache-Control': 'private, no-store',
         'Content-Disposition': `attachment; filename="qrcode-${qrcode.short_id}.png"`,
       },
     });

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import QRCodeStyling from "qr-code-styling"
 import {
   normalizeStyle,
@@ -16,7 +16,22 @@ import {
   evaluateContrast
 } from "@/lib/qrStyle"
 import { renderBwipCanvas } from "@/lib/barcode"
+import {
+  getContentType,
+  isStaticType,
+  supportsSchedules,
+  parseContent,
+  destinationFor,
+  encodedDataFor,
+  wifiPayload
+} from "@/lib/contentTypes"
 import footerStyles from "./CreateEditModal.module.css"
+import {
+  ContentTypePicker,
+  ContentTypeLabel,
+  ContentFields,
+  EMPTY_CONTENT
+} from "./ContentFields"
 import { TrashIcon } from "@/app/components/icons"
 import {
   formatChangeTime,
@@ -107,6 +122,12 @@ function toHttpsUrl(value) {
   return host ? `https://${host}` : ""
 }
 
+// What the preview shows while a new code's details are still incomplete.
+const SAMPLE_PREVIEW = {
+  url: "https://example.com",
+  wifi: wifiPayload({ ssid: "Network", security: "WPA", password: "password" })
+}
+
 function QRCodeForm({
   onClose,
   onSave,
@@ -120,6 +141,21 @@ function QRCodeForm({
   const isEdit = Boolean(qrcode)
 
   const [title, setTitle] = useState(qrcode?.title || "")
+  // What the code does (lib/contentTypes.js). Fixed once the code exists.
+  const [contentType, setContentType] = useState(() =>
+    getContentType(qrcode?.contentType).id
+  )
+  // Each type's fields, kept separately so switching types while creating a
+  // code doesn't lose what was typed. (Website codes use destinationUrl.)
+  const [contents, setContents] = useState(() =>
+    qrcode && qrcode.contentType && qrcode.contentType !== "url"
+      ? { ...EMPTY_CONTENT, [qrcode.contentType]: qrcode.content }
+      : EMPTY_CONTENT
+  )
+  const [contentError, setContentError] = useState(null)
+  const content = contents[contentType]
+  const isStatic = isStaticType(contentType)
+  const hasSchedules = supportsSchedules(contentType)
   const [destinationUrl, setDestinationUrl] = useState(
     stripHttpsPrefix(qrcode?.destinationUrl)
   )
@@ -153,16 +189,40 @@ function QRCodeForm({
     setStyle((s) => ({ ...s, [key]: value }))
   }
 
-  // Live preview
-  useEffect(() => {
-    let text = "https://example.com"
-    if (qrcode && typeof window !== "undefined") {
-      text = `${window.location.origin}/r/${qrcode.shortId}`
-    } else {
-      const url = toHttpsUrl(destinationUrl)
-      if (url) text = url
-    }
+  // Phones only act on Wi-Fi details in a QR code, so static codes are
+  // always QR (the server enforces this too).
+  const effectiveStyle = useMemo(
+    () => (isStatic && style.codeType !== "qr" ? { ...style, codeType: "qr" } : style),
+    [isStatic, style]
+  )
 
+  // Live preview. An existing code shows exactly what it holds: its QR Go
+  // link, or a static code's own content. A new code shows where it will go
+  // (scan the preview to try it), or a sample until the details are complete.
+  useEffect(() => {
+    let text
+    if (qrcode && typeof window !== "undefined") {
+      text = encodedDataFor(qrcode.contentType, {
+        redirectUrl: `${window.location.origin}/r/${qrcode.shortId}`,
+        content: qrcode.content
+      })
+    } else if (contentType === "url") {
+      text = toHttpsUrl(destinationUrl)
+    } else if (isStatic) {
+      text = encodedDataFor(contentType, { content })
+    } else {
+      text = destinationFor(contentType, content)
+    }
+    if (!text && qrcode) {
+      // An existing code whose details can't be read: draw nothing rather
+      // than a sample that could be mistaken for it.
+      qrCodeObj.current = null
+      if (qrRef.current) qrRef.current.innerHTML = ""
+      return
+    }
+    text = text || SAMPLE_PREVIEW[contentType] || `${window.location.origin}/r/preview123`
+
+    const style = effectiveStyle
     if (style.codeType === "qr") {
       const options = buildQRStylingOptions(style, {
         data: text,
@@ -199,11 +259,11 @@ function QRCodeForm({
       // Late resolutions harmlessly draw onto a now-detached canvas.
       renderBwipCanvas(canvas, style, text, 6).catch(() => {})
     }
-  }, [destinationUrl, style, qrcode])
+  }, [destinationUrl, effectiveStyle, qrcode, contentType, content, isStatic])
 
   // QR-only controls (gradients, shapes, logo) are hidden for other symbologies,
   // but a foreground color picker is kept (the "Body" tab, relabeled "Color").
-  const isQR = style.codeType === "qr"
+  const isQR = effectiveStyle.codeType === "qr"
   const visibleTabs = isQR
     ? TABS
     : [
@@ -230,22 +290,48 @@ function QRCodeForm({
     if (urlError) setUrlError("")
   }
 
+  function setContent(next) {
+    setContents((all) => ({ ...all, [contentType]: next }))
+    if (contentError) setContentError(null)
+  }
+
+  function chooseContentType(next) {
+    setContentType(next)
+    setContentError(null)
+    setUrlError("")
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
 
-    // The "https://" scheme is shown as a fixed prefix on the field, so the
-    // value holds just the host/path — re-attach it to build the saved URL.
-    const fullUrl = toHttpsUrl(destinationUrl)
-    if (!isValidDestinationUrl(fullUrl)) {
-      setUrlError("Enter a valid URL.")
-      return
+    // The fields for what the code does, checked by the same rules the
+    // server uses (lib/contentTypes.js), which builds the link from them.
+    let fullUrl = null
+    let checkedContent = null
+    if (contentType === "url") {
+      // The "https://" scheme is shown as a fixed prefix on the field, so the
+      // value holds just the host/path — re-attach it to build the saved URL.
+      fullUrl = toHttpsUrl(destinationUrl)
+      if (!isValidDestinationUrl(fullUrl)) {
+        setUrlError("Enter a valid URL.")
+        return
+      }
+      setUrlError("")
+    } else if (!(isEdit && isStatic)) {
+      const checked = parseContent(contentType, content)
+      if (!checked.ok) {
+        setContentError(checked)
+        setTab("content")
+        return
+      }
+      checkedContent = checked.content
+      setContentError(null)
     }
-    setUrlError("")
 
     // A change for later needs a time in the future. datetime-local values
     // have no time zone, so the browser reads them as the viewer's local time.
     let changeAtIso = null
-    if (isEdit && when === "later") {
+    if (isEdit && hasSchedules && when === "later") {
       const ms = changeAt ? new Date(changeAt).getTime() : NaN
       if (Number.isNaN(ms)) {
         setChangeAtError("Choose a date and time.")
@@ -269,10 +355,14 @@ function QRCodeForm({
       // though the appearance is locked after creation. The server ignores any
       // style fields on edit. `changeAt` asks for the destination to change
       // at that time instead of now.
+      // A static code's details are locked once it exists, so an edit
+      // doesn't send them.
       const payload = {
         title,
-        destinationUrl: fullUrl,
-        styleConfig: style,
+        ...(isEdit ? {} : { contentType }),
+        ...(fullUrl ? { destinationUrl: fullUrl } : {}),
+        ...(checkedContent ? { content: checkedContent } : {}),
+        styleConfig: effectiveStyle,
         collectionId: collectionId === "" ? null : Number(collectionId),
         ...(changeAtIso ? { changeAt: changeAtIso } : {})
       }
@@ -347,6 +437,12 @@ function QRCodeForm({
                   <ContentTab
                     title={title}
                     setTitle={setTitle}
+                    contentType={contentType}
+                    showTypeLabel
+                    content={content}
+                    setContent={setContent}
+                    contentError={contentError}
+                    locked={isStatic}
                     destinationUrl={destinationUrl}
                     setDestinationUrl={setDestinationUrl}
                     onUrlBlur={handleUrlBlur}
@@ -355,6 +451,15 @@ function QRCodeForm({
                     setLogoUrl={(v) => setField("logoUrl", v)}
                     showLogo={false}
                   />
+                  {isStatic && !content && (
+                    <p style={{ ...styles.hint, color: "var(--danger, #e5484d)" }}>
+                      This code’s saved Wi-Fi details can’t be read, so it
+                      can’t be shown or downloaded again. Copies already
+                      printed still work. To get a new image, create the code
+                      again.
+                    </p>
+                  )}
+                  {hasSchedules && (
                   <ChangeTiming
                     when={when}
                     onWhenChange={(value) => {
@@ -367,11 +472,14 @@ function QRCodeForm({
                     minChangeAt={minChangeAt}
                     error={changeAtError}
                   />
+                  )}
+                  {hasSchedules && (
                   <UpcomingChanges
                     changes={qrcode.scheduledChanges ?? []}
                     onCancel={(change) => onCancelChange?.(qrcode, change)}
                   />
-                  {onOpenSchedules && (
+                  )}
+                  {onOpenSchedules && hasSchedules && (
                     <div className="input-group">
                       <span className="input-label">Schedules</span>
                       <button
@@ -397,14 +505,19 @@ function QRCodeForm({
                     />
                   )}
                   <p style={styles.hint}>
-                    The code&apos;s appearance is locked after creation so codes
-                    already printed or shared keep scanning. Only the title,
-                    destination URL, and collection can be changed.
+                    {isStatic
+                      ? "The network details are part of the code itself, so codes already printed or shared keep them. Only the title and collection can be changed. To use different details, create a new code."
+                      : `The code’s appearance and type are locked after creation so codes already printed or shared keep scanning. Only the title, ${contentType === "url" ? "destination URL" : "details above"}, and collection can be changed.`}
                   </p>
                 </div>
               ) : (
                 <>
-                  {/* Code type */}
+                  {/* What the code does: the first choice, since it decides
+                      the fields below (and Wi-Fi codes are always QR). */}
+                  <ContentTypePicker value={contentType} onChange={chooseContentType} />
+
+                  {/* Code type (static codes are always QR) */}
+                  {!isStatic && (
                   <div style={{ marginBottom: "16px" }}>
                     <label className="input-label">Code type</label>
                     <div className="qr-segmented">
@@ -426,6 +539,7 @@ function QRCodeForm({
                       </p>
                     )}
                   </div>
+                  )}
 
                   {/* Collection (only once the user has collections) */}
                   {collections.length > 0 && (
@@ -477,6 +591,10 @@ function QRCodeForm({
                       <ContentTab
                         title={title}
                         setTitle={setTitle}
+                        contentType={contentType}
+                        content={content}
+                        setContent={setContent}
+                        contentError={contentError}
                         destinationUrl={destinationUrl}
                         setDestinationUrl={setDestinationUrl}
                         onUrlBlur={handleUrlBlur}
@@ -597,6 +715,12 @@ function QRCodeForm({
 function ContentTab({
   title,
   setTitle,
+  contentType,
+  showTypeLabel = false,
+  content,
+  setContent,
+  contentError,
+  locked = false,
   destinationUrl,
   setDestinationUrl,
   onUrlBlur,
@@ -618,10 +742,29 @@ function ContentTab({
           placeholder="My QR Code"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
+          maxLength={255}
           required
         />
+        <p style={styles.hint}>Only you see this. It isn&apos;t shown to people who scan the code.</p>
       </div>
 
+      {/* While creating, the type is picked above the tabs; after that it's fixed. */}
+      {showTypeLabel && <ContentTypeLabel type={contentType} />}
+
+      {contentType !== "url" ? (
+        <div style={{ marginBottom: showLogo ? undefined : 0 }}>
+          <ContentFields
+            type={contentType}
+            content={content}
+            onChange={setContent}
+            error={contentError}
+            locked={locked}
+          />
+          {contentError && !contentError.field && (
+            <p style={{ ...styles.hint, color: "var(--danger, #e5484d)" }}>{contentError.error}</p>
+          )}
+        </div>
+      ) : (
       <div
         className="input-group"
         style={{ marginBottom: showLogo ? undefined : 0 }}
@@ -655,6 +798,7 @@ function ContentTab({
           <p style={styles.hint}>Insecure http:// links are not allowed.</p>
         )}
       </div>
+      )}
 
       {/* <div
         className="input-group"

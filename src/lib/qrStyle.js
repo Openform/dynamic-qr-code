@@ -190,6 +190,22 @@ export function effectiveErrorCorrectionLevel(style) {
  * @param {object} style  A (partial) style object — merged over DEFAULT_STYLE.
  * @param {object} opts   { data, width, height, type }
  */
+/**
+ * Text as qr-code-styling needs it to come out as UTF-8. The library writes
+ * each character as one byte (just its low 8 bits), so anything outside
+ * ASCII would be garbled — "é" would become one Latin-1 byte, and emoji
+ * would be lost. Phones read QR text as UTF-8, and a Wi-Fi network's name
+ * has to match exactly, so this hands the library the UTF-8 bytes, one
+ * character per byte. ASCII text comes back unchanged.
+ */
+export function toQrByteString(text) {
+  const value = String(text ?? '');
+  if (!/[^\x00-\x7f]/.test(value)) return value;
+  let out = '';
+  for (const byte of new TextEncoder().encode(value)) out += String.fromCharCode(byte);
+  return out;
+}
+
 export function buildQRStylingOptions(style, { data, width = 300, height = 300, type = 'svg' } = {}) {
   const s = { ...DEFAULT_STYLE, ...(style || {}) };
   const logoSrc = s.logoUrl ? `/api/proxy-image?url=${encodeURIComponent(s.logoUrl)}` : '';
@@ -203,7 +219,7 @@ export function buildQRStylingOptions(style, { data, width = 300, height = 300, 
     width,
     height,
     type,
-    data: data || '',
+    data: toQrByteString(data || ''),
     shape: oneOf(s.shape, QR_SHAPES, 'square'),
     margin: clampNumber(s.margin, 0, 50, DEFAULT_STYLE.margin),
     image: logoSrc,

@@ -8,6 +8,13 @@
  * sent (see lib/scanRecorder.js), so recording never slows down or breaks a
  * scan.
  *
+ * Email, phone and text message codes go to their action page instead
+ * (/r/[shortId]/open), which has a button that opens the mail, phone or
+ * messages app: browsers don't reliably follow a redirect straight to a
+ * mailto:, tel: or sms: link, but they do follow a tap. Static codes (Wi-Fi)
+ * hold their content in the image and never use this link, so it answers
+ * "not found" for them and never reveals anything about them.
+ *
  * Codes that can't redirect send the visitor to /code-unavailable instead:
  * paused (the owner's account is disabled), not found, or a lookup error.
  * Paused scans aren't counted.
@@ -23,6 +30,7 @@ import { NextResponse, after } from 'next/server';
 import { getClientIp } from '@/lib/rateLimit';
 import { recordScanFromRequest, pruneIfDue } from '@/lib/scanRecorder';
 import { resolveDestination } from '@/lib/schedules';
+import { getContentType, supportsSchedules } from '@/lib/contentTypes';
 const { getQRCodeByShortId, getLiveCandidateSchedules } = require('@/lib/db');
 
 /**
@@ -57,20 +65,35 @@ export async function GET(request, { params }) {
       return unavailable(request, 'not-found');
     }
 
+    const type = getContentType(qrcode.content_type);
+    if (type.kind === 'static') {
+      return unavailable(request, 'not-found');
+    }
+
     if (qrcode.owner_disabled_at) {
       return unavailable(request, 'inactive');
     }
 
-    // The main destination, or a schedule's while one is live.
-    const schedules = await loadSchedules(qrcode.id);
+    // The main destination, or a schedule's while one is live. Only website
+    // codes can have schedules.
+    const schedules = supportsSchedules(type.id) ? await loadSchedules(qrcode.id) : [];
     const { url, scheduleId } = resolveDestination({ mainUrl: qrcode.destination_url, schedules });
 
-    // Ensure the destination is an absolute URL
-    let destination = url;
-    if (!destination.startsWith('http://') && !destination.startsWith('https://')) {
-      destination = `https://${destination}`;
+    let response;
+    if (type.kind === 'action') {
+      // The action page reads and checks the destination itself.
+      response = redirect(new URL(`/r/${encodeURIComponent(qrcode.short_id)}/open`, request.url));
+    } else {
+      // Ensure the destination is an absolute URL. Anything that doesn't
+      // start with http(s):// gets https:// in front, so a redirect can only
+      // ever go to a web link (a bad row fails to parse and shows the error
+      // page instead).
+      let destination = url;
+      if (!/^https?:\/\//i.test(destination)) {
+        destination = `https://${destination}`;
+      }
+      response = redirect(new URL(destination));
     }
-    const response = redirect(new URL(destination));
 
     // HEAD requests come from link checkers, not people scanning.
     if (request.method !== 'HEAD') {

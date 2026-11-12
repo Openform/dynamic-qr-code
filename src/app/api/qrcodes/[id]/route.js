@@ -7,9 +7,14 @@
  */
 
 import { getSession } from '@/lib/auth';
-import { normalizeDestinationUrl, isValidDestinationUrl } from '@/lib/qrStyle';
-import { loadClientQRCode } from '@/lib/qrcodeApi';
-const { updateQRCode, deleteQRCode, getCollectionById } = require('@/lib/db');
+import { checkTitle, getContentType, parseContent } from '@/lib/contentTypes';
+import { PRIVATE_HEADERS } from '@/lib/clientQRCode';
+import { loadClientQRCode, idParam } from '@/lib/qrcodeApi';
+const { getQRCodeById, updateQRCode, deleteQRCode, getCollectionById } = require('@/lib/db');
+
+function badRequest(error, field) {
+  return Response.json({ error, ...(field ? { field } : {}) }, { status: 400 });
+}
 
 // ── GET — single QR code ───────────────────────
 export async function GET(request, { params }) {
@@ -31,7 +36,7 @@ export async function GET(request, { params }) {
       );
     }
 
-    return Response.json({ qrcode });
+    return Response.json({ qrcode }, { headers: PRIVATE_HEADERS });
   } catch (error) {
     console.error('GET /api/qrcodes/[id] error:', error);
     return Response.json(
@@ -53,28 +58,55 @@ export async function PUT(request, { params }) {
       );
     }
 
-    const body = await request.json();
-    const { title } = body;
-    let { destinationUrl } = body;
+    const codeId = idParam(id);
+    const existing = codeId ? await getQRCodeById(codeId, session.userId) : null;
+    if (!existing) {
+      return Response.json({ error: 'QR code not found' }, { status: 404 });
+    }
+
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== 'object') return badRequest('Invalid request');
 
     // A code's visual appearance is immutable after creation. Once it has been
     // printed or shared, changing colours, code type, shape, logo, error
     // correction, etc. would produce a different image that no longer matches
-    // the codes already in the wild. Only the title (an internal label), the
-    // destination URL, and the collection (an organizational label that doesn't
+    // the codes already in the wild. Only the title (an internal label), where
+    // a scan goes, and the collection (an organizational label that doesn't
     // affect the image) may change — any style fields in the body are ignored,
     // so the lock holds even against a hand-crafted request.
 
-    // Validate destination URL if provided: autofill https:// when the scheme
-    // is omitted, then require https — plain http URLs are rejected.
-    if (destinationUrl) {
-      destinationUrl = normalizeDestinationUrl(destinationUrl);
-      if (!isValidDestinationUrl(destinationUrl)) {
-        return Response.json(
-          { error: 'Invalid destination URL. Must be a valid https URL.' },
-          { status: 400 }
+    let title;
+    if (body.title !== undefined) {
+      const checked = checkTitle(body.title);
+      if (checked.error) return badRequest(checked.error, 'title');
+      title = checked.value;
+    }
+
+    // What the code does is fixed when it's created; only its details change.
+    const type = getContentType(existing.content_type);
+    if (body.contentType !== undefined && body.contentType !== type.id) {
+      return badRequest("A code's type can't be changed after it's created. Create a new code instead.");
+    }
+
+    // The new destination, built from the type's fields (lib/contentTypes.js).
+    // Website codes also take `destinationUrl`, as they always have. Static
+    // codes (Wi-Fi) hold their content in the printed image, so it's locked.
+    let destinationUrl;
+    const hasContent = body.content !== undefined && body.content !== null;
+    const hasUrl = body.destinationUrl !== undefined && body.destinationUrl !== null && body.destinationUrl !== '';
+    if (type.kind === 'static') {
+      if (hasContent || hasUrl) {
+        return badRequest(
+          'Wi-Fi details are part of the printed code, so they can’t be changed. Create a new code instead.'
         );
       }
+    } else if (hasContent || hasUrl) {
+      if (hasUrl && type.id !== 'url') {
+        return badRequest('This code isn’t a website code, so it can’t be given a link.');
+      }
+      const checked = parseContent(type.id, hasContent ? body.content : { url: body.destinationUrl });
+      if (!checked.ok) return badRequest(checked.error, checked.field);
+      destinationUrl = checked.destination;
     }
 
     // Collection assignment is tri-state: omit the key to leave it unchanged,
@@ -94,7 +126,7 @@ export async function PUT(request, { params }) {
       }
     }
 
-    const updated = await updateQRCode(Number(id), session.userId, {
+    const updated = await updateQRCode(codeId, session.userId, {
       title,
       destinationUrl,
       collectionId,
@@ -107,7 +139,10 @@ export async function PUT(request, { params }) {
       );
     }
 
-    return Response.json({ qrcode: await loadClientQRCode(updated.id, session.userId) });
+    return Response.json(
+      { qrcode: await loadClientQRCode(updated.id, session.userId) },
+      { headers: PRIVATE_HEADERS }
+    );
   } catch (error) {
     console.error('PUT /api/qrcodes/[id] error:', error);
     return Response.json(

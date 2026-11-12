@@ -11,7 +11,26 @@ import {
   MIN_SCANNABLE_CONTRAST,
   GOOD_CONTRAST,
   PRESETS,
+  toQrByteString,
 } from '../qrStyle';
+
+describe('toQrByteString', () => {
+  it('leaves ASCII text unchanged', () => {
+    expect(toQrByteString('https://example.com/r/abc')).toBe('https://example.com/r/abc');
+    expect(toQrByteString('')).toBe('');
+  });
+
+  it('turns other text into its UTF-8 bytes, one per character', () => {
+    expect(toQrByteString('Café')).toBe('Caf\u00c3\u00a9');
+    const bytes = [...toQrByteString('Net 😀')].map((c) => c.charCodeAt(0));
+    expect(bytes).toEqual([...new TextEncoder().encode('Net 😀')]);
+    expect(bytes.every((b) => b <= 0xff)).toBe(true);
+  });
+
+  it('is what buildQRStylingOptions passes to the library', () => {
+    expect(buildQRStylingOptions(DEFAULT_STYLE, { data: 'WIFI:S:Café;;' }).data).toBe('WIFI:S:Caf\u00c3\u00a9;;');
+  });
+});
 
 describe('normalizeDestinationUrl', () => {
   it('prepends https:// when the scheme is omitted', () => {

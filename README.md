@@ -12,6 +12,7 @@ The app uses **MySQL/MariaDB** (via [`mysql2`](https://github.com/sidorares/node
 - `RESEND_API_KEY` — the [Resend](https://resend.com) API key used to email the team about each [invite request](#invite-requests). Optional `INVITE_ALERT_FROM` (sender, default `QR Go <mail@qrgo.openform.co.za>`) and `INVITE_ALERT_EMAILS` (comma-separated recipients, default `kenton@openform.co.za`)
 - `ADMIN_EMAILS` — comma-separated emails of the accounts allowed into the admin dashboard
 - `ANALYTICS_SECRET` — secret for the anonymous visitor IDs used to count unique scanners (falls back to `JWT_SECRET`)
+- `CONTENT_SECRET` — secret for encrypting Wi-Fi codes' details in the database (falls back to `JWT_SECRET`). See [Code types](#code-types) before changing it
 - `ANALYTICS_RETENTION_MONTHS` — how long detailed scan records are kept (default `24`; `0` keeps them forever)
 - `STAGING_PASSWORD` — staging site only, never production: puts the whole site behind this password (see [Staging site](#staging-site))
 
@@ -103,6 +104,59 @@ only web, email, phone and on-site links are allowed. Saved text is stored in
 the `legal_pages` table, created automatically on first run; until a page is
 saved it shows the placeholder text in
 [`src/lib/legalDefaults.js`](src/lib/legalDefaults.js).
+
+## Code types
+
+When creating a code, **What should this code do?** picks its type. The type
+can't be changed afterwards; what it holds can (except for Wi-Fi). The rules
+for each type are in [`src/lib/contentTypes.js`](src/lib/contentTypes.js).
+
+| Type         | Scanning it…                                 | How                                 | Editable | Scans counted |
+| ------------ | -------------------------------------------- | ----------------------------------- | -------- | ------------- |
+| Website      | opens the link                               | redirect                            | Yes      | Yes           |
+| Email        | opens a new email (address, subject, message) | QR Go page with a **Write email** button | Yes | Yes           |
+| Phone call   | asks to call the number                      | QR Go page with a **Call** button   | Yes      | Yes           |
+| Text message | opens a new SMS (number, message)            | QR Go page with a **Write message** button | Yes | Yes          |
+| WhatsApp     | opens a chat (number, message)               | redirect to `wa.me`                 | Yes      | Yes           |
+| Location     | shows a place                                | redirect to a Google Maps search    | Yes      | Yes           |
+| Wi-Fi        | offers to join the network                   | the details are in the image itself | No       | No            |
+
+- **Why a page for email, phone and SMS:** phone browsers and the in-app
+  browsers of scanner apps don't reliably follow a redirect straight to a
+  `mailto:`, `tel:` or `sms:` link, but they always follow a tap. The page
+  (`/r/[shortId]/open`) shows only what the owner chose to share (never the
+  code's title), isn't indexed by search engines, and sends no referrer. The
+  scan is counted before the page opens.
+- **Why Wi-Fi codes are static:** phones only offer to join a network when the
+  details are in the code itself; a web page can't join Wi-Fi. So a Wi-Fi code
+  never reaches QR Go: it can't be edited, and its scans can't be counted
+  (its card says **Not tracked**). Its `/r/` link answers "not found". To use
+  new details, create a new code. Wi-Fi codes count toward the package limit
+  like any other code and are always QR (never Data Matrix). WEP isn't
+  offered: it has been broken for years.
+- **Schedules** and **changing a destination later** are for website codes
+  only, for now.
+
+What's stored: website, email, phone, SMS, WhatsApp and location codes keep
+everything in the code's destination (for example
+`mailto:hello@example.com?subject=Hi`), so destination history and analytics
+work for them as before. The link is always built by the server from checked
+fields: a request can't supply its own `mailto:` link or add recipients, and
+control characters and invisible text-direction characters are refused.
+
+Wi-Fi codes store their details in `qrcodes.content_data`, **encrypted**
+(AES-256-GCM, with a key derived from `CONTENT_SECRET`, or `JWT_SECRET` when
+that isn't set; see [`src/lib/codeContent.js`](src/lib/codeContent.js)). They
+are decrypted only to send to the code's signed-in owner, whose dashboard
+draws the code, and never appear in destinations, scan records, analytics or
+exports. The password is hidden on screen until the owner shows it. **Changing
+the secret** makes saved Wi-Fi details unreadable: printed codes keep working,
+but the dashboard can't draw or download them again until they're created
+again. So set `CONTENT_SECRET` once and keep it, separately from
+`JWT_SECRET`, which you might want to change after a leak.
+
+`content_type` and `content_data` are added to `qrcodes` automatically on first
+run. Existing codes become website codes.
 
 ## Changing a destination later
 
@@ -310,8 +364,8 @@ hand them out.
 3. **Environment variables**: the same names as production, with these
    values:
    - `MYSQL_*`: the staging database from step 1.
-   - `JWT_SECRET`, `ANALYTICS_SECRET`, `SIGNUP_INVITE_CODE`: new values, not
-     production's.
+   - `JWT_SECRET`, `ANALYTICS_SECRET`, `CONTENT_SECRET`, `SIGNUP_INVITE_CODE`:
+     new values, not production's.
    - `BASE_URL`: `https://staging.qrgo.co.za`.
    - `ADMIN_EMAILS`: whoever should see the admin pages on staging.
    - `STAGING_PASSWORD`: the password testers enter.

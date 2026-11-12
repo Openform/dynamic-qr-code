@@ -5,6 +5,9 @@ import { formatDate, formatExact } from "./format"
 import { describeWeekly, displayUrl, viewerTimeZone } from "../../components/scheduledChanges"
 
 function safeHref(url) {
+  // Email, phone and text message destinations aren't web pages: show them
+  // as text rather than opening the mail or phone app from here.
+  if (/^(mailto|tel|sms):/i.test(String(url ?? ""))) return undefined
   try {
     const parsed = new URL(/^https?:\/\//.test(url) ? url : `https://${url}`)
     return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.href : undefined

@@ -15,6 +15,7 @@ import Destinations, { destinationName } from "./Destinations"
 import RecentScans from "./RecentScans"
 import { formatDate, formatDateTime, formatExact, languageName } from "./format"
 import { displayUrl } from "../../components/scheduledChanges"
+import { isStaticType } from "@/lib/contentTypes"
 
 // How often to refresh while the page is open and visible, and how stale the
 // data must be before coming back to the tab triggers a refresh.
@@ -220,8 +221,12 @@ export default function AnalyticsView({ mode = "user", initial }) {
       : collections.find((c) => c.id === collectionId)
   const account = accounts.find((a) => a.id === accountId)
 
-  const codeOptions = codes.filter((c) =>
-    collectionId === null ? true : collectionId === "default" ? c.collectionId == null : c.collectionId === collectionId
+  // Static codes (Wi-Fi) are never scanned through QR Go, so they have no
+  // analytics to pick.
+  const codeOptions = codes.filter(
+    (c) =>
+      !isStaticType(c.contentType) &&
+      (collectionId === null ? true : collectionId === "default" ? c.collectionId == null : c.collectionId === collectionId)
   )
 
   // The loaded code's destinations, for the destination filter.
