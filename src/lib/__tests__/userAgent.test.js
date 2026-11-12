@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseUserAgent, isBotUserAgent, parseLanguage } from '../userAgent';
+import { parseUserAgent, isBotUserAgent, parseLanguage, opensAppLinks } from '../userAgent';
 
 const UA = {
   iphoneSafari:
@@ -113,5 +113,28 @@ describe('parseLanguage', () => {
     expect(parseLanguage('')).toBeNull();
     expect(parseLanguage('*')).toBeNull();
     expect(parseLanguage('english')).toBeNull();
+  });
+});
+
+describe('opensAppLinks', () => {
+  it('is true for the phone browsers that hand mailto:, tel: and sms: to the right app', () => {
+    for (const key of ['iphoneSafari', 'iphoneChrome', 'ipad', 'androidChrome', 'androidSamsung']) {
+      expect(opensAppLinks(UA[key]), key).toBe(true);
+    }
+    expect(opensAppLinks('Mozilla/5.0 (Android 14; Mobile; rv:127.0) Gecko/127.0 Firefox/127.0')).toBe(true);
+  });
+
+  it('is false for in-app browsers, which can show an error page with no way back', () => {
+    for (const key of ['iphoneInstagram', 'iphoneFacebook', 'iphoneWebView', 'androidWebView', 'androidGoogleApp']) {
+      expect(opensAppLinks(UA[key]), key).toBe(false);
+    }
+  });
+
+  it('is false for computers, unknown browsers and no user agent', () => {
+    for (const key of ['windowsChrome', 'windowsEdge', 'macSafari', 'macFirefox', 'linuxFirefox', 'chromebook', 'huawei']) {
+      expect(opensAppLinks(UA[key]), key).toBe(false);
+    }
+    expect(opensAppLinks('')).toBe(false);
+    expect(opensAppLinks(undefined)).toBe(false);
   });
 });

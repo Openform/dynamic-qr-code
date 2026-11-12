@@ -10,10 +10,12 @@
  * sent (see lib/scanRecorder.js), so recording never slows down or breaks a
  * scan.
  *
- * Email, phone and text message codes go to their action page instead
- * (/r/[shortId]/open), which has a button that opens the mail, phone or
- * messages app: browsers don't reliably follow a redirect straight to a
- * mailto:, tel: or sms: link, but they do follow a tap. Static codes (Wi-Fi)
+ * Email, phone and text message codes redirect straight to their mailto:,
+ * tel: or sms: link in the phone browsers known to open those in the right
+ * app (Safari, Chrome, Samsung Internet, Firefox, Edge; see lib/userAgent.js).
+ * Anywhere else, and after the password page, they go to their action page
+ * (/r/[shortId]/open), which has a button: in-app browsers don't reliably
+ * follow a redirect to those links, but they always follow a tap. Static codes (Wi-Fi)
  * hold their content in the image and never use this link, so it answers
  * "not found" for them and never reveals anything about them.
  *
@@ -49,9 +51,9 @@ import { NextResponse, after } from 'next/server';
 import { getClientIp, rateLimit, isRateLimited } from '@/lib/rateLimit';
 import { recordScanFromRequest, pruneIfDue } from '@/lib/scanRecorder';
 import { resolveDestination } from '@/lib/schedules';
-import { getContentType, supportsSchedules } from '@/lib/contentTypes';
+import { appLinkFor, getContentType, supportsSchedules } from '@/lib/contentTypes';
 import { isSitePath, redirectToSitePath } from '@/lib/siteRedirect';
-import { isBotUserAgent } from '@/lib/userAgent';
+import { isBotUserAgent, opensAppLinks } from '@/lib/userAgent';
 import {
   UNLOCK_COOKIE,
   UNLOCK_DEVICE_LIMIT,
@@ -112,17 +114,25 @@ function unavailable(reason) {
  * destination history), the schedule sending it there (null for the main
  * destination), and `href`, where to send the browser: an absolute URL, or
  * for an action page the path on this site ("/r/…/open"). Only
- * website codes have schedules. Email, phone and text message codes go to
- * their action page, which reads and checks the destination itself. Anything
- * else gets https:// in front unless it starts with http(s)://, so a redirect
- * can only ever go to a web link (a bad row fails to parse instead).
+ * website codes have schedules.
+ *
+ * Email, phone and text message codes go straight to their mailto:, tel: or
+ * sms: link (rebuilt from its checked fields) when `appLinks` is set: a scan
+ * in a phone browser known to open those (opensAppLinks in lib/userAgent.js).
+ * Otherwise, and after the password page, they go to their action page with
+ * its button, which reads and checks the destination itself.
+ *
+ * Anything else gets https:// in front unless it starts with http(s)://, so
+ * a redirect can only ever go to a web link (a bad row fails to parse
+ * instead).
  */
-async function destinationFor(qrcode) {
+async function destinationFor(qrcode, { appLinks = false } = {}) {
   const type = getContentType(qrcode.content_type);
   const schedules = supportsSchedules(type.id) ? await loadSchedules(qrcode.id) : [];
   const { url, scheduleId } = resolveDestination({ mainUrl: qrcode.destination_url, schedules });
   if (type.kind === 'action') {
-    return { url, scheduleId, href: `/r/${encodeURIComponent(qrcode.short_id)}/open` };
+    const appLink = appLinks ? appLinkFor(type.id, url) : null;
+    return { url, scheduleId, href: appLink ?? `/r/${encodeURIComponent(qrcode.short_id)}/open` };
   }
   const absolute = /^https?:\/\//i.test(url) ? url : `https://${url}`;
   return { url, scheduleId, href: new URL(absolute).href };
@@ -202,8 +212,12 @@ export async function GET(request, { params }) {
       return askForPassword(request, qrcode);
     }
 
-    // The main destination, or a schedule's while one is live.
-    const destination = await destinationFor(qrcode);
+    // The main destination, or a schedule's while one is live. Email, phone
+    // and text message codes go straight to the app in phone browsers that
+    // open those links, and to the action page with its button elsewhere.
+    const destination = await destinationFor(qrcode, {
+      appLinks: opensAppLinks(request.headers.get('user-agent')),
+    });
     const response = redirect(destination.href);
     if (request.method !== 'HEAD') recordScanLater(request, qrcode, destination);
     return response;
