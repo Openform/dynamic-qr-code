@@ -207,6 +207,11 @@ export default function QRCodeCard({
               </span>
             </span>
           )}
+          {qrcode.accessPassword && (
+            <span style={styles.locked}>
+              <LockIcon size={13} /> Password protected
+            </span>
+          )}
         </div>
       </div>
 
@@ -470,6 +475,13 @@ const styles = {
   contentDetail: {
     minWidth: 0,
     color: "var(--cyan)"
+  },
+  locked: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "6px",
+    fontSize: "0.78rem",
+    color: "var(--text-secondary)"
   },
   nextChange: {
     display: "flex",

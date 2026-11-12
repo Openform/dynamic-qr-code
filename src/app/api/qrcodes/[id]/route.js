@@ -1,6 +1,9 @@
 /**
  * GET    /api/qrcodes/[id]  — Get a single QR code
- * PUT    /api/qrcodes/[id]  — Update a QR code
+ * PUT    /api/qrcodes/[id]  — Update a QR code. `accessPassword` sets or
+ *                            changes the code's password (Business package
+ *                            and up); null or "" removes it (any package);
+ *                            leaving it out keeps it.
  * DELETE /api/qrcodes/[id]  — Delete a QR code
  *
  * NOTE: In Next.js 16, `params` is a Promise and must be awaited.
@@ -9,7 +12,7 @@
 import { getSession } from '@/lib/auth';
 import { checkTitle, getContentType, parseContent } from '@/lib/contentTypes';
 import { PRIVATE_HEADERS } from '@/lib/clientQRCode';
-import { loadClientQRCode, idParam } from '@/lib/qrcodeApi';
+import { loadClientQRCode, idParam, accessPasswordFromBody } from '@/lib/qrcodeApi';
 const { getQRCodeById, updateQRCode, deleteQRCode, getCollectionById } = require('@/lib/db');
 
 function badRequest(error, field) {
@@ -73,7 +76,8 @@ export async function PUT(request, { params }) {
     // the codes already in the wild. Only the title (an internal label), where
     // a scan goes, and the collection (an organizational label that doesn't
     // affect the image) may change — any style fields in the body are ignored,
-    // so the lock holds even against a hand-crafted request.
+    // so the lock holds even against a hand-crafted request. The password
+    // doesn't change the image either, so it can change too.
 
     let title;
     if (body.title !== undefined) {
@@ -126,10 +130,24 @@ export async function PUT(request, { params }) {
       }
     }
 
+    // The password: compared with the current one, so saving it unchanged
+    // works on any package. Static codes (Wi-Fi) never reach QR Go when
+    // they're scanned, so they can't have one.
+    let accessPassword; // undefined → unchanged
+    if ('accessPassword' in body) {
+      const password = await accessPasswordFromBody(body, session.userId, existing.access_password);
+      if (password.response) return password.response;
+      if (type.kind === 'static' && password.value) {
+        return badRequest('Wi-Fi codes can’t have a password: scanning them never reaches QR Go.', 'accessPassword');
+      }
+      accessPassword = password.value;
+    }
+
     const updated = await updateQRCode(codeId, session.userId, {
       title,
       destinationUrl,
       collectionId,
+      accessPassword,
     });
 
     if (!updated) {

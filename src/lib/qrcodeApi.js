@@ -4,7 +4,8 @@
  */
 
 import { toClientQRCode } from './clientQRCode';
-import { canUseSchedules } from './packages';
+import { canUseSchedules, canUsePasswords } from './packages';
+import { parseAccessPassword } from './accessPassword';
 import { describeSchedules } from './schedules';
 import { MAX_SCHEDULES_PER_CODE } from './scheduleInput';
 const { getUserById, getQRCodeById, getScheduledDestinationChanges, getSchedulesForCode } = require('./db');
@@ -15,6 +16,10 @@ export const SCHEDULES_PACKAGE_ERROR =
 
 /** Shown when a schedule is added to a code that isn't a website code. */
 export const SCHEDULES_TYPE_ERROR = 'Only website codes can have schedules.';
+
+/** Shown when an account's package can't give a code a password. */
+export const PASSWORDS_PACKAGE_ERROR =
+  'Password protection is available on the Business package and up. Contact us to upgrade your package.';
 
 /**
  * A code in the API shape, with its scheduled destination changes and its
@@ -48,6 +53,35 @@ export async function loadSchedulesPanel(codeId, userId, canEdit) {
   if (!qrcode) return null;
   const { schedules, liveScheduleId } = describeSchedules(await getSchedulesForCode(codeId));
   return { schedules, liveScheduleId, canEdit, limit: MAX_SCHEDULES_PER_CODE, qrcode };
+}
+
+/**
+ * The password a create or edit request asks for, checked. `body` is the
+ * request body; `current` is the code's password now (null for a new code or
+ * one without). Leaving `accessPassword` out keeps the current one, and null
+ * or "" removes it. Removing it, or sending the same one again, is allowed on
+ * every package, so an account that has moved down a package can still save
+ * its codes; setting or changing one needs a package with passwords.
+ *
+ * Returns `{ value }` (a string, null to remove, or undefined to leave as it
+ * is), or `{ response }`, an error to send back.
+ */
+export async function accessPasswordFromBody(body, userId, current = null) {
+  if (!body || !('accessPassword' in body)) return { value: undefined };
+
+  const parsed = parseAccessPassword(body.accessPassword);
+  if (parsed.error) {
+    return { response: Response.json({ error: parsed.error }, { status: 400 }) };
+  }
+  if (parsed.value === null || parsed.value === current) return { value: parsed.value };
+
+  const user = await getUserById(userId);
+  if (!user || !canUsePasswords(user.package)) {
+    return {
+      response: Response.json({ error: PASSWORDS_PACKAGE_ERROR, code: 'PACKAGE_FEATURE' }, { status: 403 }),
+    };
+  }
+  return { value: parsed.value };
 }
 
 /** A route parameter as a positive whole number, or null. */

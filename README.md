@@ -136,6 +136,10 @@ for each type are in [`src/lib/contentTypes.js`](src/lib/contentTypes.js).
   offered: it has been broken for years.
 - **Schedules** and **changing a destination later** are for website codes
   only, for now.
+- **Passwords** work with every type except Wi-Fi (its scans never reach QR
+  Go, so there's nothing to ask for one). Email, phone and text message codes
+  ask for the password before their page opens, and the page checks it too,
+  so going to `/r/[shortId]/open` directly doesn't get round it.
 
 What's stored: website, email, phone, SMS, WhatsApp and location codes keep
 everything in the code's destination (for example
@@ -226,6 +230,44 @@ Weekly schedules are sent to the API (`POST /api/qrcodes/[id]/schedules`) as
 endTime }`, with `days` as bits (1 = Monday, 2 = Tuesday … 64 = Sunday, so
 31 is Monday to Friday) and the times as `"HH:MM"`.
 
+## Password-protected codes
+
+A code can ask for a password before sending people on. Turn on **Ask for a
+password after scanning** when creating or editing a code. The card then says
+**Password protected**.
+
+- **Scanning.** `/r/<code>` sends people to the code's password page
+  (`/r/<code>/unlock`) instead of the destination. The page never names the
+  code or its owner. The right password sends them on to wherever the code
+  points now, schedules included. Turning the password off opens the code
+  straight away.
+- **Remembered for 30 days.** After the right password, the browser gets a
+  cookie limited to that code's link, so it can skip the page for 30 days. Changing
+  or removing the password makes those cookies stop working. The cookie holds
+  a signed token (`src/lib/unlock.js`), keyed from `JWT_SECRET`.
+- **Wrong passwords** are limited like failed logins: 10 per device (connection
+  plus browser) per code, and 50 per connection across all codes, every 15
+  minutes. The limit lives in memory, so a restart resets it.
+- **Owners can see the password** on the edit screen, so they can share it
+  again. It's stored as typed (`qrcodes.access_password`), not hashed: it
+  protects the destination URL, which is stored in the same row anyway. The
+  edit screen warns not to reuse a password used elsewhere.
+- **Rules.** 4 to 64 characters, no tabs or line breaks, spaces at either end
+  dropped, letter case counts (`src/lib/accessPassword.js`).
+- **Packages.** Business, Extended and Enterprise can set and change passwords
+  (`passwords` in [`src/lib/packages.js`](src/lib/packages.js)). Starter
+  can't. After a downgrade, codes keep asking for their password, which can
+  still be removed but not changed.
+- **No script needed.** With JavaScript, the page checks the password without
+  reloading, then moves on. Without it, the browser posts the form and gets a
+  page that moves on. The redirect can't come straight from the form because
+  of the site's `form-action 'self'` security header.
+
+The API takes `accessPassword` on `POST /api/qrcodes` and
+`PUT /api/qrcodes/[id]`: a string sets it, `null` or `""` removes it, and
+leaving it out keeps it. Codes come back with `accessPassword` (`null` for
+none).
+
 ## Scan analytics
 
 Every scan of a code is recorded after the visitor has been redirected, so
@@ -238,7 +280,10 @@ The dashboard shows scans and unique scanners over time (with the change vs.
 the previous period), countries and cities, device type, OS, browser or app,
 language, a day × hour grid of when people scan, top codes, recent scans, and
 for a single code where its scans were sent (see
-[Destinations](#destinations)). Any range can be downloaded as CSV; the last
+[Destinations](#destinations)). For [password-protected codes](#password-protected-codes),
+a **Password page** card shows how often people were asked for the password
+and how many got through or stopped there. A scan only counts once someone
+gets through. Any range can be downloaded as CSV; the last
 two columns, **Destination** and **Schedule**, say where each scan was sent
 and which schedule sent it (empty for the main destination).
 
@@ -252,8 +297,12 @@ chart and of each code's scan count.
 
 - **Earlier scans:** scans from before analytics existed only count toward
   totals; the dashboard says so.
+- **Password page:** each time someone (not a bot) is shown a code's password
+  page is a row in `qrcode_password_prompts`, with when it was shown and, if
+  the right password followed, when. Nothing else about the visitor is kept.
 - **Retention:** rows older than `ANALYTICS_RETENTION_MONTHS` are deleted
-  automatically (checked once a day). Each code's total scan count is kept.
+  automatically (checked once a day), scans and password page rows alike.
+  Each code's total scan count is kept.
 - **Deleting** a code or account deletes its scan records too.
 
 ### Destinations
@@ -384,7 +433,7 @@ staging at quiet times.
 Hostinger redeploys whenever `main` or `staging` changes, so every pull request into either branch runs two checks (`.github/workflows/ci.yml`). Make both required in the branch rulesets for `main` and `staging`, so a PR can't merge until they pass.
 
 - **Lint, test and build**: `npm run lint`, `npm test` and a production build with webpack, as on Hostinger.
-- **Database migration check**: `scripts/ci/check-migrations.mjs` runs the app's own schema setup (`ensureSchema()` in `src/lib/db.js`) against a throwaway MariaDB. It fails if a change would remove a table, column or row, change an existing value, or break when it runs twice. It also checks that pruning old scans deletes exactly the scans it should. Then the same job runs the tests that need a database (`*.db.test.js`, skipped by `npm test` elsewhere): scans per destination must add up to each code's total, and narrowing to a destination must match its row.
+- **Database migration check**: `scripts/ci/check-migrations.mjs` runs the app's own schema setup (`ensureSchema()` in `src/lib/db.js`) against a throwaway MariaDB. It fails if a change would remove a table, column or row, change an existing value, or break when it runs twice. It also checks that pruning old scans and old password page rows deletes exactly the rows it should. Then the same job runs the tests that need a database (`*.db.test.js`, skipped by `npm test` elsewhere): scans per destination must add up to each code's total, narrowing to a destination must match its row, and a password-protected code must ask for, check and remember its password, with the password page counted in analytics.
 
 The check starts from the schema `main` builds, filled with made-up sample rows (`scripts/ci/seed-data.mjs`). Production has been migrated through older versions, so it can differ from that. To test against production's real structure too, add `scripts/ci/prod-schema.sql`:
 
@@ -404,7 +453,7 @@ docker run -d --name qrgo-ci-db -e MARIADB_ROOT_PASSWORD=ci -p 3306:3306 mariadb
 MYSQL_HOST=127.0.0.1 MYSQL_USER=root MYSQL_PASSWORD=ci MYSQL_DATABASE=qrgo_ci node scripts/ci/check-migrations.mjs
 ```
 
-The database tests also drop and recreate their database, with the same rule about `_ci`:
+The database tests also drop and recreate their databases, with the same rule about `_ci` (the password test uses its own, with `_passwords_ci` at the end):
 
 ```bash
 ANALYTICS_DB_TEST=1 MYSQL_HOST=127.0.0.1 MYSQL_USER=root MYSQL_PASSWORD=ci MYSQL_DATABASE=qrgo_ci npx vitest run db.test

@@ -1,6 +1,6 @@
 /**
  * Account packages: how many QR codes each one allows, and whether it can
- * use schedules.
+ * use schedules and password protection.
  *
  * Shared by the API (to enforce limits) and the UI (to show usage), so this
  * file must stay free of server-only imports.
@@ -11,12 +11,14 @@
 // `schedules`: whether the account can add and edit schedules (date ranges
 // and weekly windows that send scans elsewhere). Changing a destination at a
 // set time is open to every package.
+// `passwords`: whether the account can give a code a password, which people
+// must enter after scanning before they're sent on.
 export const PACKAGES = [
-  { id: 'starter', name: 'Starter', limit: 5, yearlyPrice: 1500, schedules: false },
-  { id: 'business', name: 'Business', limit: 20, yearlyPrice: 3000, schedules: true },
-  { id: 'extended', name: 'Extended', limit: 50, yearlyPrice: 5000, schedules: true },
+  { id: 'starter', name: 'Starter', limit: 5, yearlyPrice: 1500, schedules: false, passwords: false },
+  { id: 'business', name: 'Business', limit: 20, yearlyPrice: 3000, schedules: true, passwords: true },
+  { id: 'extended', name: 'Extended', limit: 50, yearlyPrice: 5000, schedules: true, passwords: true },
   // A `null` limit means unlimited; a `null` price means custom pricing.
-  { id: 'enterprise', name: 'Enterprise', limit: null, yearlyPrice: null, schedules: true },
+  { id: 'enterprise', name: 'Enterprise', limit: null, yearlyPrice: null, schedules: true, passwords: true },
 ];
 
 /** Package given to accounts created through the public sign-up page. */
@@ -43,6 +45,15 @@ export function getPackage(id) {
  */
 export function canUseSchedules(packageId) {
   return getPackage(packageId).schedules === true;
+}
+
+/**
+ * True when an account on this package can give a code a password or change
+ * it. Accounts without it can still remove a password (e.g. after a
+ * downgrade), and codes keep asking for theirs until they do.
+ */
+export function canUsePasswords(packageId) {
+  return getPackage(packageId).passwords === true;
 }
 
 /** True when an account on this package already has as many codes as it may. */

@@ -1,6 +1,8 @@
 /**
  * GET  /api/qrcodes       — List all QR codes for the authenticated user
- * POST /api/qrcodes       — Create a new QR code
+ * POST /api/qrcodes       — Create a new QR code. An optional
+ *                           `accessPassword` makes people enter it after
+ *                           scanning (Business package and up).
  */
 
 import { getSession } from '@/lib/auth';
@@ -19,6 +21,7 @@ import { sealContent } from '@/lib/codeContent';
 // undefined for every field (the cause of URLs/styling vanishing on refresh).
 import { toClientQRCode, withClientContent, PRIVATE_HEADERS } from '@/lib/clientQRCode';
 import { scheduleSummary } from '@/lib/schedules';
+import { accessPasswordFromBody } from '@/lib/qrcodeApi';
 
 const {
   getQRCodesByUserId,
@@ -128,6 +131,18 @@ export async function POST(request) {
       resolvedCollectionId = collection.id;
     }
 
+    // A password people must enter after scanning: needs a package with
+    // password protection. Static codes (Wi-Fi) never reach QR Go when
+    // they're scanned, so there'd be nothing to ask for it.
+    const password = await accessPasswordFromBody(body, session.userId);
+    if (password.response) return password.response;
+    if (isStatic && password.value) {
+      return Response.json(
+        { error: 'Wi-Fi codes can’t have a password: scanning them never reaches QR Go.', field: 'accessPassword' },
+        { status: 400 }
+      );
+    }
+
     const shortId = nanoid(10);
 
     // Prefer the full style config; sanitize untrusted input and derive the
@@ -174,6 +189,7 @@ export async function POST(request) {
         contentData: isStatic ? sealContent(checkedContent.content, shortId) : null,
         ...legacy,
         styleConfig: sanitizedStyle,
+        accessPassword: password.value ?? null,
       },
       (packageId) => getPackage(packageId).limit
     );

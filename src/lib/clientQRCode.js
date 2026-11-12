@@ -3,6 +3,8 @@
  * getQRCodeById) turned into camelCase, with the public redirect URL, the
  * code's content type and content fields, its scheduled destination changes,
  * and its schedule summary (`liveSchedule`, `scheduleCount`).
+ * `accessPassword` is the password people must enter after scanning (null for
+ * none).
  *
  * Not for the code list: getQRCodesByUserId already returns this shape (the
  * list route adds the content with withClientContent() and the schedule
@@ -85,6 +87,7 @@ export function toClientQRCode(qrcode, { scheduledChanges = [], schedules = [] }
     cornerSquareStyle: qrcode.corner_square_style,
     cornerDotStyle: qrcode.corner_dot_style,
     styleConfig: parseStyleConfig(qrcode.style_config),
+    accessPassword: qrcode.access_password ?? null,
     scanCount: qrcode.scan_count,
     createdAt: qrcode.created_at,
     updatedAt: qrcode.updated_at,

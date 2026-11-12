@@ -1,0 +1,146 @@
+/* The password page someone sees after scanning a password-protected code.
+   Same look as /code-unavailable, since both are seen by people scanning. */
+
+.page {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  overflow: hidden;
+}
+
+.orbCyan,
+.orbPurple {
+  position: absolute;
+}
+
+.orbCyan {
+  width: 380px;
+  height: 380px;
+  top: -100px;
+  left: -100px;
+}
+
+.orbPurple {
+  width: 320px;
+  height: 320px;
+  bottom: -80px;
+  right: -80px;
+}
+
+.card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 440px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 24px;
+  padding: 40px 28px;
+}
+
+.icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cyan);
+  background: rgba(0, 212, 255, 0.1);
+  border: 1px solid rgba(0, 212, 255, 0.25);
+}
+
+.title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.body {
+  color: var(--text-secondary);
+  font-size: 0.98rem;
+  line-height: 1.6;
+  margin-top: 12px;
+}
+
+.form {
+  margin-top: 28px;
+  text-align: left;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 4px;
+}
+
+.field:has(.input:focus) {
+  border-color: var(--cyan);
+  box-shadow:
+    0 0 0 3px rgba(0, 212, 255, 0.1),
+    0 0 20px rgba(0, 212, 255, 0.1);
+}
+
+.field[data-invalid="true"] {
+  border-color: var(--error);
+}
+
+/* 16px or more, so phones don't zoom in when the field is tapped. */
+.input {
+  flex: 1;
+  min-width: 0;
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent;
+  font-size: 1rem;
+}
+
+.show {
+  flex: none;
+  padding: 8px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.show:hover,
+.show:focus-visible {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.error {
+  margin-top: 12px;
+}
+
+.submit {
+  width: 100%;
+  margin-top: 16px;
+  justify-content: center;
+}
+
+.footer {
+  color: var(--text-tertiary);
+  font-size: 0.82rem;
+  margin-top: 28px;
+}
+
+.link {
+  color: var(--cyan);
+  font-weight: 500;
+}

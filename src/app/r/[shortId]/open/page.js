@@ -1,7 +1,9 @@
 import Link from "next/link"
+import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 import { ContentTypeIcon } from "@/app/components/icons"
 import { contentFromDestination, destinationFor, getContentType } from "@/lib/contentTypes"
+import { UNLOCK_COOKIE, isUnlocked } from "@/lib/unlock"
 
 const { getQRCodeByShortId } = require("@/lib/db")
 
@@ -14,6 +16,11 @@ const { getQRCodeByShortId } = require("@/lib/db")
  *
  * The scan has already been counted by /r/[shortId], so opening this page
  * directly isn't counted.
+ *
+ * A code with a password is checked here too, with the same cookie as
+ * /r/[shortId] (it's limited to the code's /r/ path, so it reaches this
+ * page). Without it, this page would be a way around the password: anyone
+ * without the cookie is sent back to the code's link, which asks for it.
  *
  * The visitor is usually a member of the public, so the page shows only the
  * content the code's owner chose to share (an address or number, and the
@@ -50,7 +57,10 @@ const TEXT = {
   }
 }
 
-/** The code's checked content, or the reason to show /code-unavailable instead. */
+/**
+ * The code's checked content, `{ reason }` to show /code-unavailable instead,
+ * or `{ locked: true }` when the visitor still has to enter its password.
+ */
 async function loadAction(shortId) {
   if (!SHORT_ID.test(shortId)) return { reason: "not-found" }
   let qrcode
@@ -65,6 +75,10 @@ async function loadAction(shortId) {
   // Only email, phone and text message codes use this page.
   if (type.kind !== "action") return { reason: "not-found" }
   if (qrcode.owner_disabled_at) return { reason: "inactive" }
+  if (qrcode.access_password) {
+    const token = (await cookies()).get(UNLOCK_COOKIE)?.value
+    if (!(await isUnlocked(token, qrcode))) return { locked: true }
+  }
 
   const content = contentFromDestination(type.id, qrcode.destination_url)
   const href = content && destinationFor(type.id, content)
@@ -77,6 +91,8 @@ export default async function ActionPage({ params }) {
   const action = await loadAction(shortId)
   // redirect() works by throwing, so it's called outside any try/catch.
   if (action.reason) redirect(`/code-unavailable?reason=${action.reason}`)
+  // The code's link asks for the password, then comes back here.
+  if (action.locked) redirect(`/r/${encodeURIComponent(shortId)}`)
 
   const { type, content, href } = action
   const text = TEXT[type]

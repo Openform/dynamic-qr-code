@@ -96,6 +96,7 @@ async function initSchema() {
       style_config LONGTEXT NULL,
       content_type VARCHAR(16) NOT NULL DEFAULT 'url',
       content_data TEXT NULL,
+      access_password VARCHAR(64) NULL,
       scan_count INT UNSIGNED NOT NULL DEFAULT 0,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -109,6 +110,11 @@ async function initSchema() {
 
   // The UNIQUE constraint on short_id already provides idx_qrcodes_short_id,
   // and the foreign key reuses idx_qrcodes_user_id — no extra indexes needed.
+  //
+  // access_password: when set, people who scan the code must enter it before
+  // they're sent on (lib/unlock.js). It's kept as typed, not hashed, so the
+  // owner can look it up and share it again. Hashing wouldn't protect much:
+  // it guards the destination URL, which is stored in the same row.
 
   // One row per scan, for the analytics dashboard. Times are UTC. The scanner's
   // IP is never stored: only its location and a keyed hash for counting unique
@@ -141,6 +147,26 @@ async function initSchema() {
       INDEX idx_scan_events_user_time (user_id, scanned_at),
       INDEX idx_scan_events_time (scanned_at),
       CONSTRAINT fk_scan_events_qrcode FOREIGN KEY (qrcode_id)
+        REFERENCES qrcodes(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  // One row each time a password-protected code's password page is shown to
+  // someone (not to bots), for the analytics dashboard. unlocked_at is set
+  // when that showing ends with the right password; rows still NULL are
+  // people who stopped at the page. Times are UTC. user_id is copied from the
+  // code, as in scan_events. Pruned with scan_events (same retention period).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS qrcode_password_prompts (
+      id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      qrcode_id INT UNSIGNED NOT NULL,
+      user_id INT UNSIGNED NOT NULL,
+      shown_at DATETIME NOT NULL,
+      unlocked_at DATETIME NULL,
+      INDEX idx_password_prompts_code_time (qrcode_id, shown_at),
+      INDEX idx_password_prompts_user_time (user_id, shown_at),
+      INDEX idx_password_prompts_time (shown_at),
+      CONSTRAINT fk_password_prompts_qrcode FOREIGN KEY (qrcode_id)
         REFERENCES qrcodes(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
@@ -257,6 +283,8 @@ async function migrateColumns() {
     // their content encrypted (lib/codeContent.js).
     ['content_type', "ADD COLUMN content_type VARCHAR(16) NOT NULL DEFAULT 'url'"],
     ['content_data', 'ADD COLUMN content_data TEXT NULL'],
+    // Nullable, so existing codes read NULL: no password.
+    ['access_password', 'ADD COLUMN access_password VARCHAR(64) NULL'],
   ];
 
   const clausesToAdd = [];
@@ -594,6 +622,7 @@ async function getQRCodesByUserId(userId) {
        q.style_config AS styleConfig,
        q.content_type AS contentType,
        q.content_data AS contentData,
+       q.access_password AS accessPassword,
        q.scan_count AS scanCount,
        q.created_at AS createdAt,
        q.updated_at AS updatedAt
@@ -744,7 +773,7 @@ async function cancelDestinationChange(id, userId, changeId) {
  * when the limit is reached, or `{ ok: false, reason: 'no_user' }`.
  */
 async function createQRCodeWithinLimit(
-  { shortId, userId, collectionId, title, destinationUrl, contentType, contentData, foregroundColor, backgroundColor, logoUrl, dotStyle, cornerSquareStyle, cornerDotStyle, styleConfig },
+  { shortId, userId, collectionId, title, destinationUrl, contentType, contentData, foregroundColor, backgroundColor, logoUrl, dotStyle, cornerSquareStyle, cornerDotStyle, styleConfig, accessPassword },
   getLimit
 ) {
   await ensureSchema();
@@ -776,9 +805,9 @@ async function createQRCodeWithinLimit(
 
     const [result] = await conn.execute(
       `INSERT INTO qrcodes
-         (short_id, user_id, collection_id, title, destination_url, content_type, content_data, foreground_color, background_color, logo_url, dot_style, corner_square_style, corner_dot_style, style_config)
+         (short_id, user_id, collection_id, title, destination_url, content_type, content_data, foreground_color, background_color, logo_url, dot_style, corner_square_style, corner_dot_style, style_config, access_password)
        VALUES
-         (:shortId, :userId, :collectionId, :title, :destinationUrl, :contentType, :contentData, :foregroundColor, :backgroundColor, :logoUrl, :dotStyle, :cornerSquareStyle, :cornerDotStyle, :styleConfig)`,
+         (:shortId, :userId, :collectionId, :title, :destinationUrl, :contentType, :contentData, :foregroundColor, :backgroundColor, :logoUrl, :dotStyle, :cornerSquareStyle, :cornerDotStyle, :styleConfig, :accessPassword)`,
       {
         shortId,
         userId,
@@ -794,6 +823,7 @@ async function createQRCodeWithinLimit(
         cornerSquareStyle: cornerSquareStyle || 'square',
         cornerDotStyle: cornerDotStyle || 'square',
         styleConfig: styleConfig != null ? JSON.stringify(styleConfig) : null,
+        accessPassword: accessPassword ?? null,
       }
     );
     // Static codes (destination '') have no destination to keep a history of.
@@ -815,8 +845,12 @@ async function createQRCodeWithinLimit(
   return { ok: true, qrcode: await getQRCodeById(insertId, userId) };
 }
 
-/** Update an existing QR code. Returns the updated record or null if not found/not owned. */
-async function updateQRCode(id, userId, { title, destinationUrl, foregroundColor, backgroundColor, logoUrl, dotStyle, cornerSquareStyle, cornerDotStyle, styleConfig, collectionId }) {
+/**
+ * Update an existing QR code. Returns the updated record or null if not
+ * found/not owned. `collectionId` and `accessPassword` are tri-state: a value
+ * sets it, null clears it, and undefined leaves it as it is.
+ */
+async function updateQRCode(id, userId, { title, destinationUrl, foregroundColor, backgroundColor, logoUrl, dotStyle, cornerSquareStyle, cornerDotStyle, styleConfig, collectionId, accessPassword }) {
   await ensureSchema();
   const existing = await getQRCodeById(id, userId);
   if (!existing) return null;
@@ -833,6 +867,7 @@ async function updateQRCode(id, userId, { title, destinationUrl, foregroundColor
            corner_dot_style = :cornerDotStyle,
            style_config = :styleConfig,
            collection_id = :collectionId,
+           access_password = :accessPassword,
            updated_at = CURRENT_TIMESTAMP
      WHERE id = :id AND user_id = :userId`,
     {
@@ -852,6 +887,7 @@ async function updateQRCode(id, userId, { title, destinationUrl, foregroundColor
       // the Default Collection, and undefined leaves it where it is. (null vs
       // undefined matters here — `??` would treat an intentional null as "keep".)
       collectionId: collectionId !== undefined ? collectionId : existing.collection_id,
+      accessPassword: accessPassword !== undefined ? accessPassword : existing.access_password,
     }
   );
 
@@ -943,22 +979,68 @@ async function recordScan({
 }
 
 /**
- * Delete scan rows older than `cutoff` ("YYYY-MM-DD HH:MM:SS", UTC) in small
- * batches, so a large first prune can't lock the table for long. Codes' totals
- * in scan_count are untouched. Returns the number of rows deleted.
+ * Delete rows of `table` whose `column` is before `cutoff` in small batches,
+ * so a large first prune can't lock the table for long. Both names are
+ * constants from this file, never input.
  */
-async function pruneScanEvents(cutoff, batchSize = 5000) {
+async function deleteBefore(table, column, cutoff, batchSize) {
   await ensureSchema();
   const limit = Math.max(1, Math.floor(batchSize));
   let deleted = 0;
   for (;;) {
     const [result] = await pool.execute(
-      `DELETE FROM scan_events WHERE scanned_at < :cutoff ORDER BY scanned_at LIMIT ${limit}`,
+      `DELETE FROM ${table} WHERE ${column} < :cutoff ORDER BY ${column} LIMIT ${limit}`,
       { cutoff }
     );
     deleted += result.affectedRows;
     if (result.affectedRows < limit) return deleted;
   }
+}
+
+/**
+ * Delete scan rows older than `cutoff` ("YYYY-MM-DD HH:MM:SS", UTC). Codes'
+ * totals in scan_count are untouched. Returns the number of rows deleted.
+ */
+async function pruneScanEvents(cutoff, batchSize = 5000) {
+  return deleteBefore('scan_events', 'scanned_at', cutoff, batchSize);
+}
+
+/**
+ * Delete password-page rows shown before `cutoff` ("YYYY-MM-DD HH:MM:SS",
+ * UTC). Returns the number of rows deleted.
+ */
+async function prunePasswordPrompts(cutoff, batchSize = 5000) {
+  return deleteBefore('qrcode_password_prompts', 'shown_at', cutoff, batchSize);
+}
+
+/**
+ * Note that a code's password page is being shown to someone. Returns the
+ * new row's id, which the page sends back with the password so a right
+ * answer can be matched to this showing (markPasswordPromptUnlocked).
+ */
+async function recordPasswordPrompt({ qrcodeId, userId }) {
+  await ensureSchema();
+  const [result] = await pool.execute(
+    `INSERT INTO qrcode_password_prompts (qrcode_id, user_id, shown_at)
+     VALUES (:qrcodeId, :userId, UTC_TIMESTAMP())`,
+    { qrcodeId, userId }
+  );
+  return Number(result.insertId);
+}
+
+/**
+ * Note that a showing of the password page ended with the right password.
+ * Only the first right answer counts, and only for this code's showings.
+ * Returns true if a row was updated.
+ */
+async function markPasswordPromptUnlocked(promptId, qrcodeId) {
+  await ensureSchema();
+  const [result] = await pool.execute(
+    `UPDATE qrcode_password_prompts SET unlocked_at = UTC_TIMESTAMP()
+     WHERE id = :promptId AND qrcode_id = :qrcodeId AND unlocked_at IS NULL`,
+    { promptId, qrcodeId }
+  );
+  return result.affectedRows > 0;
 }
 
 // ──────────────────────────────────────────────
@@ -1434,6 +1516,9 @@ module.exports = {
   deleteQRCode,
   recordScan,
   pruneScanEvents,
+  prunePasswordPrompts,
+  recordPasswordPrompt,
+  markPasswordPromptUnlocked,
   getUserStats,
   getCollectionsByUserId,
   getCollectionById,
