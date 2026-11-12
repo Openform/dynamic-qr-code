@@ -164,8 +164,9 @@ describe('POST /api/staging-access', () => {
   it('answers a form posted without the script with a redirect back, or a page that moves on', async () => {
     const wrong = await post('nope', { json: false });
     expect(wrong.status).toBe(303);
-    const back = new URL(wrong.headers.get('location'));
-    expect(back.pathname + back.search).toBe('/staging-access?next=%2Fr%2Fabc123&error=wrong');
+    // Relative, so the browser stays on the address it used: behind
+    // Hostinger's proxy, request.url is the server's own http://0.0.0.0:3000.
+    expect(wrong.headers.get('location')).toBe('/staging-access?next=%2Fr%2Fabc123&error=wrong');
 
     const right = await post('let-me-test', { json: false });
     expect(right.status).toBe(200);
