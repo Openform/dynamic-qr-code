@@ -30,6 +30,7 @@ import { NextResponse, after } from 'next/server';
 import { getClientIp } from '@/lib/rateLimit';
 import { recordScanFromRequest, pruneIfDue } from '@/lib/scanRecorder';
 import { resolveDestination } from '@/lib/schedules';
+import { redirectToSitePath } from '@/lib/siteRedirect';
 import { getContentType, supportsSchedules } from '@/lib/contentTypes';
 const { getQRCodeByShortId, getLiveCandidateSchedules } = require('@/lib/db');
 
@@ -46,14 +47,26 @@ async function loadSchedules(qrcodeId) {
   }
 }
 
-function redirect(url) {
-  const response = NextResponse.redirect(url, 302);
+function noStore(response) {
   response.headers.set('Cache-Control', 'no-store');
   return response;
 }
 
-function unavailable(request, reason) {
-  return redirect(new URL(`/code-unavailable?reason=${reason}`, request.url));
+/** A redirect to another site (a code's destination). */
+function redirect(url) {
+  return noStore(NextResponse.redirect(url, 302));
+}
+
+/**
+ * A redirect to a page on this site. Relative, because `request.url` here is
+ * the server's own address, not the public one (see lib/siteRedirect.js).
+ */
+function redirectOnSite(path) {
+  return noStore(redirectToSitePath(path));
+}
+
+function unavailable(reason) {
+  return redirectOnSite(`/code-unavailable?reason=${reason}`);
 }
 
 export async function GET(request, { params }) {
@@ -62,16 +75,16 @@ export async function GET(request, { params }) {
 
     const qrcode = await getQRCodeByShortId(shortId);
     if (!qrcode) {
-      return unavailable(request, 'not-found');
+      return unavailable('not-found');
     }
 
     const type = getContentType(qrcode.content_type);
     if (type.kind === 'static') {
-      return unavailable(request, 'not-found');
+      return unavailable('not-found');
     }
 
     if (qrcode.owner_disabled_at) {
-      return unavailable(request, 'inactive');
+      return unavailable('inactive');
     }
 
     // The main destination, or a schedule's while one is live. Only website
@@ -82,7 +95,7 @@ export async function GET(request, { params }) {
     let response;
     if (type.kind === 'action') {
       // The action page reads and checks the destination itself.
-      response = redirect(new URL(`/r/${encodeURIComponent(qrcode.short_id)}/open`, request.url));
+      response = redirectOnSite(`/r/${encodeURIComponent(qrcode.short_id)}/open`);
     } else {
       // Ensure the destination is an absolute URL. Anything that doesn't
       // start with http(s):// gets https:// in front, so a redirect can only
@@ -124,6 +137,6 @@ export async function GET(request, { params }) {
     return response;
   } catch (error) {
     console.error('Redirect error:', error);
-    return unavailable(request, 'error');
+    return unavailable('error');
   }
 }
