@@ -10,6 +10,13 @@
  * sent (see lib/scanRecorder.js), so recording never slows down or breaks a
  * scan.
  *
+ * Email, phone and text message codes go to their action page instead
+ * (/r/[shortId]/open), which has a button that opens the mail, phone or
+ * messages app: browsers don't reliably follow a redirect straight to a
+ * mailto:, tel: or sms: link, but they do follow a tap. Static codes (Wi-Fi)
+ * hold their content in the image and never use this link, so it answers
+ * "not found" for them and never reveals anything about them.
+ *
  * A code with a password sends people to its password page
  * (/r/[shortId]/unlock) instead, unless their browser entered the current
  * password in the last 30 days (a cookie, see lib/unlock.js). Each showing of
@@ -22,7 +29,8 @@
  * when the code can't be opened, or `{ error: 'wrong' | 'limited' }`.
  * Without it (a browser posting the form before the script has loaded) it
  * redirects back to the page with `?error=`, or, on success, answers with a
- * page that moves on to the destination. That page can't be a redirect: the
+ * page that moves on to the destination (for email, phone and text message
+ * codes, their action page). That page can't be a redirect: the
  * site's `form-action 'self'` policy stops a form from redirecting to another
  * site.
  *
@@ -41,6 +49,7 @@ import { NextResponse, after } from 'next/server';
 import { getClientIp, rateLimit, isRateLimited } from '@/lib/rateLimit';
 import { recordScanFromRequest, pruneIfDue } from '@/lib/scanRecorder';
 import { resolveDestination } from '@/lib/schedules';
+import { getContentType, supportsSchedules } from '@/lib/contentTypes';
 import { isBotUserAgent } from '@/lib/userAgent';
 import {
   UNLOCK_COOKIE,
@@ -93,13 +102,26 @@ function unavailable(request, reason) {
 /**
  * Where a scan of this code goes now: `url` as stored (it matches the code's
  * destination history), the schedule sending it there (null for the main
- * destination), and `href`, the absolute URL to send the browser to.
+ * destination), and `href`, the absolute URL to send the browser to. Only
+ * website codes have schedules. Email, phone and text message codes go to
+ * their action page, which reads and checks the destination itself. Anything
+ * else gets https:// in front unless it starts with http(s)://, so a redirect
+ * can only ever go to a web link (a bad row fails to parse instead).
  */
-async function destinationFor(qrcode) {
-  const schedules = await loadSchedules(qrcode.id);
+async function destinationFor(qrcode, request) {
+  const type = getContentType(qrcode.content_type);
+  const schedules = supportsSchedules(type.id) ? await loadSchedules(qrcode.id) : [];
   const { url, scheduleId } = resolveDestination({ mainUrl: qrcode.destination_url, schedules });
-  const absolute = url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`;
+  if (type.kind === 'action') {
+    return { url, scheduleId, href: new URL(`/r/${encodeURIComponent(qrcode.short_id)}/open`, request.url).href };
+  }
+  const absolute = /^https?:\/\//i.test(url) ? url : `https://${url}`;
   return { url, scheduleId, href: new URL(absolute).href };
+}
+
+/** Static codes (Wi-Fi) hold their content in the image and never use their link. */
+function isStaticCode(qrcode) {
+  return getContentType(qrcode.content_type).kind === 'static';
 }
 
 /**
@@ -159,7 +181,7 @@ export async function GET(request, { params }) {
     const { shortId } = await params;
 
     const qrcode = await getQRCodeByShortId(shortId);
-    if (!qrcode) {
+    if (!qrcode || isStaticCode(qrcode)) {
       return unavailable(request, 'not-found');
     }
 
@@ -172,7 +194,7 @@ export async function GET(request, { params }) {
     }
 
     // The main destination, or a schedule's while one is live.
-    const destination = await destinationFor(qrcode);
+    const destination = await destinationFor(qrcode, request);
     const response = redirect(destination.href);
     if (request.method !== 'HEAD') recordScanLater(request, qrcode, destination);
     return response;
@@ -230,7 +252,8 @@ export async function POST(request, { params }) {
     const given = form?.get('password');
     const promptId = promptIdFrom(form?.get('prompt'));
 
-    const qrcode = await getQRCodeByShortId(shortId);
+    let qrcode = await getQRCodeByShortId(shortId);
+    if (qrcode && isStaticCode(qrcode)) qrcode = null;
     if (!qrcode || qrcode.owner_disabled_at) {
       const location = unavailablePath(qrcode ? 'inactive' : 'not-found');
       return refuse({ status: qrcode ? 403 : 404, body: { error: 'unavailable', redirect: location }, location });
@@ -266,7 +289,7 @@ export async function POST(request, { params }) {
 
     // The right password, or the code no longer has one (it was removed while
     // the page was open): send them on, and remember it for next time.
-    const destination = await destinationFor(qrcode);
+    const destination = await destinationFor(qrcode, request);
     const response = noStore(json ? NextResponse.json({ url: destination.href }) : continuePage(destination.href));
     if (qrcode.access_password) {
       response.cookies.set(UNLOCK_COOKIE, await createUnlockToken(qrcode), unlockCookieOptions(qrcode.short_id));

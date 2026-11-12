@@ -10,16 +10,16 @@ import { nanoid } from 'nanoid';
 import {
   sanitizeStyleConfig,
   legacyFieldsFromStyle,
-  normalizeDestinationUrl,
-  isValidDestinationUrl,
   evaluateContrast,
 } from '@/lib/qrStyle';
 import { getPackage } from '@/lib/packages';
+import { checkTitle, isContentType, isStaticType, parseContent, DEFAULT_CONTENT_TYPE } from '@/lib/contentTypes';
+import { sealContent } from '@/lib/codeContent';
 // toClientQRCode is for the POST response, whose record comes from
 // getQRCodeById (snake_case columns). Do NOT use it for the GET list:
 // getQRCodesByUserId already returns camelCase fields, so re-mapping them reads
 // undefined for every field (the cause of URLs/styling vanishing on refresh).
-import { toClientQRCode, redirectUrlFor } from '@/lib/clientQRCode';
+import { toClientQRCode, withClientContent, PRIVATE_HEADERS } from '@/lib/clientQRCode';
 import { scheduleSummary } from '@/lib/schedules';
 import { accessPasswordFromBody } from '@/lib/qrcodeApi';
 
@@ -42,8 +42,8 @@ export async function GET() {
     }
 
     // getQRCodesByUserId already returns the client shape (camelCase fields with
-    // styleConfig parsed, and scheduled changes); the public redirect URL and
-    // each code's schedule summary are added here.
+    // styleConfig parsed, and scheduled changes); each code's content, its
+    // public redirect URL and its schedule summary are added here.
     const [qrcodes, schedules] = await Promise.all([
       getQRCodesByUserId(session.userId),
       getNotEndedSchedulesByUserId(session.userId),
@@ -51,12 +51,11 @@ export async function GET() {
     const schedulesByCode = Map.groupBy(schedules, (s) => s.qrcodeId);
     const now = Date.now();
     const clientQRCodes = qrcodes.map((qr) => ({
-      ...qr,
+      ...withClientContent(qr),
       ...scheduleSummary(schedulesByCode.get(qr.id) ?? [], now),
-      redirectUrl: redirectUrlFor(qr.shortId),
     }));
 
-    return Response.json({ qrcodes: clientQRCodes });
+    return Response.json({ qrcodes: clientQRCodes }, { headers: PRIVATE_HEADERS });
   } catch (error) {
     console.error('GET /api/qrcodes error:', error);
     return Response.json(
@@ -77,7 +76,10 @@ export async function POST(request) {
       );
     }
 
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== 'object') {
+      return Response.json({ error: 'Invalid request' }, { status: 400 });
+    }
     const {
       title,
       destinationUrl,
@@ -93,13 +95,29 @@ export async function POST(request) {
       collectionId,
     } = body;
 
-    // Validation
-    if (!title || !destinationUrl) {
+    // Validation. The title is an internal label; the content is checked by
+    // its type's rules (lib/contentTypes.js), which also build the link a
+    // scan goes to — a request can't supply a ready-made one. Older clients
+    // send just `destinationUrl`, which means a website code.
+    const checkedTitle = checkTitle(title);
+    if (checkedTitle.error) {
+      return Response.json({ error: checkedTitle.error, field: 'title' }, { status: 400 });
+    }
+
+    const contentType = body.contentType ?? DEFAULT_CONTENT_TYPE;
+    if (!isContentType(contentType)) {
+      return Response.json({ error: 'Choose what the code should do.' }, { status: 400 });
+    }
+    const contentInput =
+      contentType === 'url' && body.content == null ? { url: destinationUrl } : body.content;
+    const checkedContent = parseContent(contentType, contentInput);
+    if (!checkedContent.ok) {
       return Response.json(
-        { error: 'Title and destination URL are required' },
+        { error: checkedContent.error, field: checkedContent.field },
         { status: 400 }
       );
     }
+    const isStatic = isStaticType(contentType);
 
     // Resolve the target collection. A missing/empty/null value means the
     // Default Collection; any other value must be one of the user's own
@@ -113,20 +131,17 @@ export async function POST(request) {
       resolvedCollectionId = collection.id;
     }
 
-    // Autofill https:// when the scheme is omitted, then require https — plain
-    // http URLs are rejected.
-    const normalizedUrl = normalizeDestinationUrl(destinationUrl);
-    if (!isValidDestinationUrl(normalizedUrl)) {
+    // A password people must enter after scanning: needs a package with
+    // password protection. Static codes (Wi-Fi) never reach QR Go when
+    // they're scanned, so there'd be nothing to ask for it.
+    const password = await accessPasswordFromBody(body, session.userId);
+    if (password.response) return password.response;
+    if (isStatic && password.value) {
       return Response.json(
-        { error: 'Invalid destination URL. Must be a valid https URL.' },
+        { error: 'Wi-Fi codes can’t have a password: scanning them never reaches QR Go.', field: 'accessPassword' },
         { status: 400 }
       );
     }
-
-    // A password people must enter after scanning: needs a package with
-    // password protection.
-    const password = await accessPasswordFromBody(body, session.userId);
-    if (password.response) return password.response;
 
     const shortId = nanoid(10);
 
@@ -134,6 +149,9 @@ export async function POST(request) {
     // legacy flat columns from it. Fall back to the legacy body fields for
     // older clients that don't send a styleConfig.
     const sanitizedStyle = sanitizeStyleConfig(styleConfig);
+    // Phones only act on Wi-Fi details in a QR code, so static codes are
+    // always QR (never Data Matrix).
+    if (sanitizedStyle && isStatic) sanitizedStyle.codeType = 'qr';
 
     // Reject codes whose foreground/background contrast is too low to scan, so a
     // crafted request can't bypass the client-side contrast check. Only a
@@ -163,8 +181,12 @@ export async function POST(request) {
         shortId,
         userId: session.userId,
         collectionId: resolvedCollectionId,
-        title,
-        destinationUrl: normalizedUrl,
+        title: checkedTitle.value,
+        destinationUrl: checkedContent.destination,
+        contentType,
+        // A static code's content includes a password, so it's only ever
+        // stored encrypted (lib/codeContent.js).
+        contentData: isStatic ? sealContent(checkedContent.content, shortId) : null,
         ...legacy,
         styleConfig: sanitizedStyle,
         accessPassword: password.value ?? null,
@@ -185,7 +207,10 @@ export async function POST(request) {
       );
     }
 
-    return Response.json({ qrcode: toClientQRCode(created.qrcode) }, { status: 201 });
+    return Response.json(
+      { qrcode: toClientQRCode(created.qrcode) },
+      { status: 201, headers: PRIVATE_HEADERS }
+    );
   } catch (error) {
     console.error('POST /api/qrcodes error:', error);
     return Response.json(

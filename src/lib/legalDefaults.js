@@ -14,7 +14,7 @@ const privacy = `This Privacy Policy explains what information QR Go (“we”, 
 We collect the following types of information:
 
 - **Account details** — your name, email address and password. Passwords are stored as a secure hash and are never visible to us.
-- **QR code content** — the names, destination links, collections and design settings of the QR codes you create.
+- **QR code content** — the names, destinations, collections and design settings of the QR codes you create. Depending on what a code does, its destination can be a web link, an email address with a subject and message, a phone number with a message, a WhatsApp number or a place. Wi-Fi codes include the network name and password, which we store encrypted. Email addresses, phone numbers and messages you add to a code are shown to anyone who scans it.
 - **Scan data** — when someone scans one of your codes we record the time of the scan, an approximate location (country and city), the device type, operating system, browser and preferred language.
 
 We do not store the IP address of people who scan your codes. It is used briefly to estimate location and to create an anonymous identifier for counting unique scans, then discarded.
@@ -41,7 +41,7 @@ Detailed scan records are kept for 24 months and then deleted; the total scan co
 
 ## 6. Security
 
-We use industry-standard measures to protect your information, including encrypted connections and hashed passwords. No system is perfectly secure, so we cannot guarantee absolute security.
+We use industry-standard measures to protect your information, including encrypted connections, hashed passwords and encrypted Wi-Fi details. No system is perfectly secure, so we cannot guarantee absolute security.
 
 ## 7. Your rights
 
@@ -91,7 +91,7 @@ You keep ownership of the content you add to QR Go, such as code names and desti
 
 ## 6. Availability of your codes
 
-Dynamic QR codes rely on our service to redirect each scan. If the service is unavailable, or your account is suspended or closed, your codes will stop redirecting to their destinations. We aim to keep QR Go running reliably but do not guarantee uninterrupted access.
+Dynamic QR codes rely on our service to redirect each scan. Wi-Fi codes are different: their details are stored in the code itself, so they keep working without our service, but they can’t be changed after they’re created and their scans can’t be counted. If the service is unavailable, or your account is suspended or closed, your codes will stop redirecting to their destinations. We aim to keep QR Go running reliably but do not guarantee uninterrupted access.
 
 ## 7. Suspension and termination
 

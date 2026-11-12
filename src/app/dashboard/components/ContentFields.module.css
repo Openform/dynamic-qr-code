@@ -1,0 +1,94 @@
+/* What a code does: the type picker and each type's fields (ContentFields.js). */
+
+.typeGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 8px;
+}
+
+.typeOption {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 8px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  text-align: center;
+  transition: all var(--transition-fast);
+}
+
+.typeOption:hover {
+  color: var(--text-primary);
+  border-color: rgba(0, 212, 255, 0.4);
+}
+
+.typeOption:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.typeOptionActive,
+.typeOptionActive:hover {
+  color: var(--cyan);
+  border-color: var(--cyan);
+  background: rgba(0, 212, 255, 0.08);
+  font-weight: 600;
+}
+
+.typeBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 84px;
+  line-height: 1.5;
+}
+
+.hint,
+.error {
+  font-size: 0.78rem;
+  margin-top: 6px;
+  line-height: 1.45;
+}
+
+.hint {
+  color: var(--text-tertiary);
+}
+
+.hint svg {
+  vertical-align: -1px;
+  margin-right: 2px;
+}
+
+.error {
+  color: var(--danger, #e5484d);
+}
+
+.underField {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.counter {
+  flex: none;
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}

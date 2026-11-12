@@ -5,6 +5,12 @@ import Link from "next/link"
 import QRCodeStyling from "qr-code-styling"
 import { normalizeStyle, buildQRStylingOptions } from "@/lib/qrStyle"
 import { renderBwipCanvas, downloadBwip } from "@/lib/barcode"
+import {
+  getContentType,
+  supportsSchedules,
+  encodedDataFor,
+  describeContent
+} from "@/lib/contentTypes"
 import cardStyles from "./QRCodeCard.module.css"
 import {
   PencilIcon,
@@ -14,6 +20,7 @@ import {
   ChartIcon,
   FolderIcon,
   CalendarIcon,
+  ContentTypeIcon,
   LockIcon
 } from "@/app/components/icons"
 import { formatChangeTime, displayUrl } from "./scheduledChanges"
@@ -41,10 +48,27 @@ export default function QRCodeCard({
   const style = useMemo(() => normalizeStyle(qrcode), [qrcode])
   const isQR = style.codeType === "qr"
 
+  // What the code does, and what its image holds: the QR Go link, or a
+  // static code's own content (Wi-Fi details). Null when a static code's
+  // details can't be read, so there's nothing to draw.
+  const type = getContentType(qrcode.contentType)
+  const isStatic = type.kind === "static"
+  const hasSchedules = supportsSchedules(type.id)
+  const data = useMemo(
+    () => encodedDataFor(type.id, { redirectUrl, content: qrcode.content }),
+    [type.id, redirectUrl, qrcode.content]
+  )
+  const summary = describeContent(type.id, qrcode.content)
+
   useEffect(() => {
+    if (!data) {
+      qrCodeObj.current = null
+      if (qrRef.current) qrRef.current.innerHTML = ""
+      return
+    }
     if (isQR) {
       const options = buildQRStylingOptions(style, {
-        data: redirectUrl,
+        data,
         width: 300,
         height: 300
       })
@@ -74,9 +98,9 @@ export default function QRCodeCard({
         qrRef.current.innerHTML = ""
         qrRef.current.appendChild(canvas)
       }
-      renderBwipCanvas(canvas, style, redirectUrl, 6).catch(() => {})
+      renderBwipCanvas(canvas, style, data, 6).catch(() => {})
     }
-  }, [redirectUrl, style, isQR])
+  }, [data, style, isQR])
 
   // Close the download menu on outside click.
   useEffect(() => {
@@ -98,12 +122,13 @@ export default function QRCodeCard({
 
   function handleDownload(extension) {
     const name = qrcode.title || "qrcode"
+    if (!data) return
     if (isQR) {
       if (qrCodeObj.current) {
         qrCodeObj.current.download({ name, extension })
       }
     } else {
-      downloadBwip(style, redirectUrl, extension, name)
+      downloadBwip(style, data, extension, name)
     }
     setMenuOpen(false)
   }
@@ -156,16 +181,32 @@ export default function QRCodeCard({
           <h3 style={styles.title} title={qrcode.title}>
             {qrcode.title}
           </h3>
-          <a
-            href={safeDestinationUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="truncate"
-            style={styles.destUrl}
-            title={qrcode.destinationUrl}
-          >
-            {qrcode.destinationUrl}
-          </a>
+          {type.id === "url" ? (
+            <a
+              href={safeDestinationUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="truncate"
+              style={styles.destUrl}
+              title={qrcode.destinationUrl}
+            >
+              {qrcode.destinationUrl}
+            </a>
+          ) : (
+            // Plain text, not a link: a mailto:/tel: link here would open the
+            // owner's own mail or phone app by accident. Never a password.
+            <span
+              className="truncate"
+              style={styles.contentSummary}
+              title={`${summary.label}: ${summary.detail}`}
+            >
+              <ContentTypeIcon type={type.id} size={14} />
+              <span style={styles.contentLabel}>{summary.label}</span>
+              <span className="truncate" style={styles.contentDetail}>
+                {summary.detail || "Details can’t be read"}
+              </span>
+            </span>
+          )}
           {qrcode.accessPassword && (
             <span style={styles.locked}>
               <LockIcon size={13} /> Password protected
@@ -222,25 +263,34 @@ export default function QRCodeCard({
 
       {/* Info */}
       <div style={styles.info}>
-        {/* Short link, with copy and download */}
+        {/* Short link, with copy and download. Static codes have no link:
+            their content is in the image itself. */}
         <div style={styles.redirectRow}>
-          <span className="truncate" style={styles.redirectUrl}>
-            {redirectUrl}
-          </span>
-          <button
-            onClick={handleCopy}
-            className="btn btn-ghost btn-sm"
-            style={styles.iconButton}
-            aria-label="Copy redirect URL"
-          >
-            {copied ? (
-              <span className="copy-feedback" style={styles.withIcon}>
-                <CheckIcon size={14} /> Copied
+          {isStatic ? (
+            <span className="truncate" style={styles.redirectUrl}>
+              <LockIcon size={12} /> Static code · scans aren’t tracked
+            </span>
+          ) : (
+            <>
+              <span className="truncate" style={styles.redirectUrl}>
+                {redirectUrl}
               </span>
-            ) : (
-              <CopyIcon size={15} />
-            )}
-          </button>
+              <button
+                onClick={handleCopy}
+                className="btn btn-ghost btn-sm"
+                style={styles.iconButton}
+                aria-label="Copy redirect URL"
+              >
+                {copied ? (
+                  <span className="copy-feedback" style={styles.withIcon}>
+                    <CheckIcon size={14} /> Copied
+                  </span>
+                ) : (
+                  <CopyIcon size={15} />
+                )}
+              </button>
+            </>
+          )}
           <div style={styles.downloadWrap} ref={menuRef}>
             <button
               id={`download-qr-${qrcode.id}`}
@@ -249,7 +299,8 @@ export default function QRCodeCard({
               style={styles.iconButton}
               onClick={() => setMenuOpen((o) => !o)}
               aria-label="Download"
-              title="Download PNG or SVG"
+              title={data ? "Download PNG or SVG" : "This code can’t be drawn"}
+              disabled={!data}
               aria-haspopup="menu"
               aria-expanded={menuOpen}
             >
@@ -279,27 +330,41 @@ export default function QRCodeCard({
         {/* Meta row */}
         <div style={styles.metaRow}>
           <div style={styles.scansGroup}>
-            <span className="badge badge-cyan" style={styles.noWrap}>
-              {qrcode.scanCount ?? 0} scans
-            </span>
-            <Link
-              id={`analytics-qr-${qrcode.id}`}
-              href={`/dashboard/analytics?code=${qrcode.id}`}
-              style={styles.analyticsLink}
-              title="See where, when and on what this code is scanned"
-            >
-              <ChartIcon size={14} /> Analytics
-            </Link>
-            <button
-              id={`schedules-qr-${qrcode.id}`}
-              type="button"
-              style={{ ...styles.analyticsLink, ...styles.linkButton }}
-              onClick={() => onOpenSchedules?.(qrcode)}
-              title="Send scans somewhere else between two dates"
-            >
-              <CalendarIcon size={14} /> Schedules
-              {qrcode.scheduleCount > 0 && ` (${qrcode.scheduleCount})`}
-            </button>
+            {isStatic ? (
+              <span
+                className="badge badge-purple"
+                style={styles.noWrap}
+                title="Scanning this code never reaches QR Go, so scans can’t be counted"
+              >
+                Not tracked
+              </span>
+            ) : (
+              <>
+                <span className="badge badge-cyan" style={styles.noWrap}>
+                  {qrcode.scanCount ?? 0} scans
+                </span>
+                <Link
+                  id={`analytics-qr-${qrcode.id}`}
+                  href={`/dashboard/analytics?code=${qrcode.id}`}
+                  style={styles.analyticsLink}
+                  title="See where, when and on what this code is scanned"
+                >
+                  <ChartIcon size={14} /> Analytics
+                </Link>
+              </>
+            )}
+            {hasSchedules && (
+              <button
+                id={`schedules-qr-${qrcode.id}`}
+                type="button"
+                style={{ ...styles.analyticsLink, ...styles.linkButton }}
+                onClick={() => onOpenSchedules?.(qrcode)}
+                title="Send scans somewhere else between two dates"
+              >
+                <CalendarIcon size={14} /> Schedules
+                {qrcode.scheduleCount > 0 && ` (${qrcode.scheduleCount})`}
+              </button>
+            )}
           </div>
           <span style={styles.date}>{formatDate(qrcode.createdAt)}</span>
         </div>
@@ -394,6 +459,22 @@ const styles = {
     color: "var(--cyan)",
     maxWidth: "100%",
     display: "block"
+  },
+  contentSummary: {
+    fontSize: "0.82rem",
+    color: "var(--text-secondary)",
+    maxWidth: "100%",
+    display: "flex",
+    alignItems: "center",
+    gap: "6px"
+  },
+  contentLabel: {
+    flex: "none",
+    color: "var(--text-tertiary)"
+  },
+  contentDetail: {
+    minWidth: 0,
+    color: "var(--cyan)"
   },
   locked: {
     display: "inline-flex",

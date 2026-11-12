@@ -1,6 +1,8 @@
 // Display helpers for scheduled destination changes. Times are shown in the
 // viewer's own time zone; the API stores and sends them in UTC.
 
+import { describeDestination } from "@/lib/contentTypes"
+
 const changeTime = new Intl.DateTimeFormat("en-US", {
   weekday: "short",
   month: "short",
@@ -15,9 +17,12 @@ export function formatChangeTime(iso) {
   return changeTime.format(new Date(iso))
 }
 
-/** A URL without its https:// prefix, for display. */
+/**
+ * A destination for display: a web link without its https:// prefix, or an
+ * email, phone or text message destination in words ("Email hello@…").
+ */
 export function displayUrl(url) {
-  return String(url ?? "").replace(/^https?:\/\//i, "")
+  return describeDestination(url)
 }
 
 /** ms → the "YYYY-MM-DDTHH:MM" local time a datetime-local input holds. */
