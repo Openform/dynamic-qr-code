@@ -8,12 +8,16 @@
  * sent (see lib/scanRecorder.js), so recording never slows down or breaks a
  * scan.
  *
- * Email, phone and text message codes go to their action page instead
- * (/r/[shortId]/open), which has a button that opens the mail, phone or
- * messages app: browsers don't reliably follow a redirect straight to a
- * mailto:, tel: or sms: link, but they do follow a tap. Static codes (Wi-Fi)
- * hold their content in the image and never use this link, so it answers
- * "not found" for them and never reveals anything about them.
+ * Email, phone and text message codes redirect straight to their mailto:,
+ * tel: or sms: link in the phone browsers known to open those in the right
+ * app (Safari, Chrome, Samsung Internet, Firefox, Edge; see lib/userAgent.js).
+ * Anywhere else they go to their action page (/r/[shortId]/open), which has a
+ * button: in-app browsers don't reliably follow a redirect to those links,
+ * but they always follow a tap.
+ *
+ * Static codes (Wi-Fi) hold their content in the image and never use this
+ * link, so it answers "not found" for them and never reveals anything about
+ * them.
  *
  * Codes that can't redirect send the visitor to /code-unavailable instead:
  * paused (the owner's account is disabled), not found, or a lookup error.
@@ -31,7 +35,8 @@ import { getClientIp } from '@/lib/rateLimit';
 import { recordScanFromRequest, pruneIfDue } from '@/lib/scanRecorder';
 import { resolveDestination } from '@/lib/schedules';
 import { redirectToSitePath } from '@/lib/siteRedirect';
-import { getContentType, supportsSchedules } from '@/lib/contentTypes';
+import { appLinkFor, getContentType, supportsSchedules } from '@/lib/contentTypes';
+import { opensAppLinks } from '@/lib/userAgent';
 const { getQRCodeByShortId, getLiveCandidateSchedules } = require('@/lib/db');
 
 /**
@@ -94,8 +99,14 @@ export async function GET(request, { params }) {
 
     let response;
     if (type.kind === 'action') {
-      // The action page reads and checks the destination itself.
-      response = redirectOnSite(`/r/${encodeURIComponent(qrcode.short_id)}/open`);
+      // Straight to the mail, phone or messages app in the phone browsers
+      // known to open these links, with the link rebuilt from its checked
+      // fields. Anywhere else (in-app browsers, which can show an error page
+      // with no way back), the action page with its button.
+      const appLink = opensAppLinks(request.headers.get('user-agent')) ? appLinkFor(type.id, url) : null;
+      response = appLink
+        ? redirect(appLink)
+        : redirectOnSite(`/r/${encodeURIComponent(qrcode.short_id)}/open`);
     } else {
       // Ensure the destination is an absolute URL. Anything that doesn't
       // start with http(s):// gets https:// in front, so a redirect can only

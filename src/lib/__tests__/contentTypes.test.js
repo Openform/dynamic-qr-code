@@ -15,6 +15,7 @@ import {
   isActionType,
   supportsSchedules,
   checkTitle,
+  appLinkFor,
   MAX_DESTINATION_LENGTH,
 } from '../contentTypes';
 
@@ -268,5 +269,21 @@ describe('checkTitle', () => {
     expect(checkTitle('').error).toBeTruthy();
     expect(checkTitle('x'.repeat(256)).error).toBeTruthy();
     expect(checkTitle('a\u0000b').error).toBeTruthy();
+  });
+});
+
+describe('appLinkFor', () => {
+  it('gives the checked link for email, phone and text message codes', () => {
+    expect(appLinkFor('email', 'mailto:a@b.co?subject=Hi')).toBe('mailto:a@b.co?subject=Hi');
+    expect(appLinkFor('phone', 'tel:+27821234567')).toBe('tel:+27821234567');
+    expect(appLinkFor('sms', 'sms:+27821234567?body=INFO')).toBe('sms:+27821234567?body=INFO');
+  });
+
+  it('is null for other types and for links this file didn’t build', () => {
+    expect(appLinkFor('url', 'https://example.com')).toBe(null);
+    expect(appLinkFor('whatsapp', 'https://wa.me/27821234567')).toBe(null);
+    expect(appLinkFor('email', 'javascript:alert(1)')).toBe(null);
+    expect(appLinkFor('email', 'mailto:a@b.co?bcc=evil@x.com')).toBe(null);
+    expect(appLinkFor('phone', 'https://evil.example')).toBe(null);
   });
 });

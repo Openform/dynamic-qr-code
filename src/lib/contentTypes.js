@@ -9,10 +9,12 @@
  *
  *   'redirect' — the code holds the QR Go link (/r/…) and the scan is
  *     redirected to an https:// link: a website, wa.me or Google Maps.
- *   'action'   — the code holds the QR Go link and the scan lands on a small
- *     QR Go page (/r/…/open) with a button that opens a mailto:, tel: or sms:
- *     link. Browsers, and the in-app browsers of scanner apps, don't reliably
- *     follow a redirect straight to those, but they always follow a tap.
+ *   'action'   — the code holds the QR Go link and the scan opens a mailto:,
+ *     tel: or sms: link: straight away in the phone browsers known to hand
+ *     those to the right app (lib/userAgent.js), and anywhere else through a
+ *     small QR Go page (/r/…/open) with a button. In-app browsers don't
+ *     reliably follow a redirect to those links, but they always follow a
+ *     tap.
  *   'static'   — the content itself is in the image, because phones only act
  *     on it that way (a Wi-Fi network can't be joined from a web page). These
  *     scans never reach QR Go, so they can't be counted, and the image can't
@@ -473,6 +475,17 @@ function safeDecode(s) {
 export function destinationFor(typeId, content) {
   const checked = parseContent(typeId, content);
   return checked.ok ? checked.destination : null;
+}
+
+/**
+ * The mailto:, tel: or sms: link an action type's stored destination opens,
+ * rebuilt from its checked fields. Null for other types, or when the stored
+ * destination isn't one this file builds (then it must not be used).
+ */
+export function appLinkFor(typeId, destination) {
+  if (!isActionType(typeId)) return null;
+  const content = contentFromDestination(typeId, destination);
+  return content ? destinationFor(typeId, content) : null;
 }
 
 /**

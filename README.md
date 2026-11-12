@@ -114,19 +114,26 @@ for each type are in [`src/lib/contentTypes.js`](src/lib/contentTypes.js).
 | Type         | Scanning it…                                 | How                                 | Editable | Scans counted |
 | ------------ | -------------------------------------------- | ----------------------------------- | -------- | ------------- |
 | Website      | opens the link                               | redirect                            | Yes      | Yes           |
-| Email        | opens a new email (address, subject, message) | QR Go page with a **Write email** button | Yes | Yes           |
-| Phone call   | asks to call the number                      | QR Go page with a **Call** button   | Yes      | Yes           |
-| Text message | opens a new SMS (number, message)            | QR Go page with a **Write message** button | Yes | Yes          |
+| Email        | opens a new email (address, subject, message) | straight to the mail app (see below) | Yes | Yes           |
+| Phone call   | asks to call the number                      | straight to the dialer (see below)  | Yes      | Yes           |
+| Text message | opens a new SMS (number, message)            | straight to Messages (see below)    | Yes      | Yes           |
 | WhatsApp     | opens a chat (number, message)               | redirect to `wa.me`                 | Yes      | Yes           |
 | Location     | shows a place                                | redirect to a Google Maps search    | Yes      | Yes           |
 | Wi-Fi        | offers to join the network                   | the details are in the image itself | No       | No            |
 
-- **Why a page for email, phone and SMS:** phone browsers and the in-app
-  browsers of scanner apps don't reliably follow a redirect straight to a
-  `mailto:`, `tel:` or `sms:` link, but they always follow a tap. The page
-  (`/r/[shortId]/open`) shows only what the owner chose to share (never the
-  code's title), isn't indexed by search engines, and sends no referrer. The
-  scan is counted before the page opens.
+- **Email, phone and SMS:** in Safari, Chrome, Samsung Internet, Firefox and
+  Edge on a phone (which covers the camera app, Google Lens and most scanner
+  apps), the scan redirects straight to the `mailto:`, `tel:` or `sms:` link
+  and the phone opens Mail, the dialer or Messages. (iPhones still ask
+  "Call …?" before dialling; the phone does that for every call link.)
+  Everywhere else (the in-app browsers of Instagram, Facebook and similar,
+  unknown browsers and computers) it opens a QR Go page,
+  `/r/[shortId]/open`, with one button, because some in-app browsers show an
+  error page with no way back for those links but always follow a tap. The
+  list is `opensAppLinks()` in [`src/lib/userAgent.js`](src/lib/userAgent.js).
+  The page shows only what the owner chose to share (never the code's title),
+  isn't indexed by search engines, and sends no referrer. Either way, the
+  link is rebuilt from checked fields and the scan is counted.
 - **Why Wi-Fi codes are static:** phones only offer to join a network when the
   details are in the code itself; a web page can't join Wi-Fi. So a Wi-Fi code
   never reaches QR Go: it can't be edited, and its scans can't be counted

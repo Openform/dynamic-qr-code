@@ -7,10 +7,14 @@ const { getQRCodeByShortId } = require("@/lib/db")
 
 /**
  * GET /r/[shortId]/open — the page an email, phone call or text message code
- * lands on (see /r/[shortId]). It shows what will happen and has one button
- * that opens the mail, phone or messages app. Scanner apps and phone
- * browsers don't reliably follow a redirect straight to a mailto:, tel: or
- * sms: link, but they always follow a tap.
+ * lands on when the scan isn't in a phone browser known to open mailto:,
+ * tel: and sms: links straight away (see /r/[shortId] and
+ * opensAppLinks() in lib/userAgent.js): in-app browsers, unknown browsers
+ * and computers. It shows what will happen and has one button that opens the
+ * mail, phone or messages app. Those browsers don't reliably follow a
+ * redirect to such a link, but they always follow a tap. The page doesn't
+ * try to open the link by itself: where that fails, some in-app browsers
+ * replace the page with an error, button and all.
  *
  * The scan has already been counted by /r/[shortId], so opening this page
  * directly isn't counted.

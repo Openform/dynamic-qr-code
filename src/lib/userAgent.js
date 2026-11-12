@@ -90,6 +90,26 @@ export function parseUserAgent(userAgent) {
   return { deviceType: deviceTypeOf(ua), os, browser: browserOf(ua, os) };
 }
 
+// Phone browsers that open a redirect to a mailto:, tel: or sms: link in the
+// mail, phone or messages app. On iPhone, "Safari" also covers the Safari
+// view many scanner apps open links in, and "Chrome" is Chrome for iOS; on
+// Android, "Chrome" also covers Chrome Custom Tabs (an Android WebView is
+// "In-app browser"). In-app browsers aren't on the list: some show an error
+// page for those links, with no way back.
+const APP_LINK_OS = new Set(['iOS', 'Android']);
+const APP_LINK_BROWSERS = new Set(['Safari', 'Chrome', 'Samsung Internet', 'Firefox', 'Edge']);
+
+/**
+ * Can this browser be redirected straight to a mailto:, tel: or sms: link?
+ * True only for the phone browsers known to hand those to the right app.
+ * False for anything else (in-app browsers, unknown browsers, computers),
+ * which get a page with a button instead: a tap always works.
+ */
+export function opensAppLinks(userAgent) {
+  const { os, browser } = parseUserAgent(userAgent);
+  return APP_LINK_OS.has(os) && APP_LINK_BROWSERS.has(browser);
+}
+
 /**
  * True for link-preview bots (WhatsApp, Slack, Facebook…), crawlers and
  * scripts. A missing user agent counts as a bot too: every real browser and
