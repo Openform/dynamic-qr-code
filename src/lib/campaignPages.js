@@ -291,6 +291,15 @@ function parseBlock(input, path, ctx, index) {
   return { block: { id: input.id, type: input.type, hidden, ...checked.block } };
 }
 
+/** Every image a page's content shows (header cover and logo, image blocks). */
+export function imageIdsInContent(content) {
+  const ids = new Set();
+  for (const block of Array.isArray(content?.blocks) ? content.blocks : []) {
+    for (const id of imagesIn(block)) if (Number.isInteger(id) && id > 0) ids.add(id);
+  }
+  return ids;
+}
+
 /** Every image a block refers to. */
 function imagesIn(block) {
   switch (block.type) {

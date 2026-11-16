@@ -1,9 +1,11 @@
 /**
  * GET    /api/pages/[id] — One of the signed-in user's pages, with its content,
+ *                          its `images` (with the owner's address for each),
  *                          `usedBy` (what sends scans to it, see getPageUsage
  *                          in db.js) and whether the account can edit it.
  * PUT    /api/pages/[id] — Save the whole page:
  *                          `{ name, content, endsAt?, afterEnd?, keptButton? }`.
+ *                          Images the saved page doesn't use are deleted.
  * PATCH  /api/pages/[id] — Put the page online or take it offline: `{ published }`.
  * DELETE /api/pages/[id] — Delete the page with its images and reports.
  *
@@ -17,7 +19,8 @@
 
 import { getSession } from '@/lib/auth';
 import { idParam } from '@/lib/qrcodeApi';
-import { parsePageInput } from '@/lib/campaignPages';
+import { parsePageInput, imageIdsInContent } from '@/lib/campaignPages';
+import { ownerImagePath } from '@/lib/pageReference';
 import {
   PRIVATE_HEADERS,
   toClientPage,
@@ -27,9 +30,28 @@ import {
   invalidPageResponse,
   readJson,
 } from '@/lib/campaignPagesApi';
-import { getPageById, getPageUsage, updatePage, setPagePublished, deletePage, getPageImageIds } from '@/lib/db';
+import {
+  getPageById,
+  getPageUsage,
+  updatePage,
+  setPagePublished,
+  deletePage,
+  getPageImageIds,
+  getPageImages,
+  deleteUnusedPageImages,
+} from '@/lib/db';
 
 const unauthorized = () => Response.json({ error: 'Authentication required' }, { status: 401 });
+
+/** A page's images for the editor, with the owner's address for each. */
+async function ownerImages(pageId) {
+  return (await getPageImages(pageId)).map((image) => ({
+    id: image.id,
+    width: image.width,
+    height: image.height,
+    src: ownerImagePath(pageId, image),
+  }));
+}
 const notFound = () => Response.json({ error: 'Page not found' }, { status: 404, headers: PRIVATE_HEADERS });
 
 // ── GET — one page ─────────────────────────────
@@ -43,7 +65,12 @@ export async function GET(request, { params }) {
     const [page, user] = await Promise.all([getPageById(id, session.userId), loadUser(session.userId)]);
     if (!page) return notFound();
     return Response.json(
-      { page: toClientPage(page), usedBy: await getPageUsage(id, session.userId), canEdit: accountCanUsePages(user) },
+      {
+        page: toClientPage(page),
+        images: await ownerImages(id),
+        usedBy: await getPageUsage(id, session.userId),
+        canEdit: accountCanUsePages(user),
+      },
       { headers: PRIVATE_HEADERS }
     );
   } catch (error) {
@@ -72,7 +99,9 @@ export async function PUT(request, { params }) {
 
     const page = await updatePage(id, session.userId, checked.page);
     if (!page) return notFound();
-    return Response.json({ page: toClientPage(page) }, { headers: PRIVATE_HEADERS });
+    // Photos uploaded and then replaced or dropped aren't kept.
+    await deleteUnusedPageImages(id, imageIdsInContent(page.content));
+    return Response.json({ page: toClientPage(page), images: await ownerImages(id) }, { headers: PRIVATE_HEADERS });
   } catch (error) {
     console.error('PUT /api/pages/[id] error:', error);
     return Response.json({ error: 'Internal server error' }, { status: 500 });

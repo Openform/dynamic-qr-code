@@ -4,7 +4,8 @@ import CampaignPage from "@/app/components/campaign/CampaignPage"
 import { campaignFontClasses } from "@/app/components/campaign/fonts"
 import { getSession } from "@/lib/auth"
 import { pageView } from "@/lib/campaignPages"
-import { getPageById } from "@/lib/db"
+import { getPageById, getPageImages } from "@/lib/db"
+import { imagesFor, ownerImagePath } from "@/lib/pageReference"
 
 /**
  * GET /dashboard/pages/[id]/preview — the owner's preview of one of their
@@ -57,7 +58,12 @@ export default async function CampaignPagePreview({ params, searchParams }) {
         </nav>
         {note && <span style={styles.note}>{note}</span>}
       </div>
-      <CampaignPage content={page.content} view={view} className={campaignFontClasses} />
+      <CampaignPage
+        content={page.content}
+        view={view}
+        images={imagesFor(await getPageImages(pageId), (image) => ownerImagePath(pageId, image))}
+        className={campaignFontClasses}
+      />
     </>
   )
 }

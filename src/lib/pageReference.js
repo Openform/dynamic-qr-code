@@ -40,3 +40,18 @@ export function pagePath(shortId, pageId) {
 export function pagePreviewPath(pageId) {
   return `/dashboard/pages/${pageId}/preview`;
 }
+
+/** Where a page's image is shown to visitors, under the code and page (it checks both again). */
+export function pageImagePath(shortId, pageId, image) {
+  return `${pagePath(shortId, pageId)}/i/${image.id}-${image.hash}`;
+}
+
+/** Where the page's owner loads an image, for the editor and the preview. */
+export function ownerImagePath(pageId, image) {
+  return `/api/pages/${pageId}/images/${image.id}-${image.hash}`;
+}
+
+/** `{ [imageId]: { src, width, height } }` for the page component, from a page's images. */
+export function imagesFor(images, srcOf) {
+  return Object.fromEntries((images ?? []).map((image) => [image.id, { src: srcOf(image), width: image.width, height: image.height }]));
+}

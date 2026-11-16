@@ -3,6 +3,8 @@
 import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon, EyeIcon, EyeOffIcon, TrashIcon } from "@/app/components/icons"
 import { BUTTON_KINDS, DETAIL_ICONS, PAGE_LIMITS } from "@/lib/campaignPages"
 import { BLOCK_LABELS, BUTTON_DEFAULT_LABELS, BUTTON_FIELDS, move, newButton } from "@/lib/pageEditing"
+import { LOGO_MAX_SIDE, PHOTO_MAX_SIDE } from "@/lib/imageResize"
+import { useState } from "react"
 import styles from "../pages.module.css"
 
 /**
@@ -25,7 +27,9 @@ export default function BlockEditor({
   onChange,
   onMove,
   onRemove,
-  errorFor
+  errorFor,
+  images,
+  onUpload
 }) {
   const isHeader = block.type === "header"
   const label = BLOCK_LABELS[block.type] ?? block.type
@@ -69,14 +73,14 @@ export default function BlockEditor({
       {open && (
         <div id={bodyId} className={styles.blockBody}>
           {errorFor(path) && <p className={styles.fieldError}>{errorFor(path)}</p>}
-          <Fields block={block} path={path} content={content} set={set} onChange={onChange} errorFor={errorFor} />
+          <Fields block={block} path={path} content={content} set={set} onChange={onChange} errorFor={errorFor} images={images} onUpload={onUpload} />
         </div>
       )}
     </li>
   )
 }
 
-function Fields({ block, path, content, set, onChange, errorFor }) {
+function Fields({ block, path, content, set, onChange, errorFor, images, onUpload }) {
   const id = (key) => `${block.id}-${key}`
   switch (block.type) {
     case "header":
@@ -84,7 +88,10 @@ function Fields({ block, path, content, set, onChange, errorFor }) {
         <>
           <TextField id={id("title")} label="Title" value={block.title} onChange={set("title")} max={PAGE_LIMITS.title} error={errorFor(`${path}.title`)} />
           <TextField id={id("tagline")} label="Tagline (optional)" value={block.tagline} onChange={set("tagline")} max={PAGE_LIMITS.tagline} error={errorFor(`${path}.tagline`)} />
-          <p className={styles.hint}>A cover photo and logo can be added once photo uploads arrive.</p>
+          <div className={styles.fieldRow}>
+            <ImageField id={id("cover")} label="Cover photo (optional)" value={block.cover} images={images} onChange={set("cover")} onUpload={onUpload} maxSide={PHOTO_MAX_SIDE} error={errorFor(`${path}.cover`)} hint="Shown across the top, cropped to a wide shape." />
+            <ImageField id={id("logo")} label="Logo (optional)" value={block.logo} images={images} onChange={set("logo")} onUpload={onUpload} maxSide={LOGO_MAX_SIDE} round error={errorFor(`${path}.logo`)} hint="Shown in a circle, so a square logo works best." />
+          </div>
         </>
       )
     case "text":
@@ -104,7 +111,7 @@ function Fields({ block, path, content, set, onChange, errorFor }) {
     case "image":
       return (
         <>
-          <p className={styles.hint}>Photo uploads are coming soon. Until then this block isn’t shown on the page.</p>
+          <ImageField id={id("image")} label="Photo" value={block.image} images={images} onChange={set("image")} onUpload={onUpload} maxSide={PHOTO_MAX_SIDE} error={errorFor(`${path}.image`)} hint="Until a photo is chosen, this block isn’t shown on the page." />
           <TextField id={id("alt")} label="What the photo shows (for screen readers)" value={block.alt} onChange={set("alt")} max={PAGE_LIMITS.imageAlt} error={errorFor(`${path}.alt`)} />
           <TextField id={id("caption")} label="Caption (optional)" value={block.caption} onChange={set("caption")} max={PAGE_LIMITS.imageCaption} error={errorFor(`${path}.caption`)} />
           <TextField id={id("link")} label="Link when tapped (optional)" value={block.link} onChange={set("link")} placeholder="example.com" error={errorFor(`${path}.link`)} />
@@ -272,6 +279,68 @@ function DetailsFields({ block, path, onChange, errorFor }) {
         </button>
       )}
     </>
+  )
+}
+
+/**
+ * A photo for a block: a thumbnail of the one chosen, and buttons to upload
+ * one (resized in the browser first) or remove it. `onUpload(file, maxSide)`
+ * resolves to the new image's id.
+ */
+function ImageField({ id, label, value, images, onChange, onUpload, maxSide, round = false, error, hint }) {
+  const [busy, setBusy] = useState(false)
+  const [uploadError, setUploadError] = useState("")
+  const image = value ? images?.[value] : null
+
+  async function choose(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ""
+    if (!file) return
+    setBusy(true)
+    setUploadError("")
+    try {
+      onChange(await onUpload(file, maxSide))
+    } catch (err) {
+      setUploadError(err.message || "That photo couldn’t be uploaded.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const message = uploadError || error
+  return (
+    <div className={styles.field}>
+      <span className={styles.fieldLabel} id={`${id}-label`}>
+        {label}
+      </span>
+      <div className={styles.imageRow}>
+        {image ? (
+          // A preview of the owner's own upload.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={image.src} alt="" className={round ? styles.thumbRound : styles.thumb} />
+        ) : (
+          <span className={round ? styles.thumbRound : styles.thumb} aria-hidden="true" />
+        )}
+        <label className={`btn btn-secondary btn-sm${busy ? ` ${styles.busy}` : ""}`} htmlFor={id}>
+          {busy ? "Uploading…" : image ? "Replace" : "Upload photo"}
+        </label>
+        <input
+          id={id}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/*"
+          className={styles.fileInput}
+          onChange={choose}
+          disabled={busy}
+          aria-labelledby={`${id}-label`}
+        />
+        {image && (
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => onChange(null)} disabled={busy}>
+            Remove
+          </button>
+        )}
+      </div>
+      {message ? <p className={styles.fieldError}>{message}</p> : hint ? <p className={styles.hint}>{hint}</p> : null}
+    </div>
   )
 }
 

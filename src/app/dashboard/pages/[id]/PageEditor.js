@@ -8,14 +8,12 @@ import { campaignFontClasses } from "@/app/components/campaign/fonts"
 import { AFTER_END, FONTS, PAGE_LIMITS, THEMES, pageView, parsePageInput } from "@/lib/campaignPages"
 import { pageLook, THEME_FONTS } from "@/lib/pageTheme"
 import { ADDABLE_BLOCKS, allButtons, examplesLeft, isoToLocalInput, localInputToIso, move, newBlock, pageStatus } from "@/lib/pageEditing"
-import { pagePreviewPath } from "@/lib/pageReference"
+import { imagesFor, pagePreviewPath } from "@/lib/pageReference"
+import { prepareImage } from "@/lib/imageResize"
 import { formatChangeTime } from "../../components/scheduledChanges"
 import PagesHeader from "../PagesHeader"
 import BlockEditor, { TextField } from "./BlockEditor"
 import styles from "../pages.module.css"
-
-// Image blocks wait for photo uploads (the plan's step 5).
-const IMAGES_AVAILABLE = false
 
 const BRAND_SWATCHES = [
   { hex: "#1F6F4A", name: "Green" },
@@ -51,15 +49,6 @@ function requestFrom(draft) {
   }
 }
 
-/** The images the page's blocks refer to (the server checks they're the page's own). */
-function imageIdsIn(content) {
-  const ids = new Set()
-  for (const block of content?.blocks ?? []) {
-    for (const id of [block.cover, block.logo, block.image]) if (Number.isInteger(id)) ids.add(id)
-  }
-  return ids
-}
-
 async function fetchPage(pageId) {
   const res = await fetch(`/api/pages/${pageId}`)
   if (res.status === 401) return { signedOut: true }
@@ -80,6 +69,7 @@ export default function PageEditor({ pageId }) {
   const [saved, setSaved] = useState(null) // the page as last loaded or saved
   const [draft, setDraft] = useState(null)
   const [usedBy, setUsedBy] = useState([])
+  const [images, setImages] = useState([]) // the page's uploaded images, with the owner's address
   const [canEdit, setCanEdit] = useState(false)
   const [loadError, setLoadError] = useState("")
   const [problem, setProblem] = useState(null) // { path, error } from the checks
@@ -102,6 +92,7 @@ export default function PageEditor({ pageId }) {
       setSaved(result.data.page)
       setDraft(draftFrom(result.data.page))
       setUsedBy(result.data.usedBy ?? [])
+      setImages(result.data.images ?? [])
       setCanEdit(Boolean(result.data.canEdit))
     },
     [router]
@@ -164,6 +155,19 @@ export default function PageEditor({ pageId }) {
   const errorFor = (path) => (problem?.path === path ? problem.error : null)
   const examples = examplesLeft(content)
   const buttons = allButtons(content)
+  const imageMap = imagesFor(images, (image) => image.src)
+
+  // Resize a photo in the browser, upload it, and give back its id.
+  async function uploadImage(file, maxSide) {
+    const { blob } = await prepareImage(file, { maxSide })
+    const form = new FormData()
+    form.append("file", blob, blob.type === "image/webp" ? "photo.webp" : "photo.jpg")
+    const res = await fetch(`/api/pages/${pageId}/images`, { method: "POST", body: form })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.error || "That photo couldn’t be uploaded.")
+    setImages((list) => [...list, data.image])
+    return data.image.id
+  }
 
   const change = (key, value) => {
     setDraft((d) => ({ ...d, [key]: value }))
@@ -186,7 +190,7 @@ export default function PageEditor({ pageId }) {
 
   async function save() {
     const body = requestFrom(draft)
-    const checked = parsePageInput(body, { imageIds: imageIdsIn(content) })
+    const checked = parsePageInput(body, { imageIds: new Set(images.map((image) => image.id)) })
     if (!checked.ok) {
       showProblem(checked)
       return
@@ -206,6 +210,7 @@ export default function PageEditor({ pageId }) {
       }
       setSaved(data.page)
       setDraft(draftFrom(data.page))
+      setImages(data.images ?? images)
       setJustSaved(true)
     } finally {
       setSaving(false)
@@ -454,28 +459,19 @@ export default function PageEditor({ pageId }) {
                     onMove={(step) => setBlocks(move(blocks, index, step))}
                     onRemove={() => removeBlock(index)}
                     errorFor={errorFor}
+                    images={imageMap}
+                    onUpload={uploadImage}
                   />
                 ))}
               </ul>
               {blocks.length < PAGE_LIMITS.blocks ? (
                 <div className={styles.addRow}>
                   <span className={styles.addLabel}>Add a block</span>
-                  {ADDABLE_BLOCKS.map(({ type, label }) => {
-                    const soon = type === "image" && !IMAGES_AVAILABLE
-                    return (
-                      <button
-                        key={type}
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => addBlock(type)}
-                        disabled={soon}
-                        title={soon ? "Photo uploads are coming soon" : undefined}
-                      >
-                        + {label}
-                        {soon ? " (soon)" : ""}
-                      </button>
-                    )
-                  })}
+                  {ADDABLE_BLOCKS.map(({ type, label }) => (
+                    <button key={type} type="button" className="btn btn-secondary btn-sm" onClick={() => addBlock(type)}>
+                      + {label}
+                    </button>
+                  ))}
                 </div>
               ) : (
                 <p className={styles.hint}>A page can have up to {PAGE_LIMITS.blocks} blocks.</p>
@@ -516,7 +512,7 @@ export default function PageEditor({ pageId }) {
           </div>
           <div className={styles.phone}>
             <div className={styles.screen}>
-              <CampaignPage content={content} view={pageView(previewPage)} className={campaignFontClasses} />
+              <CampaignPage content={content} view={pageView(previewPage)} images={imageMap} className={campaignFontClasses} />
             </div>
           </div>
           <p className={styles.previewNote}>The preview is drawn by the same code as the real page, including what you haven’t saved yet.</p>

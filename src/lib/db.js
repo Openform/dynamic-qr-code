@@ -1667,6 +1667,81 @@ async function getPageUsageCounts(userId) {
   return counts;
 }
 
+/**
+ * Store an image for a page, unless it already has `maxStored`. The page row
+ * is locked while counting, so several uploads at once can't pass the limit.
+ * The caller has checked the page is the user's and the image's bytes
+ * (lib/pageImageFiles.js). Returns `{ ok: true, image }` (without its bytes)
+ * or `{ ok: false, reason: 'limit' | 'not_found' }`.
+ */
+async function addPageImage({ pageId, mimeType, width, height, hash, data }, maxStored) {
+  await ensureSchema();
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [pages] = await conn.execute('SELECT id FROM campaign_pages WHERE id = :pageId FOR UPDATE', { pageId });
+    if (!pages[0]) {
+      await conn.rollback();
+      return { ok: false, reason: 'not_found' };
+    }
+    const [counts] = await conn.execute('SELECT COUNT(*) AS count FROM campaign_page_images WHERE page_id = :pageId', {
+      pageId,
+    });
+    if (Number(counts[0].count) >= maxStored) {
+      await conn.rollback();
+      return { ok: false, reason: 'limit' };
+    }
+    const [result] = await conn.execute(
+      `INSERT INTO campaign_page_images (page_id, mime_type, width, height, hash, data)
+       VALUES (:pageId, :mimeType, :width, :height, :hash, :data)`,
+      { pageId, mimeType, width, height, hash, data }
+    );
+    await conn.commit();
+    return { ok: true, image: { id: result.insertId, mimeType, width, height, hash } };
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+}
+
+/** A page's images, without their bytes: `[{ id, mimeType, width, height, hash }]`. */
+async function getPageImages(pageId) {
+  await ensureSchema();
+  const [rows] = await pool.execute(
+    `SELECT id, mime_type AS mimeType, width, height, hash FROM campaign_page_images
+     WHERE page_id = :pageId ORDER BY id`,
+    { pageId }
+  );
+  return rows.map((row) => ({ ...row, id: Number(row.id) }));
+}
+
+/** One of a page's images with its bytes, or null. */
+async function getPageImageData(imageId, pageId) {
+  await ensureSchema();
+  const [rows] = await pool.execute(
+    `SELECT id, mime_type AS mimeType, hash, data FROM campaign_page_images
+     WHERE id = :imageId AND page_id = :pageId LIMIT 1`,
+    { imageId, pageId }
+  );
+  return rows[0] || null;
+}
+
+/**
+ * Delete a page's images that aren't in `keepIds` (the ones its saved
+ * content shows), so photos uploaded and then replaced or dropped don't
+ * pile up. Returns how many were deleted.
+ */
+async function deleteUnusedPageImages(pageId, keepIds) {
+  await ensureSchema();
+  const keep = [...keepIds].filter((id) => Number.isInteger(id) && id > 0);
+  const [result] = keep.length
+    ? await pool.query('DELETE FROM campaign_page_images WHERE page_id = ? AND id NOT IN (?)', [pageId, keep])
+    : await pool.query('DELETE FROM campaign_page_images WHERE page_id = ?', [pageId]);
+  return result.affectedRows;
+}
+
 /** The ids of a page's images, which are the only ones its blocks may show. */
 async function getPageImageIds(pageId) {
   await ensureSchema();
@@ -1857,6 +1932,10 @@ module.exports = {
   getPageNames,
   getPageUsage,
   getPageUsageCounts,
+  addPageImage,
+  getPageImages,
+  getPageImageData,
+  deleteUnusedPageImages,
   getPageImageIds,
   getLegalPage,
   saveLegalPage,

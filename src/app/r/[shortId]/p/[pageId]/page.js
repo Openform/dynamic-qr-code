@@ -1,9 +1,11 @@
 import { cache } from "react"
-import { cookies } from "next/headers"
+import { cookies, headers } from "next/headers"
 import { redirect } from "next/navigation"
 import CampaignPage from "@/app/components/campaign/CampaignPage"
 import { campaignFontClasses } from "@/app/components/campaign/fonts"
-import { pageView } from "@/lib/campaignPages"
+import { imageIdsInContent, pageView } from "@/lib/campaignPages"
+import { imagesFor, pageImagePath } from "@/lib/pageReference"
+import { getPageImages } from "@/lib/db"
 import { pageLook } from "@/lib/pageTheme"
 import { loadPublicPage } from "@/lib/publicPage"
 import { UNLOCK_COOKIE } from "@/lib/unlock"
@@ -27,6 +29,13 @@ const load = cache(async (shortId, pageId) => {
   return loadPublicPage({ shortId, pageId, unlockToken })
 })
 
+// The images the page shows, with the visitor's address for each.
+const loadImages = cache(async (shortId, page) => {
+  const shown = imageIdsInContent(page.content)
+  const images = (await getPageImages(page.id)).filter((image) => shown.has(image.id))
+  return imagesFor(images, (image) => pageImagePath(shortId, page.id, image))
+})
+
 export async function generateMetadata({ params }) {
   const { shortId, pageId } = await params
   const { page } = await load(shortId, pageId)
@@ -34,12 +43,22 @@ export async function generateMetadata({ params }) {
   const header = page?.content?.blocks?.[0]
   if (!header?.title) return { title: "QR Go", robots }
   const description = header.tagline || undefined
+  // The cover photo for link previews, as a full address on the domain the
+  // visitor used (production, staging or another), not QR Go's main one.
+  const cover = header.cover ? (await loadImages(shortId, page))[header.cover] : null
+  let images
+  if (cover) {
+    const h = await headers()
+    const host = h.get("x-forwarded-host") ?? h.get("host")
+    const proto = h.get("x-forwarded-proto") ?? "https"
+    if (host) images = [{ url: `${proto}://${host}${cover.src}`, width: cover.width, height: cover.height }]
+  }
   return {
     title: header.title,
     description,
     robots,
     // No siteName: the page is the business's, not QR Go's.
-    openGraph: { type: "website", title: header.title, description }
+    openGraph: { type: "website", title: header.title, description, ...(images ? { images } : {}) }
   }
 }
 
@@ -62,6 +81,7 @@ export default async function PublicCampaignPage({ params }) {
     <CampaignPage
       content={result.page.content}
       view={pageView(result.page)}
+      images={await loadImages(shortId, result.page)}
       className={campaignFontClasses}
     />
   )
