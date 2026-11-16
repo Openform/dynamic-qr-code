@@ -20,12 +20,39 @@ const securityHeaders = [
   },
 ];
 
+// Campaign pages (/r/[shortId]/p/[pageId]) show what customers write, so they
+// get a tighter policy on top of the site-wide one: images, fonts and
+// requests only from QR Go itself, and no frames, plugins or media from
+// anywhere. Still no script-src (see above). Next uses the last matching
+// header with the same key, so this repeats the site-wide directives too.
+const campaignPageHeaders = [
+  {
+    key: 'Content-Security-Policy',
+    value: [
+      "frame-ancestors 'none'",
+      "base-uri 'self'",
+      "object-src 'none'",
+      "form-action 'self'",
+      "img-src 'self'",
+      "font-src 'self'",
+      "connect-src 'self'",
+      "media-src 'none'",
+      "frame-src 'none'",
+      "worker-src 'none'",
+      "manifest-src 'self'",
+    ].join('; '),
+  },
+];
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   serverExternalPackages: ['mysql2', 'maxmind'],
   allowedDevOrigins: ['192.168.0.44'],
   async headers() {
-    return [{ source: '/:path*', headers: securityHeaders }];
+    return [
+      { source: '/:path*', headers: securityHeaders },
+      { source: '/r/:shortId/p/:path*', headers: campaignPageHeaders },
+    ];
   },
 };
 

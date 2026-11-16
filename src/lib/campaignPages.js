@@ -32,7 +32,7 @@
 import { checkText, normalizeLines, parseContent } from './contentTypes';
 import { contrastRatio } from './qrStyle';
 import { parseIsoWithOffset, isTooFarAhead } from './destinationChanges';
-import { toSqlDateTime } from './analyticsFilters';
+import { toSqlDateTime, sqlToIso } from './analyticsFilters';
 
 export const CONTENT_VERSION = 1;
 
@@ -427,4 +427,67 @@ export function pickTextColor(background, { light = '#FFFFFF', dark = '#141414' 
   if (onLight === null || onDark === null) return dark;
   if (onLight >= 4.5) return light;
   return onDark >= onLight ? dark : light;
+}
+
+// ── Showing a page ──
+
+/**
+ * How a code's main destination, a scheduled change or a schedule points at
+ * a campaign page: "qrgo-page:<id>", stored in the same destination_url
+ * columns as web links. The scan route sends such a scan to the page's path
+ * under the code (pagePath), so it works on every domain the app is served
+ * from.
+ */
+export const PAGE_REFERENCE_PREFIX = 'qrgo-page:';
+const PAGE_REFERENCE = /^qrgo-page:([1-9][0-9]{0,9})$/;
+
+/** The destination value that points at a page. */
+export function pageReference(pageId) {
+  return `${PAGE_REFERENCE_PREFIX}${pageId}`;
+}
+
+/** The page id in a destination value, or null when it isn't a page reference. */
+export function pageIdFromReference(value) {
+  const match = typeof value === 'string' ? value.match(PAGE_REFERENCE) : null;
+  return match ? Number(match[1]) : null;
+}
+
+/**
+ * Where a page is shown: under the code that links to it, so the page can
+ * check that code (and its password) on every visit.
+ */
+export function pagePath(shortId, pageId) {
+  return `/r/${encodeURIComponent(shortId)}/p/${pageId}`;
+}
+
+/** An end time as stored (UTC "YYYY-MM-DD HH:MM:SS") or as an ISO string → ms, or NaN. */
+function endTime(value) {
+  if (!value) return NaN;
+  const text = String(value);
+  return Date.parse(text.includes('T') ? text : sqlToIso(text));
+}
+
+/** True once a page's campaign is over and it should show the ended message. */
+export function isPageEnded(page, nowMs = Date.now()) {
+  if (page?.afterEnd === 'keep') return false;
+  const ends = endTime(page?.endsAt);
+  return Number.isFinite(ends) && ends <= nowMs;
+}
+
+/**
+ * What a page shows at `nowMs`, from its stored row: `{ ended, header,
+ * blocks, keptButton }`. While it's live, `blocks` are the blocks under the
+ * header that aren't hidden. Once it has ended, `blocks` is empty and
+ * `keptButton` is the one button the owner chose to keep showing (or null).
+ */
+export function pageView(page, nowMs = Date.now()) {
+  const all = Array.isArray(page?.content?.blocks) ? page.content.blocks : [];
+  const header = all[0]?.type === 'header' ? all[0] : null;
+  const rest = header ? all.slice(1) : all;
+  if (!isPageEnded(page, nowMs)) {
+    return { ended: false, header, blocks: rest.filter((block) => !block.hidden), keptButton: null };
+  }
+  const buttons = rest.flatMap((block) => (block.type === 'buttons' && Array.isArray(block.items) ? block.items : []));
+  const keptButton = page.keptButton ? buttons.find((button) => button.id === page.keptButton) ?? null : null;
+  return { ended: true, header, blocks: [], keptButton };
 }

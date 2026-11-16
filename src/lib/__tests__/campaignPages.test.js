@@ -8,6 +8,11 @@ import {
   newPageContent,
   buttonLink,
   pickTextColor,
+  pageReference,
+  pageIdFromReference,
+  pagePath,
+  isPageEnded,
+  pageView,
 } from '../campaignPages';
 
 const NOW = Date.parse('2026-11-16T10:00:00Z');
@@ -359,5 +364,57 @@ describe('pickTextColor', () => {
 
   it('falls back to dark text for a colour it can’t read', () => {
     expect(pickTextColor('not a colour')).toBe('#141414');
+  });
+});
+
+describe('page references', () => {
+  it('points a destination at a page and reads it back', () => {
+    expect(pageReference(12)).toBe('qrgo-page:12');
+    expect(pageIdFromReference('qrgo-page:12')).toBe(12);
+    expect(pagePath('abc_1', 12)).toBe('/r/abc_1/p/12');
+  });
+
+  it('reads nothing else as a page', () => {
+    for (const value of ['https://example.com', 'qrgo-page:', 'qrgo-page:0', 'qrgo-page:-1', 'qrgo-page:1x', ' qrgo-page:1', 'qrgo-page:12345678901', null, 12]) {
+      expect(pageIdFromReference(value)).toBeNull();
+    }
+  });
+});
+
+describe('pageView', () => {
+  const stored = (extra = {}) => ({
+    content: parsePageContent(samplePage()).content,
+    endsAt: '2026-11-30 14:00:00',
+    afterEnd: 'ended',
+    keptButton: 'b-menu',
+    ...extra,
+  });
+  const BEFORE = Date.parse('2026-11-30T13:59:59Z');
+  const AFTER = Date.parse('2026-11-30T14:00:00Z');
+
+  it('shows every block that isn’t hidden until the end', () => {
+    const page = stored();
+    page.content.blocks[2].hidden = true;
+    const view = pageView(page, BEFORE);
+    expect(view.ended).toBe(false);
+    expect(view.header.title).toBe('Black Friday weekend');
+    expect(view.blocks.map((b) => b.id)).toEqual(['offer', 'contact', 'details', 'photo']);
+    expect(view.keptButton).toBeNull();
+  });
+
+  it('shows the ended view, with the kept button, from the end time on', () => {
+    const view = pageView(stored(), AFTER);
+    expect(view).toMatchObject({ ended: true, blocks: [] });
+    expect(view.keptButton).toMatchObject({ id: 'b-menu', label: 'See our full menu' });
+    expect(pageView(stored({ keptButton: null }), AFTER).keptButton).toBeNull();
+    // A kept button that has since been removed is just left out.
+    expect(pageView(stored({ keptButton: 'b-gone' }), AFTER).keptButton).toBeNull();
+  });
+
+  it('never ends a page set to keep showing, or one with no end', () => {
+    expect(isPageEnded(stored({ afterEnd: 'keep' }), AFTER)).toBe(false);
+    expect(isPageEnded(stored({ endsAt: null }), AFTER)).toBe(false);
+    // The end as an ISO string (the API's shape) works the same.
+    expect(isPageEnded(stored({ endsAt: '2026-11-30T14:00:00Z' }), AFTER)).toBe(true);
   });
 });

@@ -38,3 +38,25 @@ pyftsubset web/InterVariable.woff2 \
 
 If you add UI text with a new symbol, check it's in the list above; otherwise
 it will render in the fallback font.
+
+## Campaign page fonts
+
+Campaign pages (`src/app/components/campaign/`) use two more fonts for their
+headings: the Night theme's **Space Grotesk** and the Bold theme's
+**Fraunces**. They're loaded with `next/font/local` in
+`src/app/components/campaign/fonts.js`, exposed as `--font-space-grotesk` and
+`--font-fraunces`, and not preloaded, so a browser only downloads the one a
+page actually uses.
+
+- `SpaceGroteskVariable.woff2` (22 KB, weights 300–700): the Latin subset
+  `space-grotesk-latin-wght-normal.woff2` from
+  [@fontsource-variable/space-grotesk](https://www.npmjs.com/package/@fontsource-variable/space-grotesk)
+  5.3.0. License: SIL Open Font License 1.1 (`LICENSE-SpaceGrotesk.txt`).
+- `FrauncesVariable.woff2` (37 KB, weights 100–900): the Latin subset
+  `fraunces-latin-wght-normal.woff2` from
+  [@fontsource-variable/fraunces](https://www.npmjs.com/package/@fontsource-variable/fraunces)
+  5.3.0. License: SIL Open Font License 1.1 (`LICENSE-Fraunces.txt`).
+
+Both cover Basic Latin and Latin-1 (so English and Afrikaans text, including
+ê, ë and ô). Other characters fall back to Inter, then the system font. To
+update them, take the same files from a newer release of those packages.

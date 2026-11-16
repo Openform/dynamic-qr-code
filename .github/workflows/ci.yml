@@ -86,7 +86,8 @@ jobs:
       # skipped by "npm test" in the other job, which has no database): scans
       # per destination add up to each code's total, password-protected codes
       # ask for, check and remember their password, and campaign pages keep to
-      # their package's rules and stay private to their account.
+      # their package's rules, stay private to their account and only show
+      # through a code that links to them.
       - run: npx vitest run db.test
         env:
           ANALYTICS_DB_TEST: '1'
