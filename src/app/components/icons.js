@@ -289,6 +289,30 @@ export function EyeOffIcon(props) {
   )
 }
 
+export function ArrowUpIcon(props) {
+  return (
+    <Icon {...props}>
+      <path d="M12 19V5M5 12l7-7 7 7" />
+    </Icon>
+  )
+}
+
+export function ArrowDownIcon(props) {
+  return (
+    <Icon {...props}>
+      <path d="M12 5v14M19 12l-7 7-7-7" />
+    </Icon>
+  )
+}
+
+export function ChevronDownIcon(props) {
+  return (
+    <Icon {...props}>
+      <path d="m6 9 6 6 6-6" />
+    </Icon>
+  )
+}
+
 export function ClockIcon(props) {
   return (
     <Icon {...props}>

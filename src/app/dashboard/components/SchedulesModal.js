@@ -13,6 +13,8 @@ import {
   viewerTimeZone
 } from "./scheduledChanges"
 import WeekPreview, { SCHEDULE_COLORS, OTHER_COLOR } from "./WeekPreview"
+import DestinationTarget, { useCampaignPages, pageNamesOf } from "./CampaignPagePicker"
+import { pageIdFromReference, pageReference } from "@/lib/pageReference"
 import styles from "./SchedulesModal.module.css"
 
 const HOUR_MS = 60 * 60 * 1000
@@ -49,7 +51,9 @@ function newForm() {
     id: null,
     kind: "range",
     label: "",
+    target: "website",
     url: "",
+    pageId: "",
     from: toLocalInputValue(start),
     until: toLocalInputValue(start + HOUR_MS),
     days: WEEKDAYS,
@@ -65,11 +69,14 @@ function localMs(value) {
 }
 
 function editForm(schedule) {
+  const pageId = pageIdFromReference(schedule.destinationUrl)
   const common = {
     id: schedule.id,
     kind: schedule.kind,
     label: schedule.label,
-    url: stripScheme(schedule.destinationUrl),
+    target: pageId ? "page" : "website",
+    url: pageId ? "" : stripScheme(schedule.destinationUrl),
+    pageId: pageId ? String(pageId) : "",
     original: schedule
   }
   if (schedule.kind === "weekly") {
@@ -138,6 +145,11 @@ function timingBody(form) {
   return body
 }
 
+/** Where the form sends scans: a web link, or a campaign page (lib/pageReference.js). */
+function formDestination(form) {
+  return form.target === "page" ? pageReference(form.pageId) : `https://${stripScheme(form.url)}`
+}
+
 /**
  * The form as a schedule for the week preview, so it shows the effect of a
  * change before it's saved. The label isn't needed: the preview gets names
@@ -148,7 +160,7 @@ function formAsSchedule(form, nextPosition) {
   const common = {
     id: form.id ?? DRAFT_ID,
     kind: form.kind,
-    destinationUrl: `https://${stripScheme(form.url)}`,
+    destinationUrl: formDestination(form),
     enabled: before ? before.enabled : true,
     position: before ? before.position : nextPosition
   }
@@ -168,6 +180,7 @@ export default function SchedulesModal({ qrcode, onClose, onCodeUpdate }) {
   const [form, setForm] = useState(null)
   const [formError, setFormError] = useState("")
   const [busy, setBusy] = useState(false)
+  const campaignPages = useCampaignPages()
   // Counts the changes sent from this panel, so a refresh that was already
   // on its way when one was made doesn't put older data back on screen.
   const changesSent = useRef(0)
@@ -240,11 +253,12 @@ export default function SchedulesModal({ qrcode, onClose, onCodeUpdate }) {
   async function handleSubmit(e) {
     e.preventDefault()
     const label = form.label.trim()
-    const url = `https://${stripScheme(form.url)}`
+    const url = formDestination(form)
 
     let problem = ""
     if (!label) problem = "Give the schedule a name."
-    else if (!stripScheme(form.url) || !isValidDestinationUrl(url)) problem = "Enter a valid URL."
+    else if (form.target === "page" && !form.pageId) problem = "Choose a campaign page."
+    else if (form.target !== "page" && (!stripScheme(form.url) || !isValidDestinationUrl(url))) problem = "Enter a valid URL."
     else problem = timingProblem(form)
     if (problem) {
       setFormError(problem)
@@ -305,6 +319,8 @@ export default function SchedulesModal({ qrcode, onClose, onCodeUpdate }) {
   const mainUrl = panel?.qrcode?.destinationUrl ?? qrcode.destinationUrl
   const mainChanges = panel?.qrcode?.scheduledChanges ?? qrcode.scheduledChanges
   const viewerZone = viewerTimeZone()
+  // Names for campaign page destinations.
+  const pageNames = { ...qrcode.pageNames, ...panel?.qrcode?.pageNames, ...pageNamesOf(campaignPages.pages) }
 
   const labelOf = new Map(schedules.map((s) => [s.id, s.label]))
   if (form) labelOf.set(form.id ?? DRAFT_ID, form.label.trim() || "New schedule")
@@ -342,6 +358,7 @@ export default function SchedulesModal({ qrcode, onClose, onCodeUpdate }) {
 
   const rowProps = {
     liveScheduleId: panel?.liveScheduleId,
+    pageNames,
     labelOf,
     colorOf,
     viewerZone,
@@ -377,7 +394,7 @@ export default function SchedulesModal({ qrcode, onClose, onCodeUpdate }) {
 
         <p className={styles.intro}>
           While a schedule is live, scans go to its URL instead of the main
-          destination ({displayUrl(mainUrl)}). When two are live at once, a
+          destination ({displayUrl(mainUrl, pageNames)}). When two are live at once, a
           date range wins over a weekly schedule; otherwise the one higher in
           the list wins. Dates are in your time zone ({viewerZone}); weekly
           schedules use the time zone you choose.
@@ -423,6 +440,7 @@ export default function SchedulesModal({ qrcode, onClose, onCodeUpdate }) {
                 error={formError}
                 busy={busy}
                 viewerZone={viewerZone}
+                campaignPages={campaignPages}
                 onSubmit={handleSubmit}
                 onCancel={() => setForm(null)}
               />
@@ -456,6 +474,7 @@ export default function SchedulesModal({ qrcode, onClose, onCodeUpdate }) {
                 viewerZone={viewerZone}
                 colorOf={colorOf}
                 labelOf={labelOf}
+                pageNames={pageNames}
                 note={previewNote}
               />
             )}
@@ -526,6 +545,7 @@ function ScheduleTimes({ schedule, viewerZone }) {
 function ScheduleRow({
   schedule,
   liveScheduleId,
+  pageNames,
   labelOf,
   colorOf,
   viewerZone,
@@ -552,8 +572,8 @@ function ScheduleRow({
           <span className={styles.label}>{schedule.label}</span>
           <StatusBadge schedule={schedule} sending={sending} />
         </div>
-        <div className={`truncate ${styles.url}`} title={schedule.destinationUrl}>
-          {displayUrl(schedule.destinationUrl)}
+        <div className={`truncate ${styles.url}`} title={displayUrl(schedule.destinationUrl, pageNames)}>
+          {displayUrl(schedule.destinationUrl, pageNames)}
         </div>
         <ScheduleTimes schedule={schedule} viewerZone={viewerZone} />
         {overlaps.length > 0 && (
@@ -625,7 +645,7 @@ function ScheduleRow({
   )
 }
 
-function ScheduleForm({ form, setForm, error, busy, viewerZone, onSubmit, onCancel }) {
+function ScheduleForm({ form, setForm, error, busy, viewerZone, campaignPages, onSubmit, onCancel }) {
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
   const weekly = form.kind === "weekly"
 
@@ -669,22 +689,33 @@ function ScheduleForm({ form, setForm, error, busy, viewerZone, onSubmit, onCanc
       </div>
 
       <div className="input-group">
-        <label htmlFor="schedule-url" className="input-label">
-          Send scans to
-        </label>
-        <div className="input-wrapper">
-          <span className="prefix">https://</span>
-          <input
-            id="schedule-url"
-            type="text"
-            className="input-field"
-            placeholder={weekly ? "example.com/breakfast" : "example.com/black-friday"}
-            value={form.url}
-            onChange={set("url")}
-            onBlur={() => setForm((f) => ({ ...f, url: stripScheme(f.url) }))}
-            required
-          />
-        </div>
+        <DestinationTarget
+          id="schedule-page"
+          pages={campaignPages?.pages ?? null}
+          canEdit={campaignPages?.canEdit ?? false}
+          target={form.target}
+          onTarget={(target) => setForm((f) => ({ ...f, target }))}
+          pageId={form.pageId}
+          onPageId={(pageId) => setForm((f) => ({ ...f, pageId }))}
+          hintStyle={{ fontSize: "0.8rem", color: "var(--text-tertiary)", marginTop: 6 }}
+        >
+          <label htmlFor="schedule-url" className="input-label">
+            Send scans to
+          </label>
+          <div className="input-wrapper">
+            <span className="prefix">https://</span>
+            <input
+              id="schedule-url"
+              type="text"
+              className="input-field"
+              placeholder={weekly ? "example.com/breakfast" : "example.com/black-friday"}
+              value={form.url}
+              onChange={set("url")}
+              onBlur={() => setForm((f) => ({ ...f, url: stripScheme(f.url) }))}
+              required
+            />
+          </div>
+        </DestinationTarget>
       </div>
 
       {weekly ? (

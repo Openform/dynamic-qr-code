@@ -249,6 +249,37 @@ describe.skipIf(!enabled)('campaign pages (database)', () => {
     expect(await count('SELECT COUNT(*) AS n FROM campaign_page_reports WHERE page_id = :id', { id: page.id })).toBe(0);
   });
 
+  it('lists what sends scans to a page: codes now, changes waiting and live schedules', async () => {
+    const user = await db.createUser('usage@example.com', 'x', 'Usage', 'business');
+    as(user);
+    const { page } = await (await createPage({ name: 'Used page' })).json();
+    const { page: unused } = await (await createPage({ name: 'Unused page' })).json();
+    const ref = `qrgo-page:${page.id}`;
+    const toSql = (ms) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
+    const HOUR = 60 * 60 * 1000;
+
+    const now = (await db.createQRCodeWithinLimit({ shortId: 'use-now', userId: user.id, title: 'Poster', destinationUrl: ref }, () => null)).qrcode;
+    const later = (await db.createQRCodeWithinLimit({ shortId: 'use-later', userId: user.id, title: 'Flyer', destinationUrl: 'https://example.com' }, () => null)).qrcode;
+    await db.scheduleDestinationChange(later.id, user.id, { destinationUrl: ref, startsAt: toSql(Date.now() + 24 * HOUR) }, 20);
+    const weekly = (await db.createQRCodeWithinLimit({ shortId: 'use-sched', userId: user.id, title: 'Menu', destinationUrl: 'https://example.com' }, () => null)).qrcode;
+    await db.createSchedule(weekly.id, user.id, { label: 'Lunch', kind: 'weekly', destinationUrl: ref, timeZone: 'UTC', days: 31, startTime: '11:00', endTime: '14:00' }, 20);
+    // An ended schedule doesn't count.
+    await db.createSchedule(weekly.id, user.id, { label: 'Old', kind: 'range', destinationUrl: ref, timeZone: 'UTC', startsAt: toSql(Date.now() - 48 * HOUR), endsAt: toSql(Date.now() - HOUR) }, 20);
+
+    const response = await getPage(page.id);
+    const body = await response.json();
+    expect(body.canEdit).toBe(true);
+    expect(body.usedBy).toEqual([
+      { codeId: now.id, title: 'Poster', via: 'main' },
+      expect.objectContaining({ codeId: later.id, title: 'Flyer', via: 'change' }),
+      { codeId: weekly.id, title: 'Menu', via: 'schedule', label: 'Lunch' },
+    ]);
+
+    const listed = await (await send(list.GET, '/api/pages')).json();
+    const counts = Object.fromEntries(listed.pages.map((p) => [p.id, p.usedBy]));
+    expect(counts).toEqual({ [page.id]: 3, [unused.id]: 0 });
+  });
+
   it('deleting an account deletes its pages, images and reports, and nobody else’s', async () => {
     const leaving = await db.createUser('leaving@example.com', 'x', 'Leaving', 'business');
     const staying = await db.createUser('staying@example.com', 'x', 'Staying', 'business');

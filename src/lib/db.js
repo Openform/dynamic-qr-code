@@ -1602,6 +1602,71 @@ async function getPageNames(ids, userId = null) {
   return Object.fromEntries(rows.map((row) => [Number(row.id), row.name]));
 }
 
+/**
+ * What sends scans to one of a user's pages, for the editor's "Used by" and
+ * for warning before it's deleted: `[{ codeId, title, via, label, startsAt }]`
+ * where `via` is 'main' (the code's destination now), 'change' (a scheduled
+ * change to it that hasn't started; `startsAt` ISO) or 'schedule' (a schedule
+ * that hasn't ended; `label` its name).
+ */
+async function getPageUsage(pageId, userId) {
+  await ensureSchema();
+  const ref = `qrgo-page:${pageId}`;
+  const [main] = await pool.execute(
+    `SELECT q.id AS codeId, q.title FROM qrcodes q
+     WHERE q.user_id = :userId AND ${LIVE_DESTINATION_SQL} = :ref
+     ORDER BY q.title`,
+    { userId, ref }
+  );
+  const [changes] = await pool.execute(
+    `SELECT q.id AS codeId, q.title, d.started_at AS startsAt
+     FROM qrcode_destinations d JOIN qrcodes q ON q.id = d.qrcode_id
+     WHERE q.user_id = :userId AND d.destination_url = :ref AND d.started_at > UTC_TIMESTAMP()
+     ORDER BY d.started_at`,
+    { userId, ref }
+  );
+  const [schedules] = await pool.execute(
+    `SELECT q.id AS codeId, q.title, s.label
+     FROM qrcode_schedules s JOIN qrcodes q ON q.id = s.qrcode_id
+     WHERE q.user_id = :userId AND s.destination_url = :ref AND ${NOT_ENDED_SQL}
+     ORDER BY q.title, s.position`,
+    { userId, ref }
+  );
+  return [
+    ...main.map((row) => ({ codeId: row.codeId, title: row.title, via: 'main' })),
+    ...changes.map((row) => ({ codeId: row.codeId, title: row.title, via: 'change', startsAt: utcToIso(row.startsAt) })),
+    ...schedules.map((row) => ({ codeId: row.codeId, title: row.title, via: 'schedule', label: row.label })),
+  ];
+}
+
+/**
+ * How many codes send scans to each of a user's pages (now, by a scheduled
+ * change or by a schedule that hasn't ended): `{ [pageId]: count }`.
+ */
+async function getPageUsageCounts(userId) {
+  await ensureSchema();
+  const [rows] = await pool.execute(
+    `SELECT destination, COUNT(DISTINCT codeId) AS count FROM (
+       SELECT ${LIVE_DESTINATION_SQL} AS destination, q.id AS codeId FROM qrcodes q WHERE q.user_id = :userId
+       UNION ALL
+       SELECT d.destination_url, d.qrcode_id FROM qrcode_destinations d JOIN qrcodes q ON q.id = d.qrcode_id
+         WHERE q.user_id = :userId AND d.started_at > UTC_TIMESTAMP()
+       UNION ALL
+       SELECT s.destination_url, s.qrcode_id FROM qrcode_schedules s JOIN qrcodes q ON q.id = s.qrcode_id
+         WHERE q.user_id = :userId AND ${NOT_ENDED_SQL}
+     ) uses
+     WHERE destination LIKE 'qrgo-page:%'
+     GROUP BY destination`,
+    { userId }
+  );
+  const counts = {};
+  for (const row of rows) {
+    const id = Number(String(row.destination).slice('qrgo-page:'.length));
+    if (Number.isInteger(id) && id > 0) counts[id] = Number(row.count);
+  }
+  return counts;
+}
+
 /** The ids of a page's images, which are the only ones its blocks may show. */
 async function getPageImageIds(pageId) {
   await ensureSchema();
@@ -1790,6 +1855,8 @@ module.exports = {
   setPagePublished,
   deletePage,
   getPageNames,
+  getPageUsage,
+  getPageUsageCounts,
   getPageImageIds,
   getLegalPage,
   saveLegalPage,

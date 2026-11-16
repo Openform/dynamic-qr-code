@@ -1,6 +1,7 @@
 /**
  * GET  /api/pages — The signed-in user's campaign pages (without content),
- *                   with whether they can add and edit pages and how many
+ *                   each with `usedBy` (how many codes send scans to it),
+ *                   and whether they can add and edit pages and how many
  *                   their package allows.
  * POST /api/pages — Create a page.
  *
@@ -26,7 +27,7 @@ import {
   invalidPageResponse,
   readJson,
 } from '@/lib/campaignPagesApi';
-import { getPagesByUserId, createPageWithinLimit } from '@/lib/db';
+import { getPagesByUserId, getPageUsageCounts, createPageWithinLimit } from '@/lib/db';
 
 const unauthorized = () => Response.json({ error: 'Authentication required' }, { status: 401 });
 
@@ -36,12 +37,16 @@ export async function GET() {
     const session = await getSession();
     if (!session) return unauthorized();
 
-    const [user, pages] = await Promise.all([loadUser(session.userId), getPagesByUserId(session.userId)]);
+    const [user, pages, usage] = await Promise.all([
+      loadUser(session.userId),
+      getPagesByUserId(session.userId),
+      getPageUsageCounts(session.userId),
+    ]);
     if (!user) return unauthorized();
 
     return Response.json(
       {
-        pages: pages.map(toClientPage),
+        pages: pages.map((page) => ({ ...toClientPage(page), usedBy: usage[page.id] ?? 0 })),
         canEdit: accountCanUsePages(user),
         limit: pageLimitFor(user.package),
       },

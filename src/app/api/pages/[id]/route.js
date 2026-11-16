@@ -1,5 +1,7 @@
 /**
- * GET    /api/pages/[id] — One of the signed-in user's pages, with its content.
+ * GET    /api/pages/[id] — One of the signed-in user's pages, with its content,
+ *                          `usedBy` (what sends scans to it, see getPageUsage
+ *                          in db.js) and whether the account can edit it.
  * PUT    /api/pages/[id] — Save the whole page:
  *                          `{ name, content, endsAt?, afterEnd?, keptButton? }`.
  * PATCH  /api/pages/[id] — Put the page online or take it offline: `{ published }`.
@@ -25,7 +27,7 @@ import {
   invalidPageResponse,
   readJson,
 } from '@/lib/campaignPagesApi';
-import { getPageById, updatePage, setPagePublished, deletePage, getPageImageIds } from '@/lib/db';
+import { getPageById, getPageUsage, updatePage, setPagePublished, deletePage, getPageImageIds } from '@/lib/db';
 
 const unauthorized = () => Response.json({ error: 'Authentication required' }, { status: 401 });
 const notFound = () => Response.json({ error: 'Page not found' }, { status: 404, headers: PRIVATE_HEADERS });
@@ -38,9 +40,12 @@ export async function GET(request, { params }) {
     const id = idParam((await params).id);
     if (!id) return notFound();
 
-    const page = await getPageById(id, session.userId);
+    const [page, user] = await Promise.all([getPageById(id, session.userId), loadUser(session.userId)]);
     if (!page) return notFound();
-    return Response.json({ page: toClientPage(page) }, { headers: PRIVATE_HEADERS });
+    return Response.json(
+      { page: toClientPage(page), usedBy: await getPageUsage(id, session.userId), canEdit: accountCanUsePages(user) },
+      { headers: PRIVATE_HEADERS }
+    );
   } catch (error) {
     console.error('GET /api/pages/[id] error:', error);
     return Response.json({ error: 'Internal server error' }, { status: 500 });

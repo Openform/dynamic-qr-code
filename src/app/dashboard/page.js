@@ -413,6 +413,13 @@ export default function DashboardPage() {
           </div>
           <div style={styles.headerRight}>
             <Link
+              href="/dashboard/pages"
+              id="pages-link"
+              className="btn btn-ghost btn-sm"
+            >
+              Pages
+            </Link>
+            <Link
               href="/dashboard/analytics"
               id="analytics-link"
               className="btn btn-ghost btn-sm"

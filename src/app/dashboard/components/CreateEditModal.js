@@ -26,6 +26,8 @@ import {
   wifiPayload
 } from "@/lib/contentTypes"
 import { parseAccessPassword, UNLOCK_DAYS } from "@/lib/accessPassword"
+import { pageIdFromReference, pageReference } from "@/lib/pageReference"
+import DestinationTarget, { useCampaignPages, pageNamesOf } from "./CampaignPagePicker"
 import footerStyles from "./CreateEditModal.module.css"
 import {
   ContentTypePicker,
@@ -160,8 +162,14 @@ function QRCodeForm({
   const content = contents[contentType]
   const isStatic = isStaticType(contentType)
   const hasSchedules = supportsSchedules(contentType)
+  // A website code sends scans to a web link or to one of the account's
+  // campaign pages (lib/pageReference.js).
+  const initialPageId = pageIdFromReference(qrcode?.destinationUrl)
+  const [target, setTarget] = useState(initialPageId ? "page" : "website")
+  const [pageId, setPageId] = useState(initialPageId ? String(initialPageId) : "")
+  const campaignPages = useCampaignPages()
   const [destinationUrl, setDestinationUrl] = useState(
-    stripHttpsPrefix(qrcode?.destinationUrl)
+    initialPageId ? "" : stripHttpsPrefix(qrcode?.destinationUrl)
   )
   // Select value is a string ("" = Default Collection). New codes default to
   // the collection currently being viewed on the dashboard.
@@ -216,7 +224,8 @@ function QRCodeForm({
         content: qrcode.content
       })
     } else if (contentType === "url") {
-      text = toHttpsUrl(destinationUrl)
+      // A page has no address of its own until the code exists: show a sample.
+      text = target === "page" ? "" : toHttpsUrl(destinationUrl)
     } else if (isStatic) {
       text = encodedDataFor(contentType, { content })
     } else {
@@ -268,7 +277,7 @@ function QRCodeForm({
       // Late resolutions harmlessly draw onto a now-detached canvas.
       renderBwipCanvas(canvas, style, text, 6).catch(() => {})
     }
-  }, [destinationUrl, effectiveStyle, qrcode, contentType, content, isStatic])
+  }, [destinationUrl, target, effectiveStyle, qrcode, contentType, content, isStatic])
 
   const passwordProps = {
     on: passwordOn,
@@ -322,6 +331,22 @@ function QRCodeForm({
     if (contentError) setContentError(null)
   }
 
+  // The website/campaign page switch on a website code's destination.
+  const destinationProps = {
+    pages: campaignPages.pages,
+    canEdit: campaignPages.canEdit,
+    target,
+    onTarget: (next) => {
+      setTarget(next)
+      setUrlError("")
+    },
+    pageId,
+    onPageId: (next) => {
+      setPageId(next)
+      setUrlError("")
+    }
+  }
+
   function chooseContentType(next) {
     setContentType(next)
     setContentError(null)
@@ -335,7 +360,15 @@ function QRCodeForm({
     // server uses (lib/contentTypes.js), which builds the link from them.
     let fullUrl = null
     let checkedContent = null
-    if (contentType === "url") {
+    if (contentType === "url" && target === "page") {
+      if (!pageId) {
+        setUrlError("Choose a page.")
+        setTab("content")
+        return
+      }
+      fullUrl = pageReference(pageId)
+      setUrlError("")
+    } else if (contentType === "url") {
       // The "https://" scheme is shown as a fixed prefix on the field, so the
       // value holds just the host/path — re-attach it to build the saved URL.
       fullUrl = toHttpsUrl(destinationUrl)
@@ -491,6 +524,7 @@ function QRCodeForm({
                     setDestinationUrl={setDestinationUrl}
                     onUrlBlur={handleUrlBlur}
                     urlError={urlError}
+                    destination={destinationProps}
                     logoUrl={style.logoUrl}
                     setLogoUrl={(v) => setField("logoUrl", v)}
                     showLogo={false}
@@ -520,6 +554,7 @@ function QRCodeForm({
                   {hasSchedules && (
                   <UpcomingChanges
                     changes={qrcode.scheduledChanges ?? []}
+                    pageNames={{ ...qrcode.pageNames, ...pageNamesOf(campaignPages.pages) }}
                     onCancel={(change) => onCancelChange?.(qrcode, change)}
                   />
                   )}
@@ -645,6 +680,7 @@ function QRCodeForm({
                           setDestinationUrl={setDestinationUrl}
                           onUrlBlur={handleUrlBlur}
                           urlError={urlError}
+                          destination={destinationProps}
                           logoUrl={style.logoUrl}
                           setLogoUrl={(v) => setField("logoUrl", v)}
                           showLogo={isQR}
@@ -780,6 +816,7 @@ function ContentTab({
   setDestinationUrl,
   onUrlBlur,
   urlError,
+  destination,
   logoUrl,
   setLogoUrl,
   showLogo
@@ -824,6 +861,12 @@ function ContentTab({
         className="input-group"
         style={{ marginBottom: showLogo ? undefined : 0 }}
       >
+        <DestinationTarget
+          id="qr-destination-page"
+          {...destination}
+          error={destination?.target === "page" ? urlError : ""}
+          hintStyle={styles.hint}
+        >
         <label htmlFor="qr-destination-url" className="input-label">
           Destination URL
         </label>
@@ -852,6 +895,7 @@ function ContentTab({
         ) : (
           <p style={styles.hint}>Insecure http:// links are not allowed.</p>
         )}
+        </DestinationTarget>
       </div>
       )}
 
@@ -1218,7 +1262,7 @@ function ChangeTiming({ when, onWhenChange, changeAt, setChangeAt, minChangeAt, 
 }
 
 /** Edit only: changes waiting to happen, soonest first, each with Cancel. */
-function UpcomingChanges({ changes, onCancel }) {
+function UpcomingChanges({ changes, pageNames, onCancel }) {
   if (changes.length === 0) return null
   return (
     <div className="input-group">
@@ -1227,8 +1271,8 @@ function UpcomingChanges({ changes, onCancel }) {
         {changes.map((change) => (
           <li key={change.id} style={styles.changeItem}>
             <div style={{ minWidth: 0 }}>
-              <div className="truncate" style={styles.changeUrl} title={change.destinationUrl}>
-                {displayUrl(change.destinationUrl)}
+              <div className="truncate" style={styles.changeUrl} title={displayUrl(change.destinationUrl, pageNames)}>
+                {displayUrl(change.destinationUrl, pageNames)}
               </div>
               <div style={styles.changeTime}>{formatChangeTime(change.startsAt)}</div>
             </div>
@@ -1236,7 +1280,7 @@ function UpcomingChanges({ changes, onCancel }) {
               type="button"
               className="btn btn-ghost btn-sm"
               onClick={() => onCancel(change)}
-              aria-label={`Cancel the change to ${displayUrl(change.destinationUrl)}`}
+              aria-label={`Cancel the change to ${displayUrl(change.destinationUrl, pageNames)}`}
             >
               Cancel change
             </button>
