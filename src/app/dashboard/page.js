@@ -163,7 +163,7 @@ export default function DashboardPage() {
   // Cancel a scheduled destination change (from the card or the edit screen).
   async function handleCancelChange(qr, change) {
     const when = formatChangeTime(change.startsAt)
-    if (!confirm(`Cancel the change to ${displayUrl(change.destinationUrl)} on ${when}?`)) return
+    if (!confirm(`Cancel the change to ${displayUrl(change.destinationUrl, qr?.pageNames)} on ${when}?`)) return
 
     try {
       const res = await fetch(

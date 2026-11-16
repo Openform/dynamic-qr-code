@@ -171,7 +171,8 @@ describe('parsePageContent', () => {
     });
 
     it('only allows secure web links', () => {
-      for (const url of ['javascript:alert(1)', 'http://example.com', 'data:text/html,hi', 'ftp://example.com']) {
+      // Codes can point at a campaign page, but a page's buttons can't.
+      for (const url of ['javascript:alert(1)', 'http://example.com', 'data:text/html,hi', 'ftp://example.com', 'qrgo-page:3']) {
         expect(parsePageContent(withButton({ kind: 'link', fields: { url } }))).toMatchObject({
           ok: false,
           path: 'blocks.3.items.0.fields.url',
@@ -245,6 +246,10 @@ describe('parsePageContent', () => {
 
   it('checks an Image block’s optional link', () => {
     expect(parsePageContent(withBlock(5, (b) => ({ ...b, link: 'javascript:alert(1)' })))).toMatchObject({
+      ok: false,
+      path: 'blocks.5.link',
+    });
+    expect(parsePageContent(withBlock(5, (b) => ({ ...b, link: 'qrgo-page:3' })))).toMatchObject({
       ok: false,
       path: 'blocks.5.link',
     });
@@ -349,6 +354,7 @@ describe('buttonLink', () => {
 
   it('gives nothing for a button that wouldn’t pass the checks', () => {
     expect(buttonLink({ kind: 'link', fields: { url: 'javascript:alert(1)' } })).toBeNull();
+    expect(buttonLink({ kind: 'link', fields: { url: 'qrgo-page:3' } })).toBeNull();
     expect(buttonLink({ kind: 'teleport', fields: {} })).toBeNull();
     expect(buttonLink(null)).toBeNull();
   });

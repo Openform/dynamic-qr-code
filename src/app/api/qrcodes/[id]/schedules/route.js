@@ -28,6 +28,7 @@ import {
   idParam,
   SCHEDULES_PACKAGE_ERROR,
   SCHEDULES_TYPE_ERROR,
+  pageDestinationProblem,
 } from '@/lib/qrcodeApi';
 const { createSchedule, reorderSchedules } = require('@/lib/db');
 
@@ -65,6 +66,8 @@ export async function POST(request, { params }) {
     const body = await request.json().catch(() => null);
     const input = parseScheduleInput(body);
     if (input.error) return Response.json({ error: input.error }, { status: 400 });
+    const pageProblem = await pageDestinationProblem(input.fields.destinationUrl, session.userId);
+    if (pageProblem) return pageProblem;
 
     const result = await createSchedule(codeId, session.userId, input.fields, MAX_SCHEDULES_PER_CODE);
     if (!result.ok) {

@@ -9,7 +9,9 @@ import { parseAnalyticsFilters, computePeriods, RANGES } from './analyticsFilter
 import { getScanAnalytics, scanEventBatches, resolveDestinationFilter } from './scanAnalytics';
 import { retentionMonths } from './retention';
 import { csvRow } from './csv';
-import { getQRCodeById, getCollectionById } from './db';
+import { getQRCodeById, getCollectionById, getPageNames } from './db';
+import { pageIdFromReference } from './pageReference';
+import { describeDestination } from './contentTypes';
 
 function badRequest(error) {
   return Response.json({ error }, { status: 400 });
@@ -63,7 +65,25 @@ export async function analyticsResponse(request, { userId = null, admin = false 
     admin,
   });
   if (!data) return notFound('QR code not found');
+  // Campaign pages a code sent scans to, named for the Destinations card.
+  if (data.destinations) {
+    const ids = [...pageIdsIn(data.destinations)];
+    data.destinations = { ...data.destinations, pageNames: await getPageNames(ids, admin ? null : userId) };
+  }
   return Response.json({ ...data, retentionMonths: retentionMonths() });
+}
+
+/** Every campaign page id named by a destination string anywhere in `value`. */
+function pageIdsIn(value, ids = new Set()) {
+  if (typeof value === 'string') {
+    const id = pageIdFromReference(value);
+    if (id !== null) ids.add(id);
+  } else if (Array.isArray(value)) {
+    for (const item of value) pageIdsIn(item, ids);
+  } else if (value && typeof value === 'object') {
+    for (const item of Object.values(value)) pageIdsIn(item, ids);
+  }
+  return ids;
 }
 
 const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
@@ -95,12 +115,17 @@ export async function analyticsCsvResponse(request, { userId = null, admin = fal
     ...(admin ? ['Account name', 'Account email'] : []),
     'Destination', 'Schedule',
   ];
+  // A campaign page is written as "Campaign page: <name>"; names are looked
+  // up batch by batch, as pages appear.
+  const pageNames = {};
+  const destinationText = (url) =>
+    pageIdFromReference(url) === null ? url : describeDestination(url, pageNames);
   const toLine = (r) =>
     csvRow([
       r.scannedAt, r.codeTitle, r.shortId, r.countryCode, countryName(r.countryCode), r.region, r.city,
       r.deviceType, r.os, r.browser, r.language,
       ...(admin ? [r.ownerName, r.ownerEmail] : []),
-      r.destinationUrl, r.scheduleLabel,
+      destinationText(r.destinationUrl), r.scheduleLabel,
     ]);
 
   const encoder = new TextEncoder();
@@ -113,8 +138,13 @@ export async function analyticsCsvResponse(request, { userId = null, admin = fal
     async pull(controller) {
       try {
         const { value, done } = await batches.next();
-        if (done) controller.close();
-        else controller.enqueue(encoder.encode(value.map(toLine).join('')));
+        if (done) {
+          controller.close();
+          return;
+        }
+        const missing = value.map((r) => pageIdFromReference(r.destinationUrl)).filter((id) => id !== null && !(id in pageNames));
+        if (missing.length > 0) Object.assign(pageNames, await getPageNames(missing, admin ? null : userId));
+        controller.enqueue(encoder.encode(value.map(toLine).join('')));
       } catch (error) {
         console.error('Analytics export error:', error);
         controller.error(error);

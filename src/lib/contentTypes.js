@@ -39,6 +39,7 @@
  */
 
 import { normalizeDestinationUrl, isValidDestinationUrl } from './qrStyle';
+import { pageIdFromReference } from './pageReference';
 
 /** Every content type, in the order the dashboard offers them. */
 export const CONTENT_TYPES = [
@@ -283,6 +284,9 @@ function locationDestination({ query }) {
 function parseUrl(input) {
   const raw = text(input?.url).trim();
   if (!raw) return fail('url', 'Enter the destination URL.');
+  // One of the account's campaign pages (lib/pageReference.js), kept as it
+  // is. The API checks that the page is the account's own.
+  if (pageIdFromReference(raw) !== null) return { ok: true, content: { url: raw }, destination: raw };
   const url = normalizeDestinationUrl(raw);
   if (!isValidDestinationUrl(url) || CONTROL.test(url) || INVISIBLE.test(url)) {
     return fail('url', 'Enter a valid URL. Only secure https:// links are allowed.');
@@ -529,12 +533,18 @@ function displayLink(url) {
 
 /**
  * A destination string as people read it: "Email hello@example.com" for a
- * mailto: link, "Call +27…" for tel:, "Text +27…" for sms:, and web links
- * without their https://. For lists of destinations (analytics, schedules)
- * that don't know which type made them.
+ * mailto: link, "Call +27…" for tel:, "Text +27…" for sms:, "Campaign page:
+ * Black Friday" for one of the account's pages, and web links without their
+ * https://. For lists of destinations (analytics, schedules) that don't know
+ * which type made them. `pageNames` maps page ids to names, where known.
  */
-export function describeDestination(destination) {
+export function describeDestination(destination, pageNames = null) {
   const d = String(destination ?? '');
+  const pageId = pageIdFromReference(d);
+  if (pageId !== null) {
+    const name = pageNames?.[pageId];
+    return name ? `Campaign page: ${name}` : 'Campaign page';
+  }
   const scheme = /^(mailto|tel|sms):([^?]*)/i.exec(d);
   if (scheme) {
     const what = safeDecode(scheme[2]);

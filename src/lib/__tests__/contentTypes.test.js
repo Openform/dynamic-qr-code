@@ -55,6 +55,18 @@ describe('website', () => {
     expect(parseContent('url', { url: '' }).ok).toBe(false);
   });
 
+  it('accepts a campaign page as it is, and nothing that only looks like one', () => {
+    expect(parseContent('url', { url: 'qrgo-page:12' })).toEqual({
+      ok: true,
+      content: { url: 'qrgo-page:12' },
+      destination: 'qrgo-page:12',
+    });
+    // Read back for the edit form, unchanged.
+    expect(contentFromDestination('url', 'qrgo-page:12')).toEqual({ url: 'qrgo-page:12' });
+    expect(parseContent('url', { url: 'qrgo-page:abc' }).ok).toBe(false);
+    expect(parseContent('url', { url: 'qrgo-page://evil.example' }).ok).toBe(false);
+  });
+
   it('rejects control characters and over-long links', () => {
     expect(parseContent('url', { url: 'https://exa\nmple.com' }).ok).toBe(false);
     expect(parseContent('url', { url: 'https://example.com/‮' }).ok).toBe(false);
@@ -260,6 +272,9 @@ describe('describing content', () => {
     expect(describeDestination('tel:+27821234567')).toBe('Call +27821234567');
     expect(describeDestination('sms:+27821234567?body=x')).toBe('Text +27821234567');
     expect(describeDestination('https://example.com/a')).toBe('example.com/a');
+    expect(describeDestination('qrgo-page:12')).toBe('Campaign page');
+    expect(describeDestination('qrgo-page:12', { 12: 'Black Friday' })).toBe('Campaign page: Black Friday');
+    expect(describeDestination('qrgo-page:12', { 13: 'Other' })).toBe('Campaign page');
   });
 });
 

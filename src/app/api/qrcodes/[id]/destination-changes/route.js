@@ -12,7 +12,7 @@
  */
 
 import { getSession } from '@/lib/auth';
-import { loadClientQRCode } from '@/lib/qrcodeApi';
+import { loadClientQRCode, pageDestinationProblem } from '@/lib/qrcodeApi';
 import { parseScheduledChange, MAX_SCHEDULED_CHANGES } from '@/lib/destinationChanges';
 const { scheduleDestinationChange } = require('@/lib/db');
 
@@ -34,6 +34,8 @@ export async function POST(request, { params }) {
     if (change.error) {
       return Response.json({ error: change.error }, { status: 400 });
     }
+    const pageProblem = await pageDestinationProblem(change.destinationUrl, session.userId);
+    if (pageProblem) return pageProblem;
 
     const result = await scheduleDestinationChange(codeId, session.userId, change, MAX_SCHEDULED_CHANGES);
     if (!result.ok) {

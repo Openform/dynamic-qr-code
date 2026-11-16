@@ -1587,6 +1587,21 @@ async function deletePage(id, userId) {
   return result.affectedRows > 0;
 }
 
+/**
+ * Names of pages by id, for showing where a code sends scans: `{ [id]: name }`.
+ * With a `userId`, only that account's pages; without (admins), any.
+ */
+async function getPageNames(ids, userId = null) {
+  const wanted = [...new Set(ids)].filter((id) => Number.isInteger(id) && id > 0);
+  if (wanted.length === 0) return {};
+  await ensureSchema();
+  const [rows] = await pool.query(
+    `SELECT id, name FROM campaign_pages WHERE id IN (?)${userId === null ? '' : ' AND user_id = ?'}`,
+    userId === null ? [wanted] : [wanted, userId]
+  );
+  return Object.fromEntries(rows.map((row) => [Number(row.id), row.name]));
+}
+
 /** The ids of a page's images, which are the only ones its blocks may show. */
 async function getPageImageIds(pageId) {
   await ensureSchema();
@@ -1774,6 +1789,7 @@ module.exports = {
   updatePage,
   setPagePublished,
   deletePage,
+  getPageNames,
   getPageImageIds,
   getLegalPage,
   saveLegalPage,

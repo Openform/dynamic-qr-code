@@ -112,6 +112,13 @@ function fail(path, error) {
   return { ok: false, path, error };
 }
 
+// A page's own links go to websites. (Codes can also point at a campaign
+// page, which the website check accepts, but a page can't link to another.)
+const WEB_LINK_ERROR = 'Enter a web address, like example.com.';
+function isWebLink(url) {
+  return typeof url === 'string' && url.startsWith('https://');
+}
+
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -168,6 +175,7 @@ function parseImageBlock(input, path, ctx) {
   if (typeof input.link === 'string' && input.link.trim()) {
     const checked = parseContent('url', { url: input.link });
     if (!checked.ok) return { error: fail(`${path}.link`, checked.error) };
+    if (!isWebLink(checked.destination)) return { error: fail(`${path}.link`, WEB_LINK_ERROR) };
     link = checked.destination;
   }
   return { block: { image: image.value, alt: alt.value, caption: caption.value, link } };
@@ -188,6 +196,9 @@ function parseButton(input, path, ctx) {
 
   const checked = parseContent(kind.contentType, isObject(input.fields) ? input.fields : {});
   if (!checked.ok) return { error: fail(`${path}.fields${checked.field ? `.${checked.field}` : ''}`, checked.error) };
+  if (kind.id === 'link' && !isWebLink(checked.destination)) {
+    return { error: fail(`${path}.fields.url`, WEB_LINK_ERROR) };
+  }
   ctx.buttonIds.add(input.id);
   return { button: { id: input.id, kind: kind.id, label: label.value, fields: checked.content } };
 }
@@ -412,7 +423,8 @@ export function buttonLink(button) {
   const kind = BUTTON_KIND_BY_ID.get(button?.kind);
   if (!kind) return null;
   const checked = parseContent(kind.contentType, button.fields);
-  return checked.ok ? checked.destination : null;
+  if (!checked.ok || (kind.id === 'link' && !isWebLink(checked.destination))) return null;
+  return checked.destination;
 }
 
 /**
@@ -431,34 +443,9 @@ export function pickTextColor(background, { light = '#FFFFFF', dark = '#141414' 
 
 // ── Showing a page ──
 
-/**
- * How a code's main destination, a scheduled change or a schedule points at
- * a campaign page: "qrgo-page:<id>", stored in the same destination_url
- * columns as web links. The scan route sends such a scan to the page's path
- * under the code (pagePath), so it works on every domain the app is served
- * from.
- */
-export const PAGE_REFERENCE_PREFIX = 'qrgo-page:';
-const PAGE_REFERENCE = /^qrgo-page:([1-9][0-9]{0,9})$/;
-
-/** The destination value that points at a page. */
-export function pageReference(pageId) {
-  return `${PAGE_REFERENCE_PREFIX}${pageId}`;
-}
-
-/** The page id in a destination value, or null when it isn't a page reference. */
-export function pageIdFromReference(value) {
-  const match = typeof value === 'string' ? value.match(PAGE_REFERENCE) : null;
-  return match ? Number(match[1]) : null;
-}
-
-/**
- * Where a page is shown: under the code that links to it, so the page can
- * check that code (and its password) on every visit.
- */
-export function pagePath(shortId, pageId) {
-  return `/r/${encodeURIComponent(shortId)}/p/${pageId}`;
-}
+// How destinations point at pages lives in lib/pageReference.js, because the
+// destination checks need it too.
+export { PAGE_REFERENCE_PREFIX, pageReference, pageIdFromReference, pagePath, pagePreviewPath } from './pageReference';
 
 /** An end time as stored (UTC "YYYY-MM-DD HH:MM:SS") or as an ISO string → ms, or NaN. */
 function endTime(value) {

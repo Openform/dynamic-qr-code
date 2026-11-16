@@ -6,6 +6,7 @@
 
 import { normalizeDestinationUrl, isValidDestinationUrl } from './qrStyle';
 import { toSqlDateTime } from './analyticsFilters';
+import { pageIdFromReference } from './pageReference';
 
 /** How many changes can wait on one code at once. */
 export const MAX_SCHEDULED_CHANGES = 20;
@@ -33,12 +34,15 @@ export function isTooFarAhead(ms, nowMs) {
 
 /**
  * Check a destination URL from a request: https:// is added if it was left
- * out, and only https URLs that fit the column are accepted. Returns
- * `{ url }` or `{ error }`.
+ * out, and only https URLs that fit the column are accepted, or a campaign
+ * page reference ("qrgo-page:<id>"). Returns `{ url }` or `{ error }`.
  */
 export function parseDestinationUrl(value) {
   const raw = typeof value === 'string' ? value.trim() : '';
   if (!raw) return { error: 'Enter the new destination URL.' };
+  // One of the account's campaign pages (lib/pageReference.js). The API
+  // checks that the page is the account's own.
+  if (pageIdFromReference(raw) !== null) return { url: raw };
   const url = normalizeDestinationUrl(raw);
   if (!isValidDestinationUrl(url)) {
     return { error: 'Invalid destination URL. Must be a valid https URL.' };
