@@ -251,6 +251,80 @@ async function initSchema() {
         REFERENCES users(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
+
+  // Campaign pages (lib/campaignPages.js): a simple mobile page a code can
+  // send scans to. These three tables are new and only ever created here
+  // (CREATE TABLE IF NOT EXISTS); nothing changes an existing table for them.
+  //
+  // campaign_pages: name is only shown to the owner; content is the page's
+  // blocks and look as JSON, checked by lib/campaignPages.js before it's
+  // saved. published = 0 takes the page offline without deleting it.
+  // ends_at (UTC, NULL = no end) and after_end ('ended' | 'keep') say what
+  // shows once the campaign is over; kept_button is the id of the one button
+  // still shown then. taken_down_at / taken_down_by are set when an admin
+  // takes a page down. user_id has no ON DELETE CASCADE, like qrcodes:
+  // deleteAccount() deletes an account's pages itself.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS campaign_pages (
+      id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      user_id INT UNSIGNED NOT NULL,
+      name VARCHAR(100) NOT NULL,
+      content MEDIUMTEXT NOT NULL,
+      published TINYINT(1) NOT NULL DEFAULT 1,
+      ends_at DATETIME NULL,
+      after_end VARCHAR(16) NOT NULL DEFAULT 'ended',
+      kept_button VARCHAR(32) NULL,
+      taken_down_at DATETIME NULL,
+      taken_down_by INT UNSIGNED NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_campaign_pages_user (user_id),
+      CONSTRAINT fk_campaign_pages_user FOREIGN KEY (user_id) REFERENCES users(id),
+      CONSTRAINT fk_campaign_pages_taken_down_by FOREIGN KEY (taken_down_by)
+        REFERENCES users(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  // Images uploaded for a page, resized in the browser before upload. Kept
+  // apart from the page so loading a page never loads its images. hash is a
+  // short hash of the bytes, used in the image's address so browsers can
+  // cache it for good. Rows go when their page does.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS campaign_page_images (
+      id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      page_id INT UNSIGNED NOT NULL,
+      mime_type VARCHAR(16) NOT NULL,
+      width SMALLINT UNSIGNED NOT NULL,
+      height SMALLINT UNSIGNED NOT NULL,
+      hash CHAR(16) NOT NULL,
+      data MEDIUMBLOB NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_campaign_page_images_page (page_id),
+      CONSTRAINT fk_campaign_page_images_page FOREIGN KEY (page_id)
+        REFERENCES campaign_pages(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  // Reports from "Report this page" on a public page, listed for admins.
+  // Times are UTC; handled_at / handled_by work as on invite_requests. Rows
+  // go when their page does.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS campaign_page_reports (
+      id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      page_id INT UNSIGNED NOT NULL,
+      reason VARCHAR(32) NOT NULL,
+      message VARCHAR(1000) NULL,
+      created_at DATETIME NOT NULL,
+      handled_at DATETIME NULL,
+      handled_by INT UNSIGNED NULL,
+      INDEX idx_campaign_page_reports_page (page_id),
+      INDEX idx_campaign_page_reports_created_at (created_at),
+      CONSTRAINT fk_campaign_page_reports_page FOREIGN KEY (page_id)
+        REFERENCES campaign_pages(id) ON DELETE CASCADE,
+      CONSTRAINT fk_campaign_page_reports_user FOREIGN KEY (handled_by)
+        REFERENCES users(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
 }
 
 /**
@@ -468,7 +542,8 @@ async function setUserDisabled(userId, disabled) {
 }
 
 /**
- * Permanently delete an account with all its QR codes and collections, in one
+ * Permanently delete an account with all its QR codes, collections and
+ * campaign pages (their images and reports go with them), in one
  * transaction so it can't half-apply. Only a disabled account can be deleted:
  * the row is locked first, so it can't be re-enabled mid-delete.
  *
@@ -497,6 +572,7 @@ async function deleteAccount(userId) {
     // Codes first: they reference both the user and the user's collections.
     const [codes] = await conn.execute('DELETE FROM qrcodes WHERE user_id = :userId', { userId });
     await conn.execute('DELETE FROM collections WHERE user_id = :userId', { userId });
+    await conn.execute('DELETE FROM campaign_pages WHERE user_id = :userId', { userId });
     await conn.execute('DELETE FROM users WHERE id = :userId', { userId });
 
     await conn.commit();
@@ -1351,6 +1427,173 @@ async function deleteCollection(id, userId) {
   }
 }
 
+// ──────────────────────────────────────────────
+// Campaign pages (lib/campaignPages.js)
+// ──────────────────────────────────────────────
+// Every function takes the owner's user id and only ever touches that
+// account's pages, like the QR code functions.
+
+/** Columns for a page in list form (no content); times are UTC. */
+const PAGE_SUMMARY_COLUMNS = `
+  p.id,
+  p.name,
+  p.published,
+  p.ends_at AS endsAt,
+  p.after_end AS afterEnd,
+  p.taken_down_at AS takenDownAt,
+  p.created_at AS createdAt,
+  p.updated_at AS updatedAt`;
+
+function toPageSummary(row) {
+  return { ...row, published: Boolean(row.published) };
+}
+
+/** A stored page's content (JSON) → object, or null if it can't be read. */
+function parsePageContentColumn(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+/** A user's campaign pages, newest first, without their content. */
+async function getPagesByUserId(userId) {
+  await ensureSchema();
+  const [rows] = await pool.execute(
+    `SELECT ${PAGE_SUMMARY_COLUMNS}
+     FROM campaign_pages p
+     WHERE p.user_id = :userId
+     ORDER BY p.created_at DESC, p.id DESC`,
+    { userId }
+  );
+  return rows.map(toPageSummary);
+}
+
+/** One of a user's pages with its content, or null if it isn't theirs. */
+async function getPageById(id, userId) {
+  await ensureSchema();
+  const [rows] = await pool.execute(
+    `SELECT ${PAGE_SUMMARY_COLUMNS}, p.content, p.kept_button AS keptButton
+     FROM campaign_pages p
+     WHERE p.id = :id AND p.user_id = :userId
+     LIMIT 1`,
+    { id, userId }
+  );
+  if (!rows[0]) return null;
+  const { content, ...row } = rows[0];
+  return { ...toPageSummary(row), content: parsePageContentColumn(content) };
+}
+
+/**
+ * Create a page, unless the account already has as many as its package
+ * allows. `getLimit(packageId)` gives that number. The account row is locked
+ * while counting, so several requests at once can't slip past the limit.
+ *
+ * Returns `{ ok: true, page }`, `{ ok: false, reason: 'limit', limit }` or
+ * `{ ok: false, reason: 'no_user' }`.
+ */
+async function createPageWithinLimit({ userId, name, content, endsAt, afterEnd, keptButton }, getLimit) {
+  await ensureSchema();
+  const conn = await pool.getConnection();
+  let insertId;
+  try {
+    await conn.beginTransaction();
+
+    const [users] = await conn.execute('SELECT package FROM users WHERE id = :userId FOR UPDATE', { userId });
+    if (!users[0]) {
+      await conn.rollback();
+      return { ok: false, reason: 'no_user' };
+    }
+
+    const limit = getLimit(users[0].package);
+    const [counts] = await conn.execute('SELECT COUNT(*) AS count FROM campaign_pages WHERE user_id = :userId', {
+      userId,
+    });
+    if (Number(counts[0].count) >= limit) {
+      await conn.rollback();
+      return { ok: false, reason: 'limit', limit };
+    }
+
+    const [result] = await conn.execute(
+      `INSERT INTO campaign_pages (user_id, name, content, ends_at, after_end, kept_button)
+       VALUES (:userId, :name, :content, :endsAt, :afterEnd, :keptButton)`,
+      {
+        userId,
+        name,
+        content: JSON.stringify(content),
+        endsAt: endsAt ?? null,
+        afterEnd: afterEnd || 'ended',
+        keptButton: keptButton ?? null,
+      }
+    );
+    await conn.commit();
+    insertId = result.insertId;
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+  return { ok: true, page: await getPageById(insertId, userId) };
+}
+
+/**
+ * Save a page's name, content, end and what shows after it (all checked by
+ * lib/campaignPages.js). Returns the saved page, or null if it isn't the
+ * user's. Publishing and take-downs are left as they are.
+ */
+async function updatePage(id, userId, { name, content, endsAt, afterEnd, keptButton }) {
+  await ensureSchema();
+  const [result] = await pool.execute(
+    `UPDATE campaign_pages
+     SET name = :name, content = :content, ends_at = :endsAt, after_end = :afterEnd,
+         kept_button = :keptButton, updated_at = CURRENT_TIMESTAMP
+     WHERE id = :id AND user_id = :userId`,
+    {
+      id,
+      userId,
+      name,
+      content: JSON.stringify(content),
+      endsAt: endsAt ?? null,
+      afterEnd: afterEnd || 'ended',
+      keptButton: keptButton ?? null,
+    }
+  );
+  if (result.affectedRows === 0) return null;
+  return getPageById(id, userId);
+}
+
+/** Put a page online or take it offline. Returns the page, or null if it isn't the user's. */
+async function setPagePublished(id, userId, published) {
+  await ensureSchema();
+  const [result] = await pool.execute(
+    `UPDATE campaign_pages SET published = :published, updated_at = CURRENT_TIMESTAMP
+     WHERE id = :id AND user_id = :userId`,
+    { id, userId, published: published ? 1 : 0 }
+  );
+  if (result.affectedRows === 0) return null;
+  return getPageById(id, userId);
+}
+
+/** Delete a page with its images and reports. Returns true if it was the user's. */
+async function deletePage(id, userId) {
+  await ensureSchema();
+  const [result] = await pool.execute('DELETE FROM campaign_pages WHERE id = :id AND user_id = :userId', {
+    id,
+    userId,
+  });
+  return result.affectedRows > 0;
+}
+
+/** The ids of a page's images, which are the only ones its blocks may show. */
+async function getPageImageIds(pageId) {
+  await ensureSchema();
+  const [rows] = await pool.execute('SELECT id FROM campaign_page_images WHERE page_id = :pageId', { pageId });
+  return new Set(rows.map((row) => Number(row.id)));
+}
+
 /** Get aggregate stats for a user: total QR codes and total scans. */
 async function getUserStats(userId) {
   await ensureSchema();
@@ -1525,6 +1768,13 @@ module.exports = {
   createCollection,
   updateCollection,
   deleteCollection,
+  getPagesByUserId,
+  getPageById,
+  createPageWithinLimit,
+  updatePage,
+  setPagePublished,
+  deletePage,
+  getPageImageIds,
   getLegalPage,
   saveLegalPage,
   createInviteRequest,

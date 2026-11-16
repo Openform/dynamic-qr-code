@@ -84,8 +84,9 @@ jobs:
       - run: node scripts/ci/check-migrations.mjs
       # Tests against the real database (src/lib/__tests__/*.db.test.js;
       # skipped by "npm test" in the other job, which has no database): scans
-      # per destination add up to each code's total, and password-protected
-      # codes ask for, check and remember their password.
+      # per destination add up to each code's total, password-protected codes
+      # ask for, check and remember their password, and campaign pages keep to
+      # their package's rules and stay private to their account.
       - run: npx vitest run db.test
         env:
           ANALYTICS_DB_TEST: '1'

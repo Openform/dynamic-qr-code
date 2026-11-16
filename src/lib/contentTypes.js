@@ -116,9 +116,9 @@ function text(value) {
 
 /**
  * Check one text field. Returns `{ value }` (trimmed unless `keepSpaces`) or
- * `{ error }`.
+ * `{ error }`. Also used by campaign pages (lib/campaignPages.js).
  */
-function checkText(value, { label, max, required = false, multiline = false, keepSpaces = false }) {
+export function checkText(value, { label, max, required = false, multiline = false, keepSpaces = false }) {
   const raw = text(value);
   const v = keepSpaces ? raw : raw.trim();
   if (!v.trim()) {
@@ -138,7 +138,7 @@ function capitalize(s) {
 }
 
 /** Line breaks as \n, so stored and compared text is the same everywhere. */
-function normalizeLines(s) {
+export function normalizeLines(s) {
   return s.replace(/\r\n?/g, '\n');
 }
 

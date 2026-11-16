@@ -22,6 +22,18 @@ const BIG_STYLE_CONFIG = JSON.stringify({
   image: 'data:image/png;base64,' + 'B'.repeat(100_000),
 });
 
+// A campaign page's content near its largest: 20 blocks of long text.
+const BIG_PAGE_CONTENT = JSON.stringify({
+  v: 1,
+  theme: 'fresh',
+  brand: '#1F6F4A',
+  font: null,
+  blocks: [
+    { id: 'header', type: 'header', hidden: false, cover: 1, logo: null, title: 'Black Friday weekend', tagline: '20% off ☕🎉' },
+    ...Array.from({ length: 19 }, (_, i) => ({ id: `t${i}`, type: 'text', hidden: false, text: 'Ünïcödé text. '.repeat(140) })),
+  ],
+});
+
 /** Scans before this time are deleted by pruneScanEvents(); later ones stay. */
 export const PRUNE_CUTOFF = '2024-01-01 00:00:00';
 
@@ -213,5 +225,55 @@ export const SEED = {
   invite_requests: [
     { id: 1, name: 'Ngozi Adébáyọ̀', email: 'ngozi@example.com', company: 'Café Ltd', phone: '+27 82 000 0000', package: 'business', created_at: '2026-10-20 14:00:00', handled_at: null, handled_by: null },
     { id: 2, name: 'Handled Request', email: 'handled@example.com', company: null, phone: null, package: null, created_at: '2026-09-01 09:00:00', handled_at: '2026-09-02 10:00:00', handled_by: 1 },
+  ],
+
+  campaign_pages: [
+    {
+      id: 1,
+      user_id: 1,
+      name: 'Black Friday weekend 🎂',
+      content: BIG_PAGE_CONTENT,
+      published: 1,
+      ends_at: '2026-11-30 14:00:00',
+      after_end: 'ended',
+      kept_button: 'b-menu',
+      taken_down_at: null,
+      taken_down_by: null,
+      created_at: '2026-11-01 08:00:00',
+      updated_at: '2026-11-02 09:30:00',
+    },
+    {
+      id: 2,
+      user_id: 2,
+      name: 'Taken down',
+      content: '{"v":1,"theme":"night","brand":"#F4B860","font":null,"blocks":[]}',
+      published: 0,
+      ends_at: null,
+      after_end: 'keep',
+      kept_button: null,
+      taken_down_at: '2026-11-05 12:00:00',
+      taken_down_by: 1,
+      created_at: '2026-11-04 08:00:00',
+      updated_at: '2026-11-04 08:00:00',
+    },
+  ],
+
+  campaign_page_images: [
+    {
+      id: 1,
+      page_id: 1,
+      mime_type: 'image/webp',
+      width: 1600,
+      height: 900,
+      hash: '0123456789abcdef',
+      // Every byte value, zeros included, so a change of column type or
+      // character set that mangles binary data is caught.
+      data: Buffer.from(Array.from({ length: 4096 }, (_, i) => i % 256)),
+      created_at: '2026-11-01 08:05:00',
+    },
+  ],
+
+  campaign_page_reports: [
+    { id: 1, page_id: 2, reason: 'phishing', message: 'Asks for my bank PIN 😠', created_at: '2026-11-05 11:00:00', handled_at: '2026-11-05 12:00:00', handled_by: 1 },
   ],
 };
