@@ -18,11 +18,13 @@ export function formatChangeTime(iso) {
 }
 
 /**
- * A destination for display: a web link without its https:// prefix, or an
- * email, phone or text message destination in words ("Email hello@…").
+ * A destination for display: a web link without its https:// prefix, an
+ * email, phone or text message destination in words ("Email hello@…"), or
+ * "Campaign page: <name>" for one of the account's pages. `pageNames` maps
+ * page ids to names (a code's `pageNames`, or analytics'), where known.
  */
-export function displayUrl(url) {
-  return describeDestination(url)
+export function displayUrl(url, pageNames = null) {
+  return describeDestination(url, pageNames)
 }
 
 /** ms → the "YYYY-MM-DDTHH:MM" local time a datetime-local input holds. */

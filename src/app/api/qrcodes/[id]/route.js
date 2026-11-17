@@ -12,7 +12,7 @@
 import { getSession } from '@/lib/auth';
 import { checkTitle, getContentType, parseContent } from '@/lib/contentTypes';
 import { PRIVATE_HEADERS } from '@/lib/clientQRCode';
-import { loadClientQRCode, idParam, accessPasswordFromBody } from '@/lib/qrcodeApi';
+import { loadClientQRCode, idParam, accessPasswordFromBody, pageDestinationProblem } from '@/lib/qrcodeApi';
 const { getQRCodeById, updateQRCode, deleteQRCode, getCollectionById } = require('@/lib/db');
 
 function badRequest(error, field) {
@@ -111,6 +111,12 @@ export async function PUT(request, { params }) {
       const checked = parseContent(type.id, hasContent ? body.content : { url: body.destinationUrl });
       if (!checked.ok) return badRequest(checked.error, checked.field);
       destinationUrl = checked.destination;
+      // A new campaign page as the destination must be one of the account's
+      // own. (Saving a code that already points at a page needs no check.)
+      if (destinationUrl !== existing.destination_url) {
+        const pageProblem = await pageDestinationProblem(destinationUrl, session.userId);
+        if (pageProblem) return pageProblem;
+      }
     }
 
     // Collection assignment is tri-state: omit the key to leave it unchanged,

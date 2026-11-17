@@ -1,0 +1,626 @@
+/*
+ * A campaign page (CampaignPage.js). Every colour, font and corner comes from
+ * the --cp-… custom properties that lib/pageTheme.js sets on .page, so this
+ * one stylesheet draws every theme. One column, sized for a phone; on a wider
+ * screen the column stays phone-width in the middle.
+ */
+
+.page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--cp-bg);
+  color: var(--cp-text);
+  font-family: var(--cp-body-font);
+  font-size: calc(1rem * var(--cp-text-scale, 1));
+  line-height: 1.55;
+}
+
+.column {
+  max-width: 480px;
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.page a:focus-visible,
+.page button:focus-visible {
+  outline: 3px solid var(--cp-accent);
+  outline-offset: 3px;
+}
+
+/* ---- Header ---- */
+
+.cover {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: var(--cp-cover);
+}
+
+.coverBand {
+  height: 96px;
+  background: var(--cp-cover);
+}
+
+.headerText {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px 24px 0;
+}
+
+.withLogo {
+  margin-top: -36px;
+  padding-top: 0;
+}
+
+.logo {
+  width: 72px;
+  height: 72px;
+  border-radius: 999px;
+  border: 4px solid var(--cp-bg);
+  background: var(--cp-logo-bg);
+  object-fit: cover;
+}
+
+.title {
+  font-family: var(--cp-head-font);
+  font-weight: var(--cp-head-weight);
+  letter-spacing: var(--cp-head-tracking);
+  font-size: calc(2.1rem * var(--cp-head-scale, 1));
+  line-height: 1.12;
+  overflow-wrap: anywhere;
+}
+
+.tagline {
+  font-size: calc(1.06rem * var(--cp-text-scale, 1));
+  line-height: 1.5;
+  color: var(--cp-muted);
+}
+
+/* ---- Blocks ---- */
+
+.blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px 24px 8px;
+}
+
+/* In the editor's preview: each block can be clicked to edit it. */
+.editable {
+  border-radius: 14px;
+  outline: 2px solid transparent;
+  outline-offset: 6px;
+  cursor: pointer;
+  transition: outline-color 0.15s ease;
+}
+
+/* A block that draws nothing (a gallery with no photos yet) takes no room. */
+.editable:empty {
+  display: none;
+}
+
+.editable:hover {
+  outline-color: rgba(34, 211, 238, 0.5);
+}
+
+.editableOn,
+.editableOn:hover {
+  outline-color: #22d3ee;
+}
+
+.editableHeader {
+  border-radius: 0;
+  outline-offset: -3px;
+}
+
+.prose {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.prose h2,
+.prose h3 {
+  font-family: var(--cp-head-font);
+  font-weight: var(--cp-head-weight);
+  letter-spacing: var(--cp-head-tracking);
+  line-height: 1.25;
+}
+
+.prose h2 {
+  font-size: calc(1.35rem * var(--cp-head-scale, 1));
+}
+
+.prose h3 {
+  font-size: calc(1.12rem * var(--cp-head-scale, 1));
+}
+
+.prose ul,
+.prose ol {
+  padding-left: 1.3em;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.prose ul {
+  list-style: disc;
+}
+
+.prose ol {
+  list-style: decimal;
+}
+
+.prose a {
+  color: var(--cp-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.prose table {
+  border-collapse: collapse;
+  font-size: calc(0.94rem * var(--cp-text-scale, 1));
+}
+
+.prose th,
+.prose td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--cp-divider);
+  text-align: left;
+}
+
+.figure {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.image {
+  width: 100%;
+  height: auto;
+  border-radius: var(--cp-radius);
+  background: var(--cp-cover);
+}
+
+.caption {
+  font-size: calc(0.88rem * var(--cp-text-scale, 1));
+  line-height: 1.5;
+  color: var(--cp-muted);
+}
+
+.buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.button,
+.primary {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 20px;
+  border-radius: var(--cp-btn-radius);
+  font-size: calc(1rem * var(--cp-text-scale, 1));
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+  text-decoration: none;
+  background: var(--cp-btn2-bg);
+  color: var(--cp-btn2-ink);
+  border: var(--cp-btn2-border);
+}
+
+.primary {
+  background: var(--cp-btn-bg);
+  color: var(--cp-btn-ink);
+  border: var(--cp-btn-border);
+}
+
+.details {
+  padding: 4px 16px;
+  border-radius: var(--cp-radius);
+  background: var(--cp-surface);
+  border: var(--cp-surface-border);
+}
+
+.detail {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0;
+}
+
+.detail + .detail {
+  border-top: 1px solid var(--cp-divider);
+}
+
+.detailIcon {
+  color: var(--cp-accent);
+}
+
+.detailText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.detailLabel {
+  font-size: calc(0.82rem * var(--cp-text-scale, 1));
+  color: var(--cp-muted);
+}
+
+.detailValue {
+  font-size: calc(1rem * var(--cp-text-scale, 1));
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.offer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  border-radius: var(--cp-radius);
+  background: var(--cp-offer-bg);
+  color: var(--cp-offer-ink);
+  border: var(--cp-offer-border);
+}
+
+.offerLabel {
+  font-size: calc(0.75rem * var(--cp-text-scale, 1));
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cp-offer-label);
+}
+
+.offerHeadline {
+  font-family: var(--cp-head-font);
+  font-weight: var(--cp-head-weight);
+  letter-spacing: var(--cp-head-tracking);
+  font-size: calc(1.5rem * var(--cp-head-scale, 1));
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.offerText {
+  font-size: calc(0.95rem * var(--cp-text-scale, 1));
+  line-height: 1.5;
+  color: var(--cp-offer-muted);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.codeRow {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.code {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 2px dashed var(--cp-code-border);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: calc(1.12rem * var(--cp-text-scale, 1));
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.copy {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-size: calc(0.95rem * var(--cp-text-scale, 1));
+  font-weight: 600;
+  background: var(--cp-btn-bg);
+  color: var(--cp-btn-ink);
+  border: var(--cp-btn-border);
+}
+
+/* ---- Questions, opening hours, price lists ---- */
+
+.listBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.blockTitle {
+  font-family: var(--cp-head-font);
+  font-weight: var(--cp-head-weight);
+  letter-spacing: var(--cp-head-tracking);
+  font-size: calc(1.35rem * var(--cp-head-scale, 1));
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.faq {
+  border-radius: var(--cp-radius);
+  background: var(--cp-surface);
+  border: var(--cp-surface-border);
+}
+
+.faqItem + .faqItem {
+  border-top: 1px solid var(--cp-divider);
+}
+
+.faqQuestion {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  list-style: none;
+}
+
+.faqQuestion::-webkit-details-marker {
+  display: none;
+}
+
+.faqQuestion:focus-visible {
+  outline: 3px solid var(--cp-accent);
+  outline-offset: -3px;
+  border-radius: var(--cp-radius);
+}
+
+.faqChevron {
+  color: var(--cp-accent);
+  transition: transform 0.15s ease;
+}
+
+.faqItem[open] .faqChevron {
+  transform: rotate(180deg);
+}
+
+.faqAnswer {
+  padding: 0 16px 16px;
+  color: var(--cp-text);
+}
+
+.hours {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--cp-radius);
+  background: var(--cp-surface);
+  border: var(--cp-surface-border);
+}
+
+.hoursHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.hoursTitle {
+  font-size: calc(1rem * var(--cp-text-scale, 1));
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.hoursStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: calc(0.94rem * var(--cp-text-scale, 1));
+  font-weight: 600;
+}
+
+.dotOpen,
+.dotClosed {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--cp-accent);
+}
+
+.dotClosed {
+  background: transparent;
+  border: 2px solid var(--cp-muted);
+}
+
+.hoursTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: calc(0.94rem * var(--cp-text-scale, 1));
+}
+
+.hoursTable th,
+.hoursTable td {
+  padding: 7px 0;
+  border-top: 1px solid var(--cp-divider);
+  vertical-align: top;
+}
+
+.hoursTable th {
+  padding-right: 12px;
+  font-weight: 400;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.hoursTable td {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.today th,
+.today td {
+  font-weight: 700;
+}
+
+.hoursNote {
+  font-size: calc(0.88rem * var(--cp-text-scale, 1));
+  line-height: 1.5;
+  color: var(--cp-muted);
+}
+
+.prices {
+  display: flex;
+  flex-direction: column;
+}
+
+.priceItem {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 0;
+}
+
+.priceItem + .priceItem {
+  border-top: 1px solid var(--cp-divider);
+}
+
+.priceRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.priceName {
+  min-width: 0;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.priceTag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--cp-surface);
+  border: var(--cp-surface-border);
+  font-size: calc(0.75rem * var(--cp-text-scale, 1));
+  font-weight: 600;
+  vertical-align: 2px;
+  white-space: nowrap;
+}
+
+.price {
+  flex: none;
+  max-width: 45%;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.priceDescription {
+  font-size: calc(0.9rem * var(--cp-text-scale, 1));
+  line-height: 1.5;
+  color: var(--cp-muted);
+  overflow-wrap: anywhere;
+}
+
+/* ---- Gallery: a row that scrolls sideways, reaching the screen's edges ---- */
+
+.gallery {
+  display: flex;
+  gap: 10px;
+  margin: 0 -24px;
+  padding: 0 24px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-padding: 0 24px;
+  scrollbar-width: thin;
+  overscroll-behavior-x: contain;
+}
+
+.gallery:focus-visible {
+  outline: 3px solid var(--cp-accent);
+  outline-offset: 3px;
+}
+
+.galleryPhoto {
+  flex: 0 0 86%;
+  width: 86%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: var(--cp-radius);
+  background: var(--cp-cover);
+  scroll-snap-align: start;
+}
+
+/* ---- After the end date ---- */
+
+.ended {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 24px;
+  border-radius: var(--cp-radius);
+  background: var(--cp-surface);
+  border: var(--cp-surface-border);
+}
+
+.endedIcon {
+  color: var(--cp-accent);
+}
+
+.endedTitle {
+  font-family: var(--cp-head-font);
+  font-weight: var(--cp-head-weight);
+  letter-spacing: var(--cp-head-tracking);
+  font-size: calc(1.35rem * var(--cp-head-scale, 1));
+  line-height: 1.2;
+}
+
+.endedText {
+  color: var(--cp-muted);
+}
+
+/* ---- Footer ---- */
+
+.footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 24px 24px 28px;
+  font-size: calc(0.82rem * var(--cp-text-scale, 1));
+  color: var(--cp-muted);
+}
+
+.footer a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--cp-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

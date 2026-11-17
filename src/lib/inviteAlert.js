@@ -100,9 +100,10 @@ export function describeSendError(error) {
 
 /**
  * Send one email through Resend. Never throws. Returns { ok: true, id }, or
- * { ok: false, error } with a message an admin can act on.
+ * { ok: false, error } with a message an admin can act on. Also used for
+ * page report alerts (lib/pageReportAlert.js).
  */
-async function deliver(settings, { subject, text, replyTo }) {
+export async function deliver(settings, { subject, text, replyTo }) {
   try {
     const { data, error } = await getClient(settings.apiKey).emails.send(
       { from: settings.from, to: settings.to, replyTo, subject, text },

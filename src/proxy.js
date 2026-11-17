@@ -1,9 +1,10 @@
 /**
  * Proxy – runs before every page and API route.
  *
- * 1. Signed-in areas: /dashboard, /admin, /api/qrcodes, /api/analytics and
- *    /api/admin need a valid sign-in token. Public routes (/, /login,
- *    /register, /r/:shortId, /api/auth/*) are allowed through without one.
+ * 1. Signed-in areas: /dashboard, /admin, /api/qrcodes, /api/pages,
+ *    /api/analytics and /api/admin need a valid sign-in token. Public routes
+ *    (/, /login, /register, /r/:shortId, /api/auth/*) are allowed through
+ *    without one.
  *
  *    This only checks that the visitor has a valid token. Whether their
  *    account is still active is checked by getSession() (lib/auth.js), and
@@ -32,7 +33,7 @@ import {
 const COOKIE_NAME = 'qr-auth-token';
 
 // Each covers the path itself and everything below it.
-const SIGNED_IN_PATHS = ['/dashboard', '/admin', '/api/qrcodes', '/api/analytics', '/api/admin'];
+const SIGNED_IN_PATHS = ['/dashboard', '/admin', '/api/qrcodes', '/api/pages', '/api/analytics', '/api/admin'];
 
 function needsSignIn(pathname) {
   return SIGNED_IN_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));

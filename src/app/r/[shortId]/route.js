@@ -10,6 +10,9 @@
  * sent (see lib/scanRecorder.js), so recording never slows down or breaks a
  * scan.
  *
+ * A website code whose destination is a campaign page (lib/pageReference.js)
+ * redirects to the page, at /r/[shortId]/p/[pageId].
+ *
  * Email, phone and text message codes redirect straight to their mailto:,
  * tel: or sms: link in the phone browsers known to open those in the right
  * app (Safari, Chrome, Samsung Internet, Firefox, Edge; see lib/userAgent.js).
@@ -53,6 +56,7 @@ import { recordScanFromRequest, pruneIfDue } from '@/lib/scanRecorder';
 import { resolveDestination } from '@/lib/schedules';
 import { appLinkFor, getContentType, supportsSchedules } from '@/lib/contentTypes';
 import { isSitePath, redirectToSitePath } from '@/lib/siteRedirect';
+import { pageIdFromReference, pagePath } from '@/lib/pageReference';
 import { isBotUserAgent, opensAppLinks } from '@/lib/userAgent';
 import {
   UNLOCK_COOKIE,
@@ -122,6 +126,10 @@ function unavailable(reason) {
  * Otherwise, and after the password page, they go to their action page with
  * its button, which reads and checks the destination itself.
  *
+ * A campaign page ("qrgo-page:<id>", lib/pageReference.js) goes to the
+ * page's path under this code (/r/…/p/<id>), where the page checks the code
+ * and its password again before showing.
+ *
  * Anything else gets https:// in front unless it starts with http(s)://, so
  * a redirect can only ever go to a web link (a bad row fails to parse
  * instead).
@@ -130,6 +138,11 @@ async function destinationFor(qrcode, { appLinks = false } = {}) {
   const type = getContentType(qrcode.content_type);
   const schedules = supportsSchedules(type.id) ? await loadSchedules(qrcode.id) : [];
   const { url, scheduleId } = resolveDestination({ mainUrl: qrcode.destination_url, schedules });
+  // A campaign page: shown under this code, which it checks again itself.
+  const pageId = pageIdFromReference(url);
+  if (pageId !== null && type.id === 'url') {
+    return { url, scheduleId, href: pagePath(qrcode.short_id, pageId) };
+  }
   if (type.kind === 'action') {
     const appLink = appLinks ? appLinkFor(type.id, url) : null;
     return { url, scheduleId, href: appLink ?? `/r/${encodeURIComponent(qrcode.short_id)}/open` };

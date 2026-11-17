@@ -24,6 +24,7 @@ import {
   LockIcon
 } from "@/app/components/icons"
 import { formatChangeTime, displayUrl } from "./scheduledChanges"
+import { pageIdFromReference, pagePreviewPath } from "@/lib/pageReference"
 
 export default function QRCodeCard({
   qrcode,
@@ -143,6 +144,9 @@ export default function QRCodeCard({
 
   function getSafeUrl(url) {
     if (!url) return '#';
+    // A campaign page opens its preview.
+    const pageId = pageIdFromReference(url);
+    if (pageId !== null) return pagePreviewPath(pageId);
     try {
       const parsed = new URL(url);
       if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
@@ -188,9 +192,11 @@ export default function QRCodeCard({
               rel="noopener noreferrer"
               className="truncate"
               style={styles.destUrl}
-              title={qrcode.destinationUrl}
+              title={displayUrl(qrcode.destinationUrl, qrcode.pageNames)}
             >
-              {qrcode.destinationUrl}
+              {pageIdFromReference(qrcode.destinationUrl) !== null
+                ? displayUrl(qrcode.destinationUrl, qrcode.pageNames)
+                : qrcode.destinationUrl}
             </a>
           ) : (
             // Plain text, not a link: a mailto:/tel: link here would open the
@@ -219,10 +225,10 @@ export default function QRCodeCard({
       {qrcode.liveSchedule && (
         <div style={{ ...styles.nextChange, ...styles.liveSchedule }}>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div className="truncate" title={qrcode.liveSchedule.destinationUrl}>
+            <div className="truncate" title={displayUrl(qrcode.liveSchedule.destinationUrl, qrcode.pageNames)}>
               Live now: {qrcode.liveSchedule.label} →{" "}
               <span style={styles.nextChangeUrl}>
-                {displayUrl(qrcode.liveSchedule.destinationUrl)}
+                {displayUrl(qrcode.liveSchedule.destinationUrl, qrcode.pageNames)}
               </span>
             </div>
             {qrcode.liveSchedule.until && (
@@ -238,10 +244,10 @@ export default function QRCodeCard({
       {nextChange && (
         <div style={styles.nextChange}>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div className="truncate" title={nextChange.destinationUrl}>
+            <div className="truncate" title={displayUrl(nextChange.destinationUrl, qrcode.pageNames)}>
               Changes to{" "}
               <span style={styles.nextChangeUrl}>
-                {displayUrl(nextChange.destinationUrl)}
+                {displayUrl(nextChange.destinationUrl, qrcode.pageNames)}
               </span>
             </div>
             <div style={styles.nextChangeTime}>
@@ -254,7 +260,7 @@ export default function QRCodeCard({
             type="button"
             className="btn btn-ghost btn-sm"
             onClick={() => onCancelChange?.(qrcode, nextChange)}
-            aria-label={`Cancel the change to ${displayUrl(nextChange.destinationUrl)}`}
+            aria-label={`Cancel the change to ${displayUrl(nextChange.destinationUrl, qrcode.pageNames)}`}
           >
             Cancel
           </button>

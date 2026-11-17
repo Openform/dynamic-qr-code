@@ -1,6 +1,6 @@
 /**
  * Account packages: how many QR codes each one allows, and whether it can
- * use schedules and password protection.
+ * use schedules, password protection and campaign pages.
  *
  * Shared by the API (to enforce limits) and the UI (to show usage), so this
  * file must stay free of server-only imports.
@@ -13,12 +13,15 @@
 // set time is open to every package.
 // `passwords`: whether the account can give a code a password, which people
 // must enter after scanning before they're sent on.
+// `pageLimit`: how many campaign pages the account can have (0 = none). Every
+// package has a fixed number, Enterprise too, because pages hold uploaded
+// images.
 export const PACKAGES = [
-  { id: 'starter', name: 'Starter', limit: 5, yearlyPrice: 1500, schedules: false, passwords: false },
-  { id: 'business', name: 'Business', limit: 20, yearlyPrice: 3000, schedules: true, passwords: true },
-  { id: 'extended', name: 'Extended', limit: 50, yearlyPrice: 5000, schedules: true, passwords: true },
+  { id: 'starter', name: 'Starter', limit: 5, yearlyPrice: 1500, schedules: false, passwords: false, pageLimit: 0 },
+  { id: 'business', name: 'Business', limit: 20, yearlyPrice: 3000, schedules: true, passwords: true, pageLimit: 20 },
+  { id: 'extended', name: 'Extended', limit: 50, yearlyPrice: 5000, schedules: true, passwords: true, pageLimit: 50 },
   // A `null` limit means unlimited; a `null` price means custom pricing.
-  { id: 'enterprise', name: 'Enterprise', limit: null, yearlyPrice: null, schedules: true, passwords: true },
+  { id: 'enterprise', name: 'Enterprise', limit: null, yearlyPrice: null, schedules: true, passwords: true, pageLimit: 200 },
 ];
 
 /** Package given to accounts created through the public sign-up page. */
@@ -54,6 +57,20 @@ export function canUseSchedules(packageId) {
  */
 export function canUsePasswords(packageId) {
   return getPackage(packageId).passwords === true;
+}
+
+/**
+ * True when an account on this package can add and edit campaign pages.
+ * Accounts without it (e.g. after a downgrade) keep their pages showing, and
+ * can still switch them off or delete them, but not edit them.
+ */
+export function canUsePages(packageId) {
+  return getPackage(packageId).pageLimit > 0;
+}
+
+/** How many campaign pages an account on this package can have. */
+export function pageLimitFor(packageId) {
+  return getPackage(packageId).pageLimit;
 }
 
 /** True when an account on this package already has as many codes as it may. */

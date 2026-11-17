@@ -43,7 +43,7 @@ describe('proxy on production (no STAGING_PASSWORD)', () => {
   });
 
   it('answers signed-in API routes with 401 when signed out', async () => {
-    for (const path of ['/api/qrcodes', '/api/qrcodes/12/schedules', '/api/analytics', '/api/admin/accounts']) {
+    for (const path of ['/api/qrcodes', '/api/qrcodes/12/schedules', '/api/pages', '/api/pages/3', '/api/analytics', '/api/admin/accounts']) {
       const response = await proxy(request(path));
       expect(response.status).toBe(401);
       expect(await response.json()).toEqual({ error: 'Authentication required' });

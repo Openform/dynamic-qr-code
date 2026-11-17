@@ -22,6 +22,7 @@ import {
   userCanUseSchedules,
   idParam,
   SCHEDULES_PACKAGE_ERROR,
+  pageDestinationProblem,
 } from '@/lib/qrcodeApi';
 const { getSchedule, updateSchedule, deleteSchedule } = require('@/lib/db');
 
@@ -43,6 +44,10 @@ export async function PATCH(request, { params }) {
     const body = await request.json().catch(() => null);
     const input = parseScheduleInput(body, { existing });
     if (input.error) return Response.json({ error: input.error }, { status: 400 });
+    if (input.fields.destinationUrl !== undefined && input.fields.destinationUrl !== existing.destinationUrl) {
+      const pageProblem = await pageDestinationProblem(input.fields.destinationUrl, session.userId);
+      if (pageProblem) return pageProblem;
+    }
 
     const canEdit = await userCanUseSchedules(session.userId);
     if (!canEdit && !onlySwitchesOff(input.fields)) {

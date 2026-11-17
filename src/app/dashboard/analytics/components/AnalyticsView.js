@@ -521,7 +521,7 @@ function DestinationSelect({ destinations, value, onChange }) {
         <optgroup label="Main destination, one link">
           {periods.map((p) => (
             <option key={p.key} value={p.key}>
-              {displayUrl(p.url)} · {p.endedAt ? `${formatDate(p.startedAt)} – ${formatDate(p.endedAt)}` : `since ${formatDate(p.startedAt)}`}
+              {displayUrl(p.url, destinations.pageNames)} · {p.endedAt ? `${formatDate(p.startedAt)} – ${formatDate(p.endedAt)}` : `since ${formatDate(p.startedAt)}`}
             </option>
           ))}
         </optgroup>

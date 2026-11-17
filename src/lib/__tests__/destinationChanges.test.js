@@ -10,6 +10,14 @@ describe('parseScheduledChange', () => {
     ).toEqual({ destinationUrl: 'https://example.com/sale', startsAt: '2026-12-01 07:00:00' });
   });
 
+  it('accepts a campaign page as the new destination', () => {
+    expect(parseScheduledChange({ destinationUrl: ' qrgo-page:7 ', startsAt: '2026-12-01T07:00:00.000Z' }, NOW)).toEqual({
+      destinationUrl: 'qrgo-page:7',
+      startsAt: '2026-12-01 07:00:00',
+    });
+    expect(parseScheduledChange({ destinationUrl: 'qrgo-page:x', startsAt: '2026-12-01T07:00:00.000Z' }, NOW).error).toBeTruthy();
+  });
+
   it('converts a time with an offset to UTC', () => {
     // 09:00 in Johannesburg is 07:00 UTC.
     expect(

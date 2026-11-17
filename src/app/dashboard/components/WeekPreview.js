@@ -64,7 +64,7 @@ function clockChangeNote(minutes) {
  * being edited); `colorOf` and `labelOf` map schedule ids to a colour and a
  * name; `mainChanges` are pending changes to the main destination.
  */
-export default function WeekPreview({ schedules, mainUrl, mainChanges, viewerZone, colorOf, labelOf, note }) {
+export default function WeekPreview({ schedules, mainUrl, mainChanges, viewerZone, colorOf, labelOf, pageNames = null, note }) {
   const [now, setNow] = useState(() => Date.now())
   const [zoneChoice, setZoneChoice] = useState(viewerZone)
   const [tip, setTip] = useState(null)
@@ -208,7 +208,7 @@ export default function WeekPreview({ schedules, mainUrl, mainChanges, viewerZon
                       {clockText(tip.segment.start)}–{clockText(tip.segment.end)}
                     </strong>{" "}
                     {nameOf(tip.segment)}
-                    <span className={styles.tooltipUrl}>{displayUrl(tip.segment.url)}</span>
+                    <span className={styles.tooltipUrl}>{displayUrl(tip.segment.url, pageNames)}</span>
                   </span>
                 )}
               </div>
@@ -238,7 +238,7 @@ export default function WeekPreview({ schedules, mainUrl, mainChanges, viewerZon
               <strong>{dayLabel(day.date, index)}</strong>
               {clockChangeNote(day.minutes) && ` (${clockChangeNote(day.minutes).toLowerCase()})`}:{" "}
               {day.segments
-                .map((s) => `${clockText(s.start)}–${clockText(s.end)} ${nameOf(s)} (${displayUrl(s.url)})`)
+                .map((s) => `${clockText(s.start)}–${clockText(s.end)} ${nameOf(s)} (${displayUrl(s.url, pageNames)})`)
                 .join("; ")}
             </li>
           ))}

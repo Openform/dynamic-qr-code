@@ -10,11 +10,12 @@ import styles from "./FormattedText.module.css"
  *
  * `sourceLines` marks each block with the line of text it came from
  * (data-line), so the admin editor can scroll its preview to match.
+ * `className` replaces the legal pages' styles (campaign pages use their own).
  */
-export default function FormattedText({ content, sourceLines = false }) {
+export default function FormattedText({ content, sourceLines = false, className }) {
   const blocks = parseMarkdown(content)
   return (
-    <div className={styles.prose}>
+    <div className={className ?? styles.prose}>
       {blocks.map((block, index) => (
         <Block key={index} block={block} dataLine={sourceLines ? block.line : undefined} />
       ))}

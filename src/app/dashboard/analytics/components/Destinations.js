@@ -3,8 +3,12 @@
 import styles from "../analytics.module.css"
 import { formatDate, formatExact } from "./format"
 import { describeWeekly, displayUrl, viewerTimeZone } from "../../components/scheduledChanges"
+import { pageIdFromReference, pagePreviewPath } from "@/lib/pageReference"
 
 function safeHref(url) {
+  // A campaign page opens the owner's preview of it.
+  const pageId = pageIdFromReference(url)
+  if (pageId !== null) return pagePreviewPath(pageId)
   // Email, phone and text message destinations aren't web pages: show them
   // as text rather than opening the mail or phone app from here.
   if (/^(mailto|tel|sms):/i.test(String(url ?? ""))) return undefined
@@ -30,12 +34,12 @@ function periodDates(period) {
 export function destinationName(key, destinations) {
   if (key === "main") return "Main destination"
   const period = destinations?.periods.find((p) => p.key === key)
-  if (period) return `${displayUrl(period.url)} (${periodDates(period)})`
+  if (period) return `${displayUrl(period.url, destinations?.pageNames)} (${periodDates(period)})`
   const schedule = destinations?.scheduleList.find((s) => s.key === key)
   if (schedule) return schedule.label
   // A deleted schedule: named by where it sent scans, when that's known.
   const row = destinations?.schedules.find((r) => r.key === key)
-  return row ? `Deleted schedule · ${displayUrl(row.url)}` : "Deleted schedule"
+  return row ? `Deleted schedule · ${displayUrl(row.url, destinations?.pageNames)}` : "Deleted schedule"
 }
 
 /** When a schedule sends scans, for its row. */
@@ -150,13 +154,13 @@ export default function Destinations({ destinations, rangeLabel, selected, onSel
                 <td style={{ maxWidth: 380 }}>
                   {row.otherUrl ? (
                     <>
-                      {nameButton(row, displayUrl(row.url))}
+                      {nameButton(row, displayUrl(row.url, destinations?.pageNames))}
                       <span className={styles.muted}>Sent here as the destination changed</span>
                     </>
                   ) : (
                     <div className={styles.destinationName}>
-                      {nameButton(row, displayUrl(row.url))}
-                      <UrlLink url={row.url} className={styles.openLink} label={`Open ${displayUrl(row.url)}`}>
+                      {nameButton(row, displayUrl(row.url, destinations?.pageNames))}
+                      <UrlLink url={row.url} className={styles.openLink} label={`Open ${displayUrl(row.url, destinations?.pageNames)}`}>
                         ↗
                       </UrlLink>
                       {row.current && <span className={`badge badge-cyan ${styles.currentBadge}`}>Current</span>}
@@ -188,7 +192,7 @@ export default function Destinations({ destinations, rangeLabel, selected, onSel
                 <td style={{ maxWidth: 380 }}>
                   {nameButton(row, row.schedule ? row.schedule.label : "Deleted schedule")}
                   <UrlLink url={row.url} className={`${styles.ellipsis} ${styles.scheduleUrl}`}>
-                    {displayUrl(row.url)}
+                    {displayUrl(row.url, destinations?.pageNames)}
                   </UrlLink>
                   {row.otherUrl && <span className={styles.muted}>An earlier link of this schedule</span>}
                 </td>

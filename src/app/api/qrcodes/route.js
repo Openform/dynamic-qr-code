@@ -21,7 +21,7 @@ import { sealContent } from '@/lib/codeContent';
 // undefined for every field (the cause of URLs/styling vanishing on refresh).
 import { toClientQRCode, withClientContent, PRIVATE_HEADERS } from '@/lib/clientQRCode';
 import { scheduleSummary } from '@/lib/schedules';
-import { accessPasswordFromBody } from '@/lib/qrcodeApi';
+import { accessPasswordFromBody, pageDestinationProblem, withPageNames } from '@/lib/qrcodeApi';
 
 const {
   getQRCodesByUserId,
@@ -50,10 +50,13 @@ export async function GET() {
     ]);
     const schedulesByCode = Map.groupBy(schedules, (s) => s.qrcodeId);
     const now = Date.now();
-    const clientQRCodes = qrcodes.map((qr) => ({
-      ...withClientContent(qr),
-      ...scheduleSummary(schedulesByCode.get(qr.id) ?? [], now),
-    }));
+    const clientQRCodes = await withPageNames(
+      qrcodes.map((qr) => ({
+        ...withClientContent(qr),
+        ...scheduleSummary(schedulesByCode.get(qr.id) ?? [], now),
+      })),
+      session.userId
+    );
 
     return Response.json({ qrcodes: clientQRCodes }, { headers: PRIVATE_HEADERS });
   } catch (error) {
@@ -117,6 +120,9 @@ export async function POST(request) {
         { status: 400 }
       );
     }
+    // A campaign page as the destination must be one of the account's own.
+    const pageProblem = await pageDestinationProblem(checkedContent.destination, session.userId);
+    if (pageProblem) return pageProblem;
     const isStatic = isStaticType(contentType);
 
     // Resolve the target collection. A missing/empty/null value means the
@@ -207,10 +213,8 @@ export async function POST(request) {
       );
     }
 
-    return Response.json(
-      { qrcode: toClientQRCode(created.qrcode) },
-      { status: 201, headers: PRIVATE_HEADERS }
-    );
+    const [qrcode] = await withPageNames([toClientQRCode(created.qrcode)], session.userId);
+    return Response.json({ qrcode }, { status: 201, headers: PRIVATE_HEADERS });
   } catch (error) {
     console.error('POST /api/qrcodes error:', error);
     return Response.json(

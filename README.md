@@ -275,6 +275,68 @@ The API takes `accessPassword` on `POST /api/qrcodes` and
 leaving it out keeps it. Codes come back with `accessPassword` (`null` for
 none).
 
+## Campaign pages
+
+A campaign page is a simple mobile page a code can send scans to instead of
+a website: a sale with a promo code, an event, a menu, a contact card, a
+property listing or a guesthouse welcome. Owners build them at **Pages** in
+the dashboard (`/dashboard/pages`) and choose **Campaign page** as a code's
+destination, in a scheduled change or in a schedule.
+
+- **Packages.** Business (20 pages), Extended (50) and Enterprise (200)
+  (`pageLimit` in [`src/lib/packages.js`](src/lib/packages.js)). Starter
+  can't make pages. After a downgrade, pages keep showing and can be switched
+  off or deleted, but not edited.
+- **Building a page.** A page starts from a template, then the owner edits
+  its blocks (Content), theme, colour and fonts (Design), and its name and
+  end date (Settings), with a live preview. Saving publishes. Anything only
+  the owner knows starts as a `[placeholder]`, and the editor lists what's
+  left to fill in. The blocks and look are stored as JSON in
+  `campaign_pages.content`, checked by
+  [`src/lib/campaignPages.js`](src/lib/campaignPages.js) on every save;
+  nothing is ever treated as HTML.
+- **Address.** A page lives under the code that links to it,
+  `/r/<code>/p/<page>`, and every visit checks that code again
+  ([`src/lib/publicPage.js`](src/lib/publicPage.js)): its owner isn't
+  disabled, its password (if any) has been entered, and it sends scans to this
+  page. Opening the page doesn't count another scan.
+- **Photos** are resized and saved again in the browser before upload (so
+  phone photos lose their location), checked by their bytes on the server
+  (JPEG, PNG or WebP, at most 1 MB), and stored in `campaign_page_images`, at
+  most 24 per page. Photos a saved page no longer uses are deleted.
+- **Fonts** are self-hosted from `src/app/fonts/` (see its README), so pages
+  never load anything from another site. Pages get a stricter
+  Content-Security-Policy than the rest of the site (`next.config.mjs`).
+- **End date.** After it, a page shows "This campaign has ended", with one
+  button kept if the owner chose one, or carries on as it is.
+
+### Reports and take-downs
+
+Every page has a **Report this page** link at the bottom. It opens a short
+form (`/r/<code>/p/<page>/report`) that works without JavaScript: a reason,
+and an optional message. Only someone who can see the page can report it.
+Reports are saved in `campaign_page_reports` with no record of who sent them;
+each connection can send 5 an hour, and spam bots (caught by a hidden field)
+are dropped.
+
+The first report about a page is emailed through Resend, like invite
+requests, to `PAGE_REPORT_EMAILS` (comma-separated), or to the invite alert
+recipients when that isn't set. More reports about the same page don't send
+another email until it's been dealt with.
+
+Admins see reported pages at **Page reports** in the admin header
+(`/admin/reports`), with a count of pages waiting. **View page** shows the
+page as visitors see it (`/admin/pages/<page>`), with a list of where its
+buttons and links go. Then:
+
+- **Take down** hides the page: visitors get "QR code not found", and its
+  owner sees that QR Go took it down. Its open reports are closed.
+- **Restore** shows it again (if its owner has it switched on).
+- **Close reports** closes them and leaves the page up.
+
+For an account that keeps breaking the rules, disable it from **Accounts**:
+all its codes and pages stop showing.
+
 ## Scan analytics
 
 Every scan of a code is recorded after the visitor has been redirected, so
@@ -440,7 +502,7 @@ staging at quiet times.
 Hostinger redeploys whenever `main` or `staging` changes, so every pull request into either branch runs two checks (`.github/workflows/ci.yml`). Make both required in the branch rulesets for `main` and `staging`, so a PR can't merge until they pass.
 
 - **Lint, test and build**: `npm run lint`, `npm test` and a production build with webpack, as on Hostinger.
-- **Database migration check**: `scripts/ci/check-migrations.mjs` runs the app's own schema setup (`ensureSchema()` in `src/lib/db.js`) against a throwaway MariaDB. It fails if a change would remove a table, column or row, change an existing value, or break when it runs twice. It also checks that pruning old scans and old password page rows deletes exactly the rows it should. Then the same job runs the tests that need a database (`*.db.test.js`, skipped by `npm test` elsewhere): scans per destination must add up to each code's total, narrowing to a destination must match its row, and a password-protected code must ask for, check and remember its password, with the password page counted in analytics.
+- **Database migration check**: `scripts/ci/check-migrations.mjs` runs the app's own schema setup (`ensureSchema()` in `src/lib/db.js`) against a throwaway MariaDB. It fails if a change would remove a table, column or row, change an existing value, or break when it runs twice. It also checks that pruning old scans and old password page rows deletes exactly the rows it should. Then the same job runs the tests that need a database (`*.db.test.js`, skipped by `npm test` elsewhere): scans per destination must add up to each code's total, narrowing to a destination must match its row, a password-protected code must ask for, check and remember its password, with the password page counted in analytics, campaign pages must keep to their package's rules, stay private to their account and be deleted with it, a page must only be shown through a code that links to it, past that code's password, codes and schedules can only point at the account's own pages, a page's photos are only shown once the saved page uses them, under the same checks, its calendar and contact files are only given out for buttons visitors can see, a page can only be reported by someone who can see it (at most 5 reports an hour per connection), and only admins can take a page down, after which visitors get “not found”.
 
 The check starts from the schema `main` builds, filled with made-up sample rows (`scripts/ci/seed-data.mjs`). Production has been migrated through older versions, so it can differ from that. To test against production's real structure too, add `scripts/ci/prod-schema.sql`:
 

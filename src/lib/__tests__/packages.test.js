@@ -6,6 +6,8 @@ import {
   getPackage,
   canUseSchedules,
   canUsePasswords,
+  canUsePages,
+  pageLimitFor,
   hasReachedLimit,
   describeLimit,
   describePrice,
@@ -61,6 +63,18 @@ describe('packages', () => {
     // An unknown package falls back to Starter, so no passwords.
     expect(canUsePasswords('nonsense')).toBe(false);
     expect(canUsePasswords(undefined)).toBe(false);
+  });
+
+  it('allows campaign pages from Business up, with a fixed number on every package', () => {
+    expect(PACKAGES.map((p) => [p.id, canUsePages(p.id), pageLimitFor(p.id)])).toEqual([
+      ['starter', false, 0],
+      ['business', true, 20],
+      ['extended', true, 50],
+      ['enterprise', true, 200],
+    ]);
+    // An unknown package falls back to Starter, so no pages.
+    expect(canUsePages('nonsense')).toBe(false);
+    expect(pageLimitFor(undefined)).toBe(0);
   });
 });
 
