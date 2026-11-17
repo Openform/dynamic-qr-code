@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation"
 import { pagePreviewPath } from "@/lib/pageReference"
 import { pageStatus } from "@/lib/pageEditing"
 import { formatChangeTime } from "../components/scheduledChanges"
-import PagesHeader from "./PagesHeader"
 import NewPageDialog from "./NewPageDialog"
 import styles from "./pages.module.css"
 
@@ -97,7 +96,6 @@ export default function CampaignPagesList() {
 
   return (
     <div className={styles.wrapper}>
-      <PagesHeader current="pages" />
       <main className={`container ${styles.main}`}>
         <div className={styles.titleRow}>
           <div>

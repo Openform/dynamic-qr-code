@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { REASON_NAMES, groupReportsByPage } from "@/lib/pageReports"
 import { adminPagePath } from "@/lib/pageReference"
 import { formatDateTime, timeAgo, useNow } from "./adminTime"
@@ -125,6 +126,7 @@ function PageCard({ page, now, onReports, onError }) {
  * Closed (reports closed, page left up).
  */
 export default function PageReportsView({ initialReports, alertStatus }) {
+  const router = useRouter()
   const [reports, setReports] = useState(initialReports)
   const [tab, setTab] = useState("open")
   const [error, setError] = useState("")
@@ -137,24 +139,12 @@ export default function PageReportsView({ initialReports, alertStatus }) {
   function replaceReports(pageId, pageReports) {
     setError("")
     setReports((list) => [...list.filter((report) => report.pageId !== pageId), ...pageReports])
+    // The sidebar counts the pages with open reports.
+    router.refresh()
   }
 
   return (
     <div className={shared.page}>
-      <header className={shared.header}>
-        <div className={`container ${shared.headerInner}`}>
-          <div className={shared.headerGroup}>
-            <Link href="/admin">
-              <span className={`gradient-text ${shared.logo}`}>QR Go</span>
-            </Link>
-            <span className={`badge badge-purple ${shared.adminBadge}`}>Admin</span>
-          </div>
-          <Link href="/admin" className="btn btn-ghost btn-sm">
-            ← Back to Accounts
-          </Link>
-        </div>
-      </header>
-
       <main className={`container ${shared.main}`}>
         <h1 className={shared.pageTitle}>Page reports</h1>
         <p className={shared.pageSubtitle}>
