@@ -7,10 +7,8 @@ import CreateEditModal from "./components/CreateEditModal"
 import CollectionsBar from "./components/CollectionsBar"
 import CollectionModal from "./components/CollectionModal"
 import SchedulesModal from "./components/SchedulesModal"
-import Avatar from "./components/Avatar"
 import { formatChangeTime, displayUrl } from "./components/scheduledChanges"
 import { SearchIcon, InboxIcon } from "@/app/components/icons"
-import Link from "next/link"
 
 export default function DashboardPage() {
   const [user, setUser] = useState(null)
@@ -243,16 +241,6 @@ export default function DashboardPage() {
     [editingQR]
   )
 
-  async function handleLogout() {
-    try {
-      await fetch("/api/auth/logout", { method: "POST" })
-    } catch (error) {
-      console.error("Logout failed:", error)
-    }
-    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full page load, so nothing from the signed-out session stays in memory
-    window.location.href = "/"
-  }
-
   // ---- Collection handlers ----
 
   // Create or rename a collection. Throws on failure so CollectionModal can
@@ -401,65 +389,16 @@ export default function DashboardPage() {
 
   return (
     <div className="page-wrapper">
-      {/* ---- Header ---- */}
-      <header style={styles.header}>
-        <div className="container" style={styles.headerInner}>
-          <div style={styles.headerLeft}>
-            <Link href="/dashboard">
-              <span className="gradient-text" style={styles.logo}>
-                QR Go
-              </span>
-            </Link>
-          </div>
-          <div style={styles.headerRight}>
-            <Link
-              href="/dashboard/pages"
-              id="pages-link"
-              className="btn btn-ghost btn-sm"
-            >
-              Pages
-            </Link>
-            <Link
-              href="/dashboard/analytics"
-              id="analytics-link"
-              className="btn btn-ghost btn-sm"
-            >
-              Analytics
-            </Link>
-            {user?.isAdmin && (
-              <Link
-                href="/admin"
-                id="admin-link"
-                className="btn btn-ghost btn-sm"
-              >
-                Admin
-              </Link>
-            )}
-            <Link
-              href="/dashboard/settings"
-              id="profile-settings-link"
-              style={styles.profileLink}
-              title="Profile settings"
-            >
-              <Avatar src={user?.avatar} name={user?.name} size={34} />
-              <span style={styles.greeting}>{user?.name || "User"}</span>
-            </Link>
-            <button
-              id="logout-btn"
-              className="btn btn-ghost btn-sm"
-              onClick={handleLogout}
-            >
-              Log out
-            </button>
-          </div>
-        </div>
-      </header>
-
       {/* ---- Main Content ---- */}
       <main
         className="container"
         style={{ paddingTop: "32px", paddingBottom: "64px" }}
       >
+        <h1 style={styles.pageTitle}>QR codes</h1>
+        <p style={styles.pageSubtitle}>
+          Change where a code sends people at any time, without reprinting it.
+        </p>
+
         {/* Stats */}
         <div className="animate-fadeIn">
           <StatsCards
@@ -629,46 +568,15 @@ const styles = {
     justifyContent: "center",
     minHeight: "100vh"
   },
-  header: {
-    position: "sticky",
-    top: 0,
-    zIndex: 50,
-    backdropFilter: "blur(16px)",
-    WebkitBackdropFilter: "blur(16px)",
-    background: "rgba(10, 10, 26, 0.85)",
-    borderBottom: "1px solid rgba(255,255,255,0.06)"
-  },
-  headerInner: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    height: "64px"
-  },
-  headerLeft: {
-    display: "flex",
-    alignItems: "center"
-  },
-  logo: {
-    fontSize: "1.4rem",
+  pageTitle: {
+    fontSize: "1.6rem",
     fontWeight: 700,
     letterSpacing: "-0.02em"
   },
-  headerRight: {
-    display: "flex",
-    alignItems: "center",
-    gap: "16px"
-  },
-  greeting: {
-    fontSize: "0.9rem",
-    color: "var(--text-secondary)"
-  },
-  profileLink: {
-    display: "flex",
-    alignItems: "center",
-    gap: "10px",
-    padding: "4px 12px 4px 4px",
-    borderRadius: "9999px",
-    border: "1px solid var(--glass-border)"
+  pageSubtitle: {
+    color: "var(--text-secondary)",
+    marginTop: "4px",
+    marginBottom: "24px"
   },
   actionBar: {
     display: "flex",

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExter
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import CampaignPage from "@/app/components/campaign/CampaignPage"
+import { useConfirmLeave, useLeaveWarning } from "@/app/components/shell/leaveGuard"
 import { EyeIcon, LayersIcon, PaletteIcon, PlusIcon, SettingsIcon } from "@/app/components/icons"
 import { campaignFontClasses } from "@/app/components/campaign/fonts"
 import { AFTER_END, PAGE_LIMITS, THEMES, pageView, parsePageInput } from "@/lib/campaignPages"
@@ -12,7 +13,6 @@ import { BLOCK_LABELS, allButtons, blockName, editorTabFor, examplesLeft, isoToL
 import { imagesFor, ownerFilePath, pagePreviewPath } from "@/lib/pageReference"
 import { prepareImage } from "@/lib/imageResize"
 import { formatChangeTime } from "../../components/scheduledChanges"
-import PagesHeader from "../PagesHeader"
 import AddBlockDialog from "./AddBlockDialog"
 import BlockEditor from "./BlockEditor"
 import { TextField } from "./fields"
@@ -154,16 +154,10 @@ export default function PageEditor({ pageId }) {
 
   const dirty = Boolean(saved && draft) && JSON.stringify(requestFrom(draft)) !== JSON.stringify(requestFrom(draftFrom(saved)))
 
-  // Warn before leaving with unsaved changes.
-  useEffect(() => {
-    if (!dirty) return undefined
-    const warn = (e) => {
-      e.preventDefault()
-      e.returnValue = ""
-    }
-    window.addEventListener("beforeunload", warn)
-    return () => window.removeEventListener("beforeunload", warn)
-  }, [dirty])
+  // Warn before leaving with unsaved changes: closing the tab, or a link in
+  // the sidebar or the bar here.
+  useLeaveWarning(dirty)
+  const confirmLeave = useConfirmLeave()
 
   // Back to where this tab was scrolled to (the top, the first time).
   useLayoutEffect(() => {
@@ -208,7 +202,6 @@ export default function PageEditor({ pageId }) {
   if (loadError) {
     return (
       <div className={styles.wrapper}>
-        <PagesHeader current="pages" />
         <main className={`container ${styles.main}`}>
           <p className={styles.errorBox}>{loadError}</p>
           <p style={{ marginTop: 16 }}>
@@ -224,7 +217,6 @@ export default function PageEditor({ pageId }) {
   if (!draft) {
     return (
       <div className={styles.wrapper}>
-        <PagesHeader current="pages" />
         <main className={`container ${styles.main}`}>
           <p className={styles.subtitle}>Loading…</p>
         </main>
@@ -394,11 +386,14 @@ export default function PageEditor({ pageId }) {
 
   return (
     <div className={styles.wrapper}>
-      <PagesHeader current="pages" sticky={false} />
-
       <div ref={topRef} className={styles.top}>
         <div className={`container ${styles.bar}`}>
-          <Link href="/dashboard/pages" className={`btn btn-ghost btn-sm ${styles.back}`} aria-label="Back to pages">
+          <Link
+            href="/dashboard/pages"
+            className={`btn btn-ghost btn-sm ${styles.back}`}
+            aria-label="Back to pages"
+            onClick={(e) => confirmLeave() || e.preventDefault()}
+          >
             <span aria-hidden="true">←</span>
             <span className={styles.backText}>Pages</span>
           </Link>

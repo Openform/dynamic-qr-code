@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react"
-import Link from "next/link"
 import styles from "../analytics.module.css"
 import { RANGES } from "@/lib/analyticsFilters"
 import KpiRow from "./KpiRow"
@@ -258,20 +257,6 @@ export default function AnalyticsView({ mode = "user", initial }) {
 
   return (
     <div className={`page-wrapper ${styles.root}`}>
-      <header className={styles.header}>
-        <div className={`container ${styles.headerInner}`}>
-          <div className={styles.headerLeft}>
-            <Link href="/dashboard">
-              <span className={`gradient-text ${styles.logo}`}>QR Go</span>
-            </Link>
-            {admin && <span className={`badge badge-purple ${styles.adminBadge}`}>Admin</span>}
-          </div>
-          <Link href={admin ? "/admin" : "/dashboard"} className="btn btn-ghost btn-sm">
-            ← Back to {admin ? "Accounts" : "Dashboard"}
-          </Link>
-        </div>
-      </header>
-
       <main className={`container ${styles.main}`}>
         <div className={styles.titleRow}>
           <div style={{ minWidth: 0 }}>

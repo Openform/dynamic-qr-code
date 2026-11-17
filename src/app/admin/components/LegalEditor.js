@@ -3,13 +3,12 @@
 import {
   useDeferredValue,
   useLayoutEffect,
-  useEffect,
   useRef,
   useState,
   useSyncExternalStore
 } from "react"
-import Link from "next/link"
 import LegalDocument from "@/app/components/LegalDocument"
+import { useLeaveWarning } from "@/app/components/shell/leaveGuard"
 import { MAX_LEGAL_CONTENT_LENGTH, formatLegalDate } from "@/lib/legal"
 import {
   toggleWrap,
@@ -113,16 +112,9 @@ export default function LegalEditor({ initialPages }) {
     if (previewRef.current) previewRef.current.scrollTop = 0
   }, [activeSlug])
 
-  // Warn before closing the tab or reloading with unsaved changes.
-  useEffect(() => {
-    if (!anyDirty) return
-    const warn = (event) => {
-      event.preventDefault()
-      event.returnValue = ""
-    }
-    window.addEventListener("beforeunload", warn)
-    return () => window.removeEventListener("beforeunload", warn)
-  }, [anyDirty])
+  // Warn before closing the tab, reloading or following a sidebar link with
+  // unsaved changes.
+  useLeaveWarning(anyDirty)
 
   // Restore the selection after a toolbar change that had to go through state.
   useLayoutEffect(() => {
@@ -306,34 +298,13 @@ export default function LegalEditor({ initialPages }) {
     setNotice(null)
   }
 
-  function confirmLeave(event) {
-    if (anyDirty && !window.confirm("You have unsaved changes. Leave without saving them?")) {
-      event.preventDefault()
-    }
-  }
-
   const savedAt = inBrowser ? formatSavedAt(page.updatedAt) : ""
   const dateFollowsText = !draft.dateTouched && draft.lastUpdated !== page.lastUpdated
 
   return (
-    // Not .page-wrapper: its overflow: hidden would stop the header and
+    // Not .page-wrapper: its overflow: hidden would stop the
     // toolbar from sticking.
     <div className={styles.page} onKeyDown={handleKeyDown}>
-      {/* ---- Header ---- */}
-      <header className={styles.header}>
-        <div className={`container ${styles.headerInner}`}>
-          <div className={styles.headerGroup}>
-            <Link href="/admin" onClick={confirmLeave}>
-              <span className={`gradient-text ${styles.logo}`}>QR Go</span>
-            </Link>
-            <span className={`badge badge-purple ${styles.adminBadge}`}>Admin</span>
-          </div>
-          <Link href="/admin" className="btn btn-ghost btn-sm" onClick={confirmLeave}>
-            ← Back to Accounts
-          </Link>
-        </div>
-      </header>
-
       <main className={`container ${styles.main}`}>
         <h1 className={styles.pageTitle}>Legal pages</h1>
         <p className={styles.pageSubtitle}>
