@@ -14,6 +14,7 @@ import {
   localInputToIso,
   examplesLeft,
   hasPlaceholder,
+  editorTabFor,
 } from '../pageEditing';
 import { BUTTON_KINDS } from '../campaignPages';
 
@@ -158,5 +159,31 @@ describe('end times', () => {
       { nowMs: Date.parse('2026-11-16T00:00:00Z') }
     );
     expect(checked.ok).toBe(true);
+  });
+});
+
+describe('editorTabFor', () => {
+  const page = () => ({ name: 'Market', content: templateContent('menu', 'Market', { timeZone: 'Africa/Johannesburg' }), endsAt: null, afterEnd: 'ended', keptButton: null });
+  const tabOf = (change) => {
+    const body = page();
+    change(body);
+    const checked = parsePageInput(body);
+    expect(checked.ok).toBe(false);
+    return editorTabFor(checked.path);
+  };
+
+  it('opens the tab with the field the check points at', () => {
+    expect(tabOf((b) => (b.name = ''))).toBe('settings');
+    expect(tabOf((b) => (b.endsAt = 'soon'))).toBe('settings');
+    expect(tabOf((b) => (b.content.theme = 'neon'))).toBe('design');
+    expect(tabOf((b) => (b.content.bodyFont = 'caveat'))).toBe('design');
+    expect(tabOf((b) => (b.content.blocks[1].items[0].name = ''))).toBe('content');
+    expect(tabOf((b) => (b.content.blocks = []))).toBe('content');
+  });
+
+  it('stays put for an error that isn’t about one field', () => {
+    expect(editorTabFor(null)).toBe(null);
+    expect(editorTabFor('content')).toBe(null);
+    expect(editorTabFor(undefined)).toBe(null);
   });
 });

@@ -7,10 +7,14 @@ const LINKS = [
   { id: "analytics", href: "/dashboard/analytics", label: "Analytics" }
 ]
 
-/** The header on the campaign page screens. `current` marks the open section. */
-export default function PagesHeader({ current = "pages" }) {
+/**
+ * The header on the campaign page screens. `current` marks the open section.
+ * It stays at the top while scrolling, unless `sticky` is false (the editor
+ * keeps its own bar there instead).
+ */
+export default function PagesHeader({ current = "pages", sticky = true }) {
   return (
-    <header className={styles.header}>
+    <header className={`${styles.header}${sticky ? ` ${styles.headerSticky}` : ""}`}>
       <div className={`container ${styles.headerInner}`}>
         <Link href="/dashboard">
           <span className={`gradient-text ${styles.logo}`}>QR Go</span>

@@ -272,3 +272,21 @@ export function examplesLeft(content) {
   }
   return found;
 }
+
+/** The editor's tabs, in order: the blocks, the look, and the page's settings. */
+export const EDITOR_TABS = ['content', 'design', 'settings'];
+
+const DESIGN_FIELDS = new Set(['theme', 'brand', 'font', 'bodyFont', 'textSize', 'headingSize']);
+const SETTINGS_FIELDS = new Set(['name', 'endsAt', 'afterEnd', 'keptButton']);
+
+/**
+ * The editor tab with the field a check's error `path` points at (see
+ * parsePageInput in lib/campaignPages.js), or null when it isn't one field.
+ */
+export function editorTabFor(path) {
+  const field = typeof path === 'string' ? path.split('.')[0] : null;
+  if (field === 'blocks') return 'content';
+  if (DESIGN_FIELDS.has(field)) return 'design';
+  if (SETTINGS_FIELDS.has(field)) return 'settings';
+  return null;
+}

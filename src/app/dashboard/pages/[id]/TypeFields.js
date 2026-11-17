@@ -19,20 +19,21 @@ export default function TypeFields({ content, onChange }) {
       <FontChoices
         id="heading-font"
         label="Heading font"
-        options={[
-          // Follows the theme when the theme changes.
-          { id: null, font: themeFont, caption: "Theme’s font" },
-          ...FONTS.map((font) => ({ id: font.id, font: font.id }))
-        ]}
-        value={content.font ?? null}
+        fonts={FONTS.map((font) => font.id)}
+        // Choosing the theme's own font saves no font, so it follows the theme if that changes.
+        defaultFont={themeFont}
+        defaultCaption="Theme’s font"
+        value={content.font}
         onChange={(font) => onChange({ font })}
       />
       <FontChoices
         id="body-font"
         label="Text font"
         hint="Only fonts that stay easy to read in paragraphs on a phone."
-        options={BODY_FONTS.map((font) => ({ id: font.id === "inter" ? null : font.id, font: font.id, caption: font.id === "inter" ? "Default" : null }))}
-        value={content.bodyFont ?? null}
+        fonts={BODY_FONTS.map((font) => font.id)}
+        defaultFont="inter"
+        defaultCaption="Default"
+        value={content.bodyFont}
         onChange={(bodyFont) => onChange({ bodyFont })}
       />
       <div className={styles.fieldRow}>
@@ -46,8 +47,13 @@ export default function TypeFields({ content, onChange }) {
   )
 }
 
-/** Fonts to pick from, each name written in its own font. */
-function FontChoices({ id, label, hint, options, value, onChange }) {
+/**
+ * Fonts to pick from, each name written in its own font. `defaultFont` is
+ * the one used when none is chosen: picking it gives `onChange(null)`, and
+ * it's marked with `defaultCaption`.
+ */
+function FontChoices({ id, label, hint, fonts, defaultFont, defaultCaption, value, onChange }) {
+  const current = value ?? defaultFont
   return (
     <div className={styles.field}>
       <span id={`${id}-label`} className={styles.fieldLabel}>
@@ -55,20 +61,21 @@ function FontChoices({ id, label, hint, options, value, onChange }) {
       </span>
       {/* The fonts' CSS variables, so each name can be shown in its font. */}
       <div className={`${styles.fonts} ${campaignFontClasses}`} role="group" aria-labelledby={`${id}-label`}>
-        {options.map((option) => {
-          const on = option.id === value
+        {fonts.map((font) => {
+          const on = font === current
+          const isDefault = font === defaultFont
           return (
             <button
-              key={option.id ?? "default"}
+              key={font}
               type="button"
               aria-pressed={on}
               className={`${styles.font}${on ? ` ${styles.fontOn}` : ""}`}
-              onClick={() => onChange(option.id)}
+              onClick={() => onChange(isDefault ? null : font)}
             >
-              <span className={styles.fontSample} style={{ fontFamily: fontStack(option.font) }}>
-                {FONT_NAMES[option.font]}
+              <span className={styles.fontSample} style={{ fontFamily: fontStack(font) }}>
+                {FONT_NAMES[font]}
               </span>
-              {option.caption && <span className={styles.fontCaption}>{option.caption}</span>}
+              {isDefault && <span className={styles.fontCaption}>{defaultCaption}</span>}
             </button>
           )
         })}
