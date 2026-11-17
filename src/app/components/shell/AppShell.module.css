@@ -25,6 +25,19 @@
   --sidebar-width: 72px;
 }
 
+/* Collapsed with the sidebar's own button (AppShell.js), on any computer. */
+.collapsed {
+  --sidebar-width: 72px;
+}
+
+/* Expanded with that button where there's no room for it (narrower laptop
+   screens, the editor): it opens over the screen, which stays as it is. */
+.overlay .sidebar {
+  width: 240px;
+  background: #0d0d20;
+  box-shadow: var(--shadow-lg);
+}
+
 .content {
   min-width: 0;
   outline: none;
@@ -92,6 +105,61 @@
   margin-bottom: 12px;
 }
 
+/* Collapses and expands the sidebar, beside the logo. Its name shows in a
+   tag on hover: below it while the sidebar is wide (which can't show
+   anything past its edge), beside it like the links' names when it's icons. */
+.toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  margin-right: -8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+}
+
+.toggle:hover {
+  background: var(--glass-bg-hover);
+  color: var(--text-primary);
+}
+
+.toggle:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: -2px;
+}
+
+.toggle .label {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--glass-border-hover);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-md);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.toggle:hover .label,
+.toggle:focus-visible .label {
+  opacity: 1;
+  transition: opacity var(--transition-fast);
+}
+
+/* The toggle's label and icon for each width: "Collapse" while the sidebar
+   is wide, "Expand" while it's icons (see the container query below). */
+.whenIcons {
+  display: none;
+}
+
 .logo {
   font-size: 1.4rem;
   font-weight: 800;
@@ -145,9 +213,17 @@
   font-weight: 500;
   line-height: 1.3;
   text-align: left;
-  transition:
-    background var(--transition-fast),
-    color var(--transition-fast);
+}
+
+/* Each link's hover area reaches halfway across the 2px gap to the next, so
+   the pointer moves straight from one link to the next. With nothing hovered
+   in between, the highlight (and, when the sidebar is icons, the name) would
+   blink off and on again. Hover changes are immediate for the same reason:
+   a fade left the last link lit while the next one lit up. */
+.item::after {
+  content: "";
+  position: absolute;
+  inset: -1px 0;
 }
 
 .item:hover {
@@ -179,7 +255,6 @@
 
 .icon {
   color: var(--text-tertiary);
-  transition: color var(--transition-fast);
 }
 
 .item:hover .icon {
@@ -256,8 +331,25 @@
   }
 
   .brand {
+    flex-direction: column;
     justify-content: center;
+    gap: 6px;
     padding: 0;
+  }
+
+  /* Under the logo, the size of the links, with its name beside it as
+     theirs is. */
+  .toggle {
+    width: 100%;
+    height: 42px;
+    margin: 0;
+  }
+
+  .toggle .label {
+    top: 50%;
+    right: auto;
+    left: calc(100% + 14px);
+    translate: 0 -50%;
   }
 
   .logo {
@@ -288,16 +380,23 @@
     font-size: 0.85rem;
     opacity: 0;
     pointer-events: none;
-    translate: -4px -50%;
-    transition:
-      opacity var(--transition-fast),
-      translate var(--transition-fast);
+    translate: 0 -50%;
   }
 
+  /* A name fades in but goes at once, so moving to the next icon never
+     shows two. */
   .item:hover .label,
   .item:focus-visible .label {
     opacity: 1;
-    translate: 0 -50%;
+    transition: opacity var(--transition-fast);
+  }
+
+  .whenWide {
+    display: none;
+  }
+
+  .whenIcons {
+    display: inline;
   }
 
   .count {
@@ -340,12 +439,6 @@
   .accountName,
   .accountHint {
     display: block;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .label {
-    transition: none;
   }
 }
 

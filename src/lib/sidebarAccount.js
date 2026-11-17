@@ -4,9 +4,20 @@
  * and /admin layouts.
  */
 
+import { cookies } from 'next/headers';
 import { unstable_rethrow } from 'next/navigation';
+import { SIDEBAR_COOKIE, isSidebarCollapsed } from '@/lib/appNavigation';
 import { getSession, isAdminEmail } from '@/lib/auth';
 import { countOpenInviteRequests, countPagesWithOpenReports, getUserById } from '@/lib/db';
+
+/**
+ * Whether this browser has the sidebar collapsed to icons (its toggle sets a
+ * cookie), so the screen is drawn that way from the start.
+ */
+export async function loadSidebarCollapsed() {
+  const cookieStore = await cookies();
+  return isSidebarCollapsed(cookieStore.get(SIDEBAR_COOKIE)?.value);
+}
 
 /**
  * `{ user: { name, avatar, isAdmin }, adminCounts }`, where adminCounts is

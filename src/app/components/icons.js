@@ -575,6 +575,24 @@ export function CloseIcon(props) {
   )
 }
 
+export function PanelLeftCloseIcon(props) {
+  return (
+    <Icon {...props}>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M9 3v18M16 15l-3-3 3-3" />
+    </Icon>
+  )
+}
+
+export function PanelLeftOpenIcon(props) {
+  return (
+    <Icon {...props}>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M9 3v18M14 9l3 3-3 3" />
+    </Icon>
+  )
+}
+
 export function ContentTypeIcon({ type, ...props }) {
   const TypeIcon = CONTENT_TYPE_ICONS[type] ?? LinkIcon
   return <TypeIcon {...props} />

@@ -78,3 +78,35 @@ export function isFullScreen(pathname) {
 export function isEditorScreen(pathname) {
   return /^\/dashboard\/pages\/[^/]+\/?$/.test(String(pathname ?? ''));
 }
+
+/**
+ * The cookie that keeps the sidebar collapsed to icons on computers, set by
+ * the sidebar's toggle and read by the /dashboard and /admin layouts, so the
+ * screen is drawn the right width from the start. Without it the sidebar is
+ * expanded wherever there's room for it.
+ */
+export const SIDEBAR_COOKIE = 'qr-sidebar';
+
+/** Whether a SIDEBAR_COOKIE value means collapsed. */
+export function isSidebarCollapsed(value) {
+  return value === 'collapsed';
+}
+
+/** Whether a `document.cookie` string has the sidebar collapsed. */
+export function sidebarCollapsedIn(cookieHeader) {
+  for (const part of String(cookieHeader ?? '').split(';')) {
+    const [name, ...value] = part.trim().split('=');
+    if (name === SIDEBAR_COOKIE) return isSidebarCollapsed(value.join('='));
+  }
+  return false;
+}
+
+/**
+ * What to assign to `document.cookie` to remember the sidebar collapsed (for
+ * a year) or, when it's expanded again, to forget it. `secure` adds Secure,
+ * for pages served over HTTPS.
+ */
+export function sidebarCookie(collapsed, { secure = false } = {}) {
+  const value = collapsed ? 'collapsed; Max-Age=31536000' : '; Max-Age=0';
+  return `${SIDEBAR_COOKIE}=${value}; Path=/; SameSite=Lax${secure ? '; Secure' : ''}`;
+}

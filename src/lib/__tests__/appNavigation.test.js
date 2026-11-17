@@ -2,10 +2,14 @@ import { describe, expect, it } from 'vitest';
 import {
   ADMIN_NAV,
   MAIN_NAV,
+  SIDEBAR_COOKIE,
   isAdminScreen,
   isEditorScreen,
   isFullScreen,
+  isSidebarCollapsed,
   navItemFor,
+  sidebarCollapsedIn,
+  sidebarCookie,
 } from '../appNavigation';
 
 describe('navItemFor', () => {
@@ -63,5 +67,34 @@ describe('isEditorScreen', () => {
     expect(isEditorScreen('/dashboard/pages/12')).toBe(true);
     expect(isEditorScreen('/dashboard/pages')).toBe(false);
     expect(isEditorScreen('/dashboard/pages/12/preview')).toBe(false);
+  });
+});
+
+describe('the sidebar cookie', () => {
+  it('means collapsed only when it says so', () => {
+    expect(isSidebarCollapsed('collapsed')).toBe(true);
+    for (const value of [undefined, null, '', 'expanded', 'Collapsed', '1']) {
+      expect(isSidebarCollapsed(value)).toBe(false);
+    }
+  });
+
+  it('is found among the other cookies', () => {
+    expect(sidebarCollapsedIn(`${SIDEBAR_COOKIE}=collapsed`)).toBe(true);
+    expect(sidebarCollapsedIn(`a=1; ${SIDEBAR_COOKIE}=collapsed; b=2`)).toBe(true);
+    expect(sidebarCollapsedIn(`a=1; ${SIDEBAR_COOKIE}=; b=2`)).toBe(false);
+    expect(sidebarCollapsedIn(`x${SIDEBAR_COOKIE}=collapsed`)).toBe(false);
+    expect(sidebarCollapsedIn('')).toBe(false);
+    expect(sidebarCollapsedIn(undefined)).toBe(false);
+  });
+
+  it('is kept for a year when collapsed, and removed when expanded', () => {
+    expect(sidebarCookie(true)).toBe(`${SIDEBAR_COOKIE}=collapsed; Max-Age=31536000; Path=/; SameSite=Lax`);
+    expect(sidebarCookie(false)).toBe(`${SIDEBAR_COOKIE}=; Max-Age=0; Path=/; SameSite=Lax`);
+    expect(sidebarCookie(true, { secure: true })).toMatch(/; Secure$/);
+  });
+
+  it('reads back as it was written', () => {
+    expect(sidebarCollapsedIn(sidebarCookie(true).split(';')[0])).toBe(true);
+    expect(sidebarCollapsedIn(sidebarCookie(false).split(';')[0])).toBe(false);
   });
 });

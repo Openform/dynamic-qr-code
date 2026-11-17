@@ -1,6 +1,6 @@
 "use client"
 
-import { useContext, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react"
+import { useContext, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import Avatar from "@/app/dashboard/components/Avatar"
@@ -11,7 +11,9 @@ import {
   isAdminScreen,
   isEditorScreen,
   isFullScreen,
-  navItemFor
+  navItemFor,
+  sidebarCollapsedIn,
+  sidebarCookie
 } from "@/lib/appNavigation"
 import {
   ChartIcon,
@@ -20,6 +22,8 @@ import {
   LogOutIcon,
   MailIcon,
   MenuIcon,
+  PanelLeftCloseIcon,
+  PanelLeftOpenIcon,
   QrCodeIcon,
   ScaleIcon,
   ShieldIcon,
@@ -59,6 +63,34 @@ function usePhoneLayout() {
   )
 }
 
+// Narrower laptop screens, where the sidebar is icons unless it's opened
+// over the screen. The same width as in AppShell.module.css.
+const NARROW_QUERY = "(max-width: 1199px)"
+
+// Whether the sidebar is collapsed lives in a cookie (see SIDEBAR_COOKIE in
+// lib/appNavigation.js), so the server draws each screen the right width and
+// the /dashboard and /admin screens agree.
+const collapsedListeners = new Set()
+
+function subscribeToCollapsed(callback) {
+  collapsedListeners.add(callback)
+  return () => collapsedListeners.delete(callback)
+}
+
+function readCollapsed() {
+  return sidebarCollapsedIn(document.cookie)
+}
+
+function saveCollapsed(collapsed) {
+  document.cookie = sidebarCookie(collapsed, { secure: window.location.protocol === "https:" })
+  for (const listener of collapsedListeners) listener()
+}
+
+/** `collapsedOnServer` is the cookie as the layout read it. */
+function useCollapsed(collapsedOnServer) {
+  return useSyncExternalStore(subscribeToCollapsed, readCollapsed, () => collapsedOnServer)
+}
+
 /**
  * The frame around the signed-in screens (/dashboard and /admin, from their
  * layouts): a sidebar with the sections, the admin sections for admins, and
@@ -66,38 +98,96 @@ function usePhoneLayout() {
  * editor, the sidebar shrinks to icons with their names on hover; on phones
  * it's a menu bar whose Menu button slides the sidebar in.
  *
- * `user` is `{ name, avatar, isAdmin }` (null if it couldn't be loaded), and
- * `adminCounts` the open `{ invites, reports }` for admins. A campaign page's
+ * The button at the top of the sidebar collapses it to icons, or expands it
+ * again, on any computer screen; the choice is kept in a cookie. Where it's
+ * icons only for want of room (narrower screens, the editor), expanding it
+ * opens it over the screen until a section is chosen, Escape is pressed or
+ * the screen is clicked.
+ *
+ * `user` is `{ name, avatar, isAdmin }` (null if it couldn't be loaded),
+ * `adminCounts` the open `{ invites, reports }` for admins, and `collapsed`
+ * whether the sidebar's cookie has it collapsed. A campaign page's
  * preview and an admin's view of a reported page show without the frame
  * (lib/appNavigation.js).
  *
  * Screens with unsaved work warn before a sidebar link leaves them: see
  * useLeaveWarning in ./leaveGuard.js.
  */
-export default function AppShell({ user, adminCounts, children }) {
+export default function AppShell({ user, adminCounts, collapsed: collapsedOnServer = false, children }) {
   const pathname = usePathname()
   const [guard] = useState(createLeaveGuard)
   const phone = usePhoneLayout()
+  const collapsed = useCollapsed(collapsedOnServer)
   // The menu stays open on the screen it was opened on, so going to another
   // screen closes it, as does widening the window past phone size.
   const [menuOpenOn, setMenuOpenOn] = useState(null)
   const menuOpen = phone && menuOpenOn === pathname
+  // Likewise the sidebar opened over the screen where there's no room for it.
+  const [overlayOn, setOverlayOn] = useState(null)
+  const overlay = !phone && overlayOn === pathname
+  const sidebarRef = useRef(null)
+
+  // A click outside the sidebar opened over the screen, or Escape, closes it.
+  useEffect(() => {
+    if (!overlay) return
+    const close = () => setOverlayOn(null)
+    const onPointerDown = (event) => {
+      if (!sidebarRef.current?.contains(event.target)) close()
+    }
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") close()
+    }
+    document.addEventListener("pointerdown", onPointerDown)
+    document.addEventListener("keydown", onKeyDown)
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown)
+      document.removeEventListener("keydown", onKeyDown)
+    }
+  }, [overlay])
 
   if (isFullScreen(pathname)) {
     return <LeaveGuardContext value={guard}>{children}</LeaveGuardContext>
   }
 
   const closeMenu = () => setMenuOpenOn(null)
+  const closeOverlay = () => setOverlayOn(null)
+
+  // The sidebar's own button. It reads "Collapse" while the sidebar is wide
+  // and "Expand" while it's icons (AppShell.module.css), whatever the reason.
+  // Where there's no room to keep it expanded, it opens over the screen for
+  // a moment, leaving the choice kept for wider screens as it is.
+  function toggleSidebar() {
+    if (overlay) {
+      closeOverlay()
+    } else if (noRoomForSidebar(pathname)) {
+      setOverlayOn(pathname)
+    } else {
+      saveCollapsed(!collapsed)
+    }
+  }
+
+  const shellClasses = [
+    styles.shell,
+    isEditorScreen(pathname) && styles.editorScreen,
+    collapsed && styles.collapsed,
+    overlay && styles.overlay
+  ]
 
   return (
     <LeaveGuardContext value={guard}>
-      <div className={`${styles.shell}${isEditorScreen(pathname) ? ` ${styles.editorScreen}` : ""}`}>
+      <div className={shellClasses.filter(Boolean).join(" ")}>
         <a href="#content" className={styles.skip}>
           Skip to content
         </a>
 
-        <header className={styles.sidebar}>
-          <Sidebar user={user} adminCounts={adminCounts} pathname={pathname} />
+        <header ref={sidebarRef} className={styles.sidebar}>
+          <Sidebar
+            user={user}
+            adminCounts={adminCounts}
+            pathname={pathname}
+            onNavigate={closeOverlay}
+            onToggle={toggleSidebar}
+          />
         </header>
 
         <header className={styles.menuBar}>
@@ -131,11 +221,20 @@ export default function AppShell({ user, adminCounts, children }) {
 }
 
 /**
- * The sidebar's contents, in the sidebar on computers and in the menu on
- * phones. `onNavigate` runs when a link is followed, and `onClose` adds a
- * close button (the menu).
+ * Whether the window or the screen leaves the sidebar only room for icons
+ * (narrower laptop screens and the page editor).
  */
-function Sidebar({ user, adminCounts, pathname, onNavigate, onClose }) {
+function noRoomForSidebar(pathname) {
+  return isEditorScreen(pathname) || window.matchMedia(NARROW_QUERY).matches
+}
+
+/**
+ * The sidebar's contents, in the sidebar on computers and in the menu on
+ * phones. `onNavigate` runs when a link is followed, `onToggle` adds the
+ * button that collapses and expands it (the sidebar), and `onClose` a close
+ * button (the menu).
+ */
+function Sidebar({ user, adminCounts, pathname, onNavigate, onToggle, onClose }) {
   const confirmLeave = useConfirmLeave()
   const guard = useContext(LeaveGuardContext)
   const adminLabel = useId()
@@ -200,6 +299,18 @@ function Sidebar({ user, adminCounts, pathname, onNavigate, onClose }) {
         <Link href="/dashboard" className={`gradient-text ${styles.logo}`} onClick={(event) => follow(event, "/dashboard")}>
           QR Go
         </Link>
+        {onToggle && (
+          // Both labels and icons are here; the stylesheet shows the pair
+          // that fits how wide the sidebar is.
+          <button type="button" className={styles.toggle} onClick={onToggle}>
+            <PanelLeftCloseIcon size={18} className={styles.whenWide} />
+            <PanelLeftOpenIcon size={18} className={styles.whenIcons} />
+            <span className={styles.label}>
+              <span className={styles.whenWide}>Collapse sidebar</span>
+              <span className={styles.whenIcons}>Expand sidebar</span>
+            </span>
+          </button>
+        )}
         {onClose && (
           <button type="button" className={styles.closeButton} onClick={onClose} aria-label="Close menu">
             <CloseIcon size={20} />

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation"
 import AppShell from "@/app/components/shell/AppShell"
-import { loadSidebarAccount } from "@/lib/sidebarAccount"
+import { loadSidebarAccount, loadSidebarCollapsed } from "@/lib/sidebarAccount"
 
 /**
  * The frame (sidebar) around every /dashboard screen. Signed-out visitors
@@ -8,10 +8,13 @@ import { loadSidebarAccount } from "@/lib/sidebarAccount"
  * account has gone.
  */
 export default async function DashboardLayout({ children }) {
-  const { signedOut, user, adminCounts } = await loadSidebarAccount()
+  const [{ signedOut, user, adminCounts }, collapsed] = await Promise.all([
+    loadSidebarAccount(),
+    loadSidebarCollapsed()
+  ])
   if (signedOut) redirect("/login")
   return (
-    <AppShell user={user} adminCounts={adminCounts}>
+    <AppShell user={user} adminCounts={adminCounts} collapsed={collapsed}>
       {children}
     </AppShell>
   )
