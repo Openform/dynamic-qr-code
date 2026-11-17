@@ -1,10 +1,9 @@
 "use client"
 
-import { TrashIcon } from "@/app/components/icons"
 import { PAGE_LIMITS } from "@/lib/campaignPages"
 import { DAY_NAMES } from "@/lib/openingHours"
 import { localTimeZone } from "@/lib/pageEditing"
-import { IconButton, TextField } from "./fields"
+import { TextField } from "./fields"
 import styles from "../pages.module.css"
 
 /**
@@ -78,16 +77,16 @@ export default function HoursFields({ block, path, onChange, errorFor }) {
                         value={period.close}
                         onChange={(e) => setDay(index, periods.map((x, i) => (i === p ? { ...x, close: e.target.value } : x)))}
                       />
-                      {p > 0 && (
-                        <IconButton label={`Remove ${name}’s second time`} onClick={() => setDay(index, periods.slice(0, 1))}>
-                          <TrashIcon size={16} />
-                        </IconButton>
-                      )}
                     </div>
                   ))}
                   {isOpen && periods.length < PAGE_LIMITS.hoursPeriods && (
                     <button type="button" className={styles.textButton} onClick={() => addBreak(index)}>
                       + Add a break
+                    </button>
+                  )}
+                  {periods.length > 1 && (
+                    <button type="button" className={styles.textButton} onClick={() => setDay(index, periods.slice(0, 1))} aria-label={`Remove ${name}’s second time`}>
+                      Remove the second time
                     </button>
                   )}
                 </div>

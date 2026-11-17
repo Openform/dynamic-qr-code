@@ -614,6 +614,8 @@
   border-radius: var(--radius-md);
   background: var(--bg-secondary);
   border: 1px solid var(--glass-border);
+  /* Clear of the bar and tabs at the top when scrolled to. */
+  scroll-margin-top: 128px;
 }
 
 .blockOpen {
@@ -636,11 +638,228 @@
   min-width: 0;
   min-height: 44px;
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 1px;
+  align-items: center;
+  gap: 12px;
   text-align: left;
   color: var(--text-primary);
+}
+
+.blockIcon {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: rgba(0, 212, 255, 0.08);
+  color: #7ee8ff;
+}
+
+.blockOpen .blockIcon {
+  background: rgba(0, 212, 255, 0.18);
+}
+
+.blockText {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.blockTools {
+  display: flex;
+  gap: 2px;
+}
+
+/* The "⋯" menu stands in for the row of icons on a phone. */
+.blockMenu {
+  position: relative;
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .blockTools {
+    display: none;
+  }
+
+  .blockMenu {
+    display: block;
+  }
+
+  .blockHead {
+    padding-left: 10px;
+  }
+
+  .blockToggle {
+    gap: 10px;
+  }
+}
+
+.menuList {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--glass-border-hover);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 0.92rem;
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.menuItem:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.menuItem:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.menuDanger {
+  color: #fca5a5;
+}
+
+.blockFoot {
+  padding-top: 12px;
+  border-top: 1px dashed var(--glass-border);
+}
+
+.blockFoot .textButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* "Add a block" at the end of the list. */
+.addButton {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: var(--radius-md);
+  border: 1.5px dashed rgba(255, 255, 255, 0.22);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.addButton:hover {
+  border-color: var(--cyan);
+  background: rgba(0, 212, 255, 0.05);
+}
+
+/* The Add a block dialog. */
+.addDialog {
+  width: calc(100% - 32px);
+  max-width: 680px;
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  overflow: visible;
+}
+
+.addDialog::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+}
+
+.addCard {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  padding: 24px;
+  border-radius: var(--radius-xl);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--glass-border);
+}
+
+.addGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 8px;
+}
+
+.addTile {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  border: 1px solid var(--glass-border);
+  text-align: left;
+  color: var(--text-primary);
+}
+
+.addTile:hover,
+.addTile:focus-visible {
+  border-color: var(--cyan);
+}
+
+.addIcon {
+  width: 38px;
+  height: 38px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(0, 212, 255, 0.1);
+  color: #7ee8ff;
+}
+
+.addText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.addName {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.addDescription {
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 520px) {
+  .addDialog {
+    width: 100%;
+    max-width: none;
+    margin: auto 0 0;
+  }
+
+  .addCard {
+    padding: 18px 16px;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  }
+
+  .addTile {
+    padding: 10px;
+  }
 }
 
 .blockType {
@@ -712,21 +931,6 @@
   flex: 1;
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--text-secondary);
-}
-
-.addRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 14px;
-  border-radius: var(--radius-md);
-  border: 1.5px dashed rgba(255, 255, 255, 0.18);
-}
-
-.addLabel {
-  flex: 1 1 100%;
-  font-size: 0.85rem;
   color: var(--text-secondary);
 }
 
@@ -917,6 +1121,50 @@
   width: 148px;
   padding-top: 6px;
   padding-bottom: 6px;
+}
+
+/* On a phone, the times share the row's width instead of running off it. */
+@media (max-width: 600px) {
+  .card {
+    padding: 16px;
+  }
+
+  .blockBody {
+    padding: 14px 12px 14px;
+  }
+
+  .hoursDay {
+    padding: 8px 10px;
+  }
+
+  .hoursTimes {
+    min-width: 0;
+    align-items: stretch;
+  }
+
+  /* Side by side when they fit, else the closing time goes under the opening one. */
+  .hoursPeriod {
+    flex-wrap: wrap;
+  }
+
+  .hoursPeriod input {
+    flex: 1 1 100px;
+    width: 0;
+    min-width: 100px;
+    max-width: 148px;
+    padding-left: 10px;
+    padding-right: 6px;
+  }
+
+  .hoursTimes .textButton {
+    align-self: flex-start;
+  }
+
+  /* Long button labels wrap rather than run off the screen. */
+  .blockBody .rowActions :global(.btn) {
+    white-space: normal;
+    text-align: left;
+  }
 }
 
 /* A small action that reads as a link, for one repeated on every row. */

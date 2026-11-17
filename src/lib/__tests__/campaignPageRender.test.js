@@ -38,9 +38,9 @@ function content(change = (page) => page) {
   return checked.content;
 }
 
-function render(pageContent, { ended = false, keptButton = null, images, reportHref, fileHref, nowMs } = {}) {
+function render(pageContent, { ended = false, keptButton = null, images, reportHref, fileHref, nowMs, editing } = {}) {
   const page = { content: pageContent, endsAt: ended ? '2000-01-01 00:00:00' : null, afterEnd: 'ended', keptButton };
-  return renderToStaticMarkup(createElement(CampaignPage, { content: pageContent, view: pageView(page, nowMs), images, reportHref, fileHref }));
+  return renderToStaticMarkup(createElement(CampaignPage, { content: pageContent, view: pageView(page, nowMs), images, reportHref, fileHref, editing }));
 }
 
 /** Every href in the HTML. */
@@ -154,6 +154,15 @@ describe('CampaignPage', () => {
   it('only shows “Report this page” when there’s somewhere to report to', () => {
     expect(render(content())).not.toContain('Report this page');
     expect(render(content(), { reportHref: '/r/abc/p/1/report' })).toContain('Report this page');
+  });
+
+  it('marks each block for the editor’s preview, and only there', () => {
+    expect(render(content())).not.toContain('data-block-id');
+    const html = render(content(), { editing: { openId: 'offer', onPick: () => {} } });
+    const ids = [...html.matchAll(/data-block-id="([^"]*)"/g)].map((m) => m[1]);
+    // The image block has no photo, so it draws nothing, but keeps its place.
+    expect(ids).toEqual(['header', 'offer', 'about', 'contact', 'details', 'photo']);
+    expect(html.match(/class="[^"]*editableOn[^"]*" data-block-id="([^"]*)"/)[1]).toBe('offer');
   });
 });
 

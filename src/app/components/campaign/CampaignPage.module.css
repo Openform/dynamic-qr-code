@@ -90,6 +90,34 @@
   padding: 24px 24px 8px;
 }
 
+/* In the editor's preview: each block can be clicked to edit it. */
+.editable {
+  border-radius: 14px;
+  outline: 2px solid transparent;
+  outline-offset: 6px;
+  cursor: pointer;
+  transition: outline-color 0.15s ease;
+}
+
+/* A block that draws nothing (a gallery with no photos yet) takes no room. */
+.editable:empty {
+  display: none;
+}
+
+.editable:hover {
+  outline-color: rgba(34, 211, 238, 0.5);
+}
+
+.editableOn,
+.editableOn:hover {
+  outline-color: #22d3ee;
+}
+
+.editableHeader {
+  border-radius: 0;
+  outline-offset: -3px;
+}
+
 .prose {
   display: flex;
   flex-direction: column;

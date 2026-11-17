@@ -10,17 +10,17 @@
 import { isPageEnded } from './campaignPages';
 import { isValidTimeZone } from './scheduleInput';
 
-/** Blocks the editor offers to add (the header is always there). */
+/** Blocks the editor offers to add (the header is always there), with a line on what each is for. */
 export const ADDABLE_BLOCKS = [
-  { type: 'text', label: 'Text' },
-  { type: 'buttons', label: 'Buttons' },
-  { type: 'details', label: 'Details' },
-  { type: 'offer', label: 'Offer' },
-  { type: 'image', label: 'Image' },
-  { type: 'gallery', label: 'Gallery' },
-  { type: 'faq', label: 'FAQ' },
-  { type: 'hours', label: 'Opening hours' },
-  { type: 'prices', label: 'Price list' },
+  { type: 'text', label: 'Text', description: 'Paragraphs, with bold, lists and links.' },
+  { type: 'buttons', label: 'Buttons', description: 'Call, WhatsApp, email, a link, directions, a calendar event or a contact.' },
+  { type: 'details', label: 'Details', description: 'Short facts with icons, like when, where and the price.' },
+  { type: 'image', label: 'Image', description: 'One photo, with a caption and a link if you like.' },
+  { type: 'gallery', label: 'Gallery', description: 'A few photos in a row that scrolls sideways.' },
+  { type: 'offer', label: 'Offer', description: 'A deal in big letters, with a promo code to copy.' },
+  { type: 'prices', label: 'Price list', description: 'Items and their prices, like a menu or your services.' },
+  { type: 'hours', label: 'Opening hours', description: 'Your week’s hours, and whether you’re open right now.' },
+  { type: 'faq', label: 'FAQ', description: 'Questions that open to show their answers.' },
 ];
 
 /** What each block is called in the editor. */
@@ -246,7 +246,7 @@ export function hasPlaceholder(value) {
 }
 
 /** A block's name for a list: "Details", or "Price list “Coffee”" when it has a heading. */
-function blockName(block) {
+export function blockName(block) {
   const label = BLOCK_LABELS[block.type] ?? block.type;
   return block.type !== 'header' && block.title && block.title !== label ? `${label} “${block.title}”` : label;
 }

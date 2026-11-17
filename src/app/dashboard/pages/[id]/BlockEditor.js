@@ -1,18 +1,21 @@
 "use client"
 
-import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon, EyeIcon, EyeOffIcon, TrashIcon } from "@/app/components/icons"
+import { useEffect, useId, useRef, useState } from "react"
+import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon, EyeIcon, EyeOffIcon, MoreIcon, PlusIcon, TrashIcon } from "@/app/components/icons"
 import { BUTTON_KINDS, DETAIL_ICONS, PAGE_LIMITS } from "@/lib/campaignPages"
 import { BLOCK_LABELS, BUTTON_DEFAULT_LABELS, BUTTON_FIELDS, isoToLocalInput, localInputToIso, move, newButton } from "@/lib/pageEditing"
 import { LOGO_MAX_SIDE, PHOTO_MAX_SIDE } from "@/lib/imageResize"
 import { dayHoursText } from "@/lib/openingHours"
 import { IconButton, ImageField, SubItemHead, TextField } from "./fields"
+import { BlockIcon } from "./blockIcons"
 import HoursFields from "./HoursFields"
 import { FaqFields, GalleryFields, PricesFields } from "./ListBlockFields"
 import styles from "../pages.module.css"
 
 /**
- * One block in the page editor: a row with its name and summary, arrows to
- * move it, hide and delete buttons, and its fields when it's open.
+ * One block in the page editor: a row with its icon, name and summary,
+ * arrows to move it, hide and delete buttons (in a "⋯" menu on a phone), and
+ * when it's open, its fields and a way to add a block below it.
  *
  * `errorFor(path)` gives the message for a field from the page checks
  * (lib/campaignPages.js), whose paths look like "blocks.3.items.0.label";
@@ -30,6 +33,7 @@ export default function BlockEditor({
   onChange,
   onMove,
   onRemove,
+  onAddBelow,
   errorFor,
   images,
   onUpload
@@ -39,33 +43,43 @@ export default function BlockEditor({
   const set = (key) => (value) => onChange({ ...block, [key]: value })
   const bodyId = `${block.id}-fields`
 
+  const actions = isHeader
+    ? []
+    : [
+        // `label` is for the menu; `name` is for the icon on its own.
+        { label: "Move up", name: `Move ${label} up`, Icon: ArrowUpIcon, onClick: () => onMove(-1), disabled: !canMoveUp },
+        { label: "Move down", name: `Move ${label} down`, Icon: ArrowDownIcon, onClick: () => onMove(1), disabled: !canMoveDown },
+        block.hidden
+          ? { label: "Show on the page", name: `Show ${label}`, Icon: EyeOffIcon, onClick: () => onChange({ ...block, hidden: false }) }
+          : { label: "Hide from the page", name: `Hide ${label}`, Icon: EyeIcon, onClick: () => onChange({ ...block, hidden: true }) },
+        { label: "Delete", name: `Delete ${label}`, Icon: TrashIcon, onClick: onRemove, danger: true }
+      ]
+
   return (
-    <li className={`${styles.block}${open ? ` ${styles.blockOpen}` : ""}${hasError ? ` ${styles.blockError}` : ""}`}>
+    <li id={`block-${block.id}`} className={`${styles.block}${open ? ` ${styles.blockOpen}` : ""}${hasError ? ` ${styles.blockError}` : ""}`}>
       <div className={styles.blockHead}>
         <button type="button" className={styles.blockToggle} onClick={onToggle} aria-expanded={open} aria-controls={bodyId}>
-          <span className={styles.blockType}>
-            {label}
-            {block.hidden && <span className={styles.hiddenTag}>Hidden</span>}
+          <span className={styles.blockIcon} aria-hidden="true">
+            <BlockIcon type={block.type} size={18} />
           </span>
-          <span className={styles.blockSummary}>{summaryOf(block) || "Not filled in yet"}</span>
+          <span className={styles.blockText}>
+            <span className={styles.blockType}>
+              {label}
+              {block.hidden && <span className={styles.hiddenTag}>Hidden</span>}
+            </span>
+            <span className={styles.blockSummary}>{summaryOf(block) || "Not filled in yet"}</span>
+          </span>
         </button>
-        {!isHeader && (
+        {actions.length > 0 && (
           <>
-            <IconButton label={`Move ${label} up`} onClick={() => onMove(-1)} disabled={!canMoveUp}>
-              <ArrowUpIcon size={17} />
-            </IconButton>
-            <IconButton label={`Move ${label} down`} onClick={() => onMove(1)} disabled={!canMoveDown}>
-              <ArrowDownIcon size={17} />
-            </IconButton>
-            <IconButton
-              label={block.hidden ? `Show ${label}` : `Hide ${label}`}
-              onClick={() => onChange({ ...block, hidden: !block.hidden })}
-            >
-              {block.hidden ? <EyeOffIcon size={17} /> : <EyeIcon size={17} />}
-            </IconButton>
-            <IconButton label={`Delete ${label}`} onClick={onRemove}>
-              <TrashIcon size={17} />
-            </IconButton>
+            <div className={styles.blockTools}>
+              {actions.map((action) => (
+                <IconButton key={action.label} label={action.name} onClick={action.onClick} disabled={action.disabled}>
+                  <action.Icon size={17} />
+                </IconButton>
+              ))}
+            </div>
+            <BlockMenu label={label} actions={actions} />
           </>
         )}
         <IconButton label={open ? `Close ${label}` : `Edit ${label}`} onClick={onToggle}>
@@ -77,9 +91,78 @@ export default function BlockEditor({
         <div id={bodyId} className={styles.blockBody}>
           {errorFor(path) && <p className={styles.fieldError}>{errorFor(path)}</p>}
           <Fields block={block} path={path} content={content} set={set} onChange={onChange} errorFor={errorFor} images={images} onUpload={onUpload} />
+          {onAddBelow && (
+            <div className={styles.blockFoot}>
+              <button type="button" className={styles.textButton} onClick={onAddBelow}>
+                <PlusIcon size={16} />
+                Add a block below this one
+              </button>
+            </div>
+          )}
         </div>
       )}
     </li>
+  )
+}
+
+/**
+ * The block's actions behind a "⋯" button, for screens too narrow for a
+ * row of icons (pages.module.css shows one or the other). A disclosure: the
+ * actions are ordinary buttons, Escape or a click elsewhere closes it.
+ */
+function BlockMenu({ label, actions }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  const menuId = useId()
+
+  useEffect(() => {
+    if (!open) return undefined
+    const away = (e) => {
+      if (!ref.current?.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener("pointerdown", away)
+    return () => document.removeEventListener("pointerdown", away)
+  }, [open])
+
+  function close() {
+    setOpen(false)
+    ref.current?.querySelector("button")?.focus()
+  }
+
+  return (
+    <div
+      ref={ref}
+      className={styles.blockMenu}
+      onKeyDown={(e) => {
+        if (e.key === "Escape" && open) {
+          e.stopPropagation()
+          close()
+        }
+      }}
+    >
+      <IconButton label={`More for ${label}`} onClick={() => setOpen(!open)} expanded={open} controls={menuId}>
+        <MoreIcon size={18} />
+      </IconButton>
+      {open && (
+        <div id={menuId} className={styles.menuList}>
+          {actions.map((action) => (
+            <button
+              key={action.label}
+              type="button"
+              className={`${styles.menuItem}${action.danger ? ` ${styles.menuDanger}` : ""}`}
+              disabled={action.disabled}
+              onClick={() => {
+                close()
+                action.onClick()
+              }}
+            >
+              <action.Icon size={16} />
+              {action.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 

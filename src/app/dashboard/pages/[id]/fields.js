@@ -161,9 +161,18 @@ export function SubItemHead({ title, name, index, count, onMove, onRemove, canRe
   )
 }
 
-export function IconButton({ label, onClick, disabled, children }) {
+export function IconButton({ label, onClick, disabled, expanded, controls, children }) {
   return (
-    <button type="button" className={styles.iconButton} aria-label={label} title={label} onClick={onClick} disabled={disabled}>
+    <button
+      type="button"
+      className={styles.iconButton}
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      disabled={disabled}
+      aria-expanded={expanded}
+      aria-controls={expanded ? controls : undefined}
+    >
       {children}
     </button>
   )

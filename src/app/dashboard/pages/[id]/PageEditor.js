@@ -4,15 +4,16 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExter
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import CampaignPage from "@/app/components/campaign/CampaignPage"
-import { EyeIcon, LayersIcon, PaletteIcon, SettingsIcon } from "@/app/components/icons"
+import { EyeIcon, LayersIcon, PaletteIcon, PlusIcon, SettingsIcon } from "@/app/components/icons"
 import { campaignFontClasses } from "@/app/components/campaign/fonts"
 import { AFTER_END, PAGE_LIMITS, THEMES, pageView, parsePageInput } from "@/lib/campaignPages"
 import { pageLook } from "@/lib/pageTheme"
-import { ADDABLE_BLOCKS, allButtons, editorTabFor, examplesLeft, isoToLocalInput, localInputToIso, move, newBlock, pageStatus } from "@/lib/pageEditing"
+import { BLOCK_LABELS, allButtons, blockName, editorTabFor, examplesLeft, isoToLocalInput, localInputToIso, move, newBlock, pageStatus } from "@/lib/pageEditing"
 import { imagesFor, ownerFilePath, pagePreviewPath } from "@/lib/pageReference"
 import { prepareImage } from "@/lib/imageResize"
 import { formatChangeTime } from "../../components/scheduledChanges"
 import PagesHeader from "../PagesHeader"
+import AddBlockDialog from "./AddBlockDialog"
 import BlockEditor from "./BlockEditor"
 import { TextField } from "./fields"
 import TypeFields from "./TypeFields"
@@ -51,6 +52,11 @@ function useNarrow() {
     () => window.matchMedia(NARROW).matches,
     () => false
   )
+}
+
+/** "smooth", unless the person has asked their device for less motion. */
+function motion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"
 }
 
 /** What the editor's form holds for a page from the API. */
@@ -112,6 +118,10 @@ export default function PageEditor({ pageId }) {
   const narrow = useNarrow()
   const view = narrow && previewOpen ? "preview" : tab
   const scrolls = useRef({}) // where each tab was scrolled to, to go back there
+  const [reveal, setReveal] = useState(null) // { id }: a block to scroll the form to
+  const [adding, setAdding] = useState(null) // { at }: where the Add a block dialog puts the new block
+  const topRef = useRef(null) // the bar and tabs at the top
+  const screenRef = useRef(null) // the preview's screen
 
   const apply = useCallback(
     (result) => {
@@ -166,9 +176,34 @@ export default function PageEditor({ pageId }) {
     const target =
       [...document.querySelectorAll(`.${styles.fieldError}`)].find((el) => el.textContent === problem.error) ??
       document.getElementById("save-problem")
-    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    target?.scrollIntoView({ block: "center", behavior: still ? "auto" : "smooth" })
+    target?.scrollIntoView({ block: "center", behavior: motion() })
   }, [problem])
+
+  // Scroll the form to a block opened from the preview, a notice or Add a block.
+  useEffect(() => {
+    if (!reveal) return
+    const row = document.getElementById(`block-${reveal.id}`)
+    row?.scrollIntoView({ block: "start", behavior: motion() })
+    row?.querySelector("button[aria-expanded]")?.focus({ preventScroll: true })
+  }, [reveal])
+
+  // Keep the open block in sight in the preview: in the phone frame beside
+  // the form, or on a phone, when the Preview tab opens.
+  useEffect(() => {
+    const screen = screenRef.current
+    if (!screen || !openId) return
+    const block = screen.querySelector(`[data-block-id="${CSS.escape(openId)}"]`)
+    if (!block?.offsetParent) return // hidden, or draws nothing yet
+    const framed = screen.scrollHeight > screen.clientHeight
+    const area = framed ? screen.getBoundingClientRect() : { top: topRef.current?.getBoundingClientRect().bottom ?? 0, bottom: window.innerHeight }
+    const box = block.getBoundingClientRect()
+    if (box.top >= area.top && box.bottom <= area.bottom) return
+    if (framed) {
+      screen.scrollTo({ top: screen.scrollTop + box.top - area.top - 16, behavior: motion() })
+    } else {
+      window.scrollTo({ top: window.scrollY + box.top - area.top - 16, behavior: "instant" })
+    }
+  }, [openId, view])
 
   if (loadError) {
     return (
@@ -225,15 +260,23 @@ export default function PageEditor({ pageId }) {
   const changeContent = (next) => change("content", { ...content, ...next })
   const setBlocks = (next) => changeContent({ blocks: next })
 
-  function addBlock(type) {
+  // Open a block in the form and scroll to it, from the Content tab if need be.
+  function openBlock(id) {
+    if (view !== "content") show("content")
+    setOpenId(id)
+    setReveal({ id })
+  }
+
+  function addBlock(type, at) {
     const block = newBlock(content, type)
-    setBlocks([...blocks, block])
-    setOpenId(block.id)
+    setBlocks([...blocks.slice(0, at), block, ...blocks.slice(at)])
+    setAdding(null)
+    openBlock(block.id)
   }
 
   function removeBlock(index) {
     const block = blocks[index]
-    if (!confirm(`Delete this ${block.type} block?`)) return
+    if (!confirm(`Delete the ${BLOCK_LABELS[block.type] ?? block.type} block?`)) return
     setBlocks(blocks.filter((_, i) => i !== index))
   }
 
@@ -353,7 +396,7 @@ export default function PageEditor({ pageId }) {
     <div className={styles.wrapper}>
       <PagesHeader current="pages" sticky={false} />
 
-      <div className={styles.top}>
+      <div ref={topRef} className={styles.top}>
         <div className={`container ${styles.bar}`}>
           <Link href="/dashboard/pages" className={`btn btn-ghost btn-sm ${styles.back}`} aria-label="Back to pages">
             <span aria-hidden="true">←</span>
@@ -426,7 +469,7 @@ export default function PageEditor({ pageId }) {
                       {examples.map((example, i) => (
                         <span key={`${example.blockId}-${i}`}>
                           {i > 0 && ", "}
-                          <button type="button" className={styles.textButton} onClick={() => setOpenId(example.blockId)}>
+                          <button type="button" className={styles.textButton} onClick={() => openBlock(example.blockId)}>
                             {example.label}
                           </button>
                         </span>
@@ -457,6 +500,7 @@ export default function PageEditor({ pageId }) {
                             onChange={(next) => setBlocks(blocks.map((b, i) => (i === index ? next : b)))}
                             onMove={(step) => setBlocks(move(blocks, index, step))}
                             onRemove={() => removeBlock(index)}
+                            onAddBelow={blocks.length < PAGE_LIMITS.blocks ? () => setAdding({ at: index + 1 }) : null}
                             errorFor={errorFor}
                             images={imageMap}
                             onUpload={uploadImage}
@@ -464,14 +508,10 @@ export default function PageEditor({ pageId }) {
                         ))}
                       </ul>
                       {blocks.length < PAGE_LIMITS.blocks ? (
-                        <div className={styles.addRow}>
-                          <span className={styles.addLabel}>Add a block</span>
-                          {ADDABLE_BLOCKS.map(({ type, label }) => (
-                            <button key={type} type="button" className="btn btn-secondary btn-sm" onClick={() => addBlock(type)}>
-                              + {label}
-                            </button>
-                          ))}
-                        </div>
+                        <button type="button" className={styles.addButton} onClick={() => setAdding({ at: blocks.length })}>
+                          <PlusIcon size={18} />
+                          Add a block
+                        </button>
                       ) : (
                         <p className={styles.hint}>A page can have up to {PAGE_LIMITS.blocks} blocks.</p>
                       )}
@@ -658,23 +698,35 @@ export default function PageEditor({ pageId }) {
               </div>
             )}
             <div className={styles.phone}>
-              <div className={styles.screen}>
+              <div ref={screenRef} className={styles.screen}>
                 <CampaignPage
                   content={content}
                   view={pageView(previewPage)}
                   images={imageMap}
                   fileHref={(buttonId, type) => ownerFilePath(pageId, buttonId, type)}
                   className={campaignFontClasses}
+                  editing={{ openId, onPick: openBlock }}
                 />
               </div>
             </div>
             <p className={styles.previewNote}>
-              The preview is drawn by the same code as the real page, including what you haven’t saved yet. Calendar and contact
-              buttons download what you last saved.
+              Tap a block to edit it. The preview includes changes you haven’t saved yet. To try the buttons,{" "}
+              <a href={pagePreviewPath(pageId)} target="_blank" rel="noopener noreferrer">
+                open the saved page in a new tab
+              </a>
+              .
             </p>
           </aside>
         )}
       </main>
+
+      {adding && (
+        <AddBlockDialog
+          where={adding.at >= blocks.length ? "at the end of the page" : `below ${blockName(blocks[adding.at - 1])}`}
+          onPick={(type) => addBlock(type, adding.at)}
+          onClose={() => setAdding(null)}
+        />
+      )}
     </div>
   )
 }

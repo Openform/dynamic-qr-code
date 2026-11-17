@@ -46,18 +46,27 @@ import styles from "./CampaignPage.module.css"
  *              are left out
  *   className  extra classes for the root (the theme fonts' variables)
  *   reportHref where "Report this page" goes; left out when not given
+ *   editing    only in the editor's preview: { openId, onPick(blockId) }.
+ *              Each block can then be clicked to edit it (links don't open),
+ *              and the one open in the editor is outlined.
  */
-export default function CampaignPage({ content, view, images = {}, fileHref = null, className, reportHref = null }) {
+export default function CampaignPage({ content, view, images = {}, fileHref = null, className, reportHref = null, editing = null }) {
   const look = pageLook(content)
   return (
     <div className={className ? `${styles.page} ${className}` : styles.page} style={look.style}>
       <main className={styles.column}>
-        <Header header={view.header} images={images} showTagline={!view.ended} />
+        <Editable editing={editing} id={view.header?.id ?? "header"} header>
+          <Header header={view.header} images={images} showTagline={!view.ended} />
+        </Editable>
         <div className={styles.blocks}>
           {view.ended ? (
             <Ended keptButton={view.keptButton} fileHref={fileHref} />
           ) : (
-            view.blocks.map((block) => <Block key={block.id} block={block} images={images} fileHref={fileHref} nowMs={view.nowMs} />)
+            view.blocks.map((block) => (
+              <Editable key={block.id} editing={editing} id={block.id}>
+                <Block block={block} images={images} fileHref={fileHref} nowMs={view.nowMs} />
+              </Editable>
+            ))
           )}
         </div>
         <footer className={styles.footer}>
@@ -70,6 +79,28 @@ export default function CampaignPage({ content, view, images = {}, fileHref = nu
           <a href={SITE_URL}>Made with QR Go</a>
         </footer>
       </main>
+    </div>
+  )
+}
+
+/**
+ * In the editor's preview, a block that opens in the editor when clicked.
+ * Links inside don't open, so a click never leaves the editor; questions
+ * still open and the Copy button still copies. Elsewhere, just the block.
+ */
+function Editable({ editing, id, header = false, children }) {
+  if (!editing) return children
+  const classes = [styles.editable, header && styles.editableHeader, editing.openId === id && styles.editableOn].filter(Boolean)
+  return (
+    <div
+      className={classes.join(" ")}
+      data-block-id={id}
+      onClickCapture={(e) => {
+        if (e.target.closest("a")) e.preventDefault()
+        editing.onPick(id)
+      }}
+    >
+      {children}
     </div>
   )
 }

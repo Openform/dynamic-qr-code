@@ -416,6 +416,107 @@ export function SettingsIcon(props) {
   )
 }
 
+export function PanelTopIcon(props) {
+  return (
+    <Icon {...props}>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M3 9h18" />
+    </Icon>
+  )
+}
+
+export function TextIcon(props) {
+  return (
+    <Icon {...props}>
+      <path d="M21 6H3M15 12H3M17 18H3" />
+    </Icon>
+  )
+}
+
+export function ImageIcon(props) {
+  return (
+    <Icon {...props}>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="9" cy="9" r="2" />
+      <path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21" />
+    </Icon>
+  )
+}
+
+export function ImagesIcon(props) {
+  return (
+    <Icon {...props}>
+      <path d="M18 22H4a2 2 0 0 1-2-2V6" />
+      <path d="m22 13-1.3-1.3a2.41 2.41 0 0 0-3.4 0L11 18" />
+      <circle cx="12" cy="8" r="2" />
+      <rect x="6" y="2" width="16" height="16" rx="2" />
+    </Icon>
+  )
+}
+
+export function PointerIcon(props) {
+  return (
+    <Icon {...props}>
+      <path d="M14 4.1 12 6M5.1 8l-2.9-.8M6 12l-1.9 2M7.2 2.2 8 5.1" />
+      <path d="M9.04 9.69a.5.5 0 0 1 .65-.65l11 4.5a.5.5 0 0 1-.07.95l-4.35 1.04a1 1 0 0 0-.74.74l-1.04 4.35a.5.5 0 0 1-.95.07z" />
+    </Icon>
+  )
+}
+
+export function ListIcon(props) {
+  return (
+    <Icon {...props}>
+      <path d="M3 6h.01M3 12h.01M3 18h.01M8 6h13M8 12h13M8 18h13" />
+    </Icon>
+  )
+}
+
+export function PercentIcon(props) {
+  return (
+    <Icon {...props}>
+      <path d="M19 5 5 19" />
+      <circle cx="6.5" cy="6.5" r="2.5" />
+      <circle cx="17.5" cy="17.5" r="2.5" />
+    </Icon>
+  )
+}
+
+export function ReceiptIcon(props) {
+  return (
+    <Icon {...props}>
+      <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1z" />
+      <path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8M12 17.5v-11" />
+    </Icon>
+  )
+}
+
+export function MoreIcon(props) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="19" cy="12" r="1" />
+      <circle cx="5" cy="12" r="1" />
+    </Icon>
+  )
+}
+
+export function CircleHelpIcon(props) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01" />
+    </Icon>
+  )
+}
+
+export function PlusIcon(props) {
+  return (
+    <Icon {...props}>
+      <path d="M5 12h14M12 5v14" />
+    </Icon>
+  )
+}
+
 export function ContentTypeIcon({ type, ...props }) {
   const TypeIcon = CONTENT_TYPE_ICONS[type] ?? LinkIcon
   return <TypeIcon {...props} />
