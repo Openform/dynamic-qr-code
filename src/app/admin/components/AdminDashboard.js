@@ -1,7 +1,6 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
 import Avatar from "../../dashboard/components/Avatar"
 import CreateAccountModal from "./CreateAccountModal"
@@ -110,7 +109,7 @@ function Usage({ account }) {
   )
 }
 
-export default function AdminDashboard({ currentAdminId, openInviteCount = 0, openReportCount = 0 }) {
+export default function AdminDashboard({ currentAdminId }) {
   const [accounts, setAccounts] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState("")
@@ -328,63 +327,6 @@ export default function AdminDashboard({ currentAdminId, openInviteCount = 0, op
 
   return (
     <div className="page-wrapper">
-      {/* ---- Header ---- */}
-      <header style={styles.header}>
-        <div className="container" style={styles.headerInner}>
-          <div style={styles.headerLeft}>
-            <Link href="/dashboard">
-              <span className="gradient-text" style={styles.logo}>
-                QR Go
-              </span>
-            </Link>
-            <span className="badge badge-purple" style={styles.adminBadge}>
-              Admin
-            </span>
-          </div>
-          <div style={styles.headerLeft}>
-            <Link
-              href="/admin/invites"
-              id="admin-invites-link"
-              className="btn btn-ghost btn-sm"
-              aria-label={
-                openInviteCount > 0 ? `Invite requests, ${openInviteCount} open` : undefined
-              }
-            >
-              Invite requests
-              {openInviteCount > 0 && (
-                <span style={styles.countBadge} aria-hidden="true">
-                  {openInviteCount}
-                </span>
-              )}
-            </Link>
-            <Link
-              href="/admin/reports"
-              id="admin-reports-link"
-              className="btn btn-ghost btn-sm"
-              aria-label={
-                openReportCount > 0 ? `Page reports, ${openReportCount} open` : undefined
-              }
-            >
-              Page reports
-              {openReportCount > 0 && (
-                <span style={styles.countBadge} aria-hidden="true">
-                  {openReportCount}
-                </span>
-              )}
-            </Link>
-            <Link href="/admin/legal" id="admin-legal-link" className="btn btn-ghost btn-sm">
-              Legal pages
-            </Link>
-            <Link href="/admin/analytics" id="admin-analytics-link" className="btn btn-ghost btn-sm">
-              Platform analytics
-            </Link>
-            <Link href="/dashboard" className="btn btn-ghost btn-sm">
-              ← Back to Dashboard
-            </Link>
-          </div>
-        </div>
-      </header>
-
       <main className="container" style={styles.main}>
         <h1 style={styles.pageTitle}>Accounts</h1>
         <p style={styles.pageSubtitle}>
@@ -659,54 +601,6 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     minHeight: "100vh"
-  },
-  header: {
-    position: "sticky",
-    top: 0,
-    zIndex: 50,
-    backdropFilter: "blur(16px)",
-    WebkitBackdropFilter: "blur(16px)",
-    background: "rgba(10, 10, 26, 0.85)",
-    borderBottom: "1px solid rgba(255,255,255,0.06)"
-  },
-  headerInner: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    // Wraps onto two rows on phones instead of overflowing.
-    flexWrap: "wrap",
-    minHeight: "64px",
-    paddingTop: "10px",
-    paddingBottom: "10px",
-    gap: "12px"
-  },
-  headerLeft: {
-    display: "flex",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: "12px"
-  },
-  logo: {
-    fontSize: "1.4rem",
-    fontWeight: 700,
-    letterSpacing: "-0.02em"
-  },
-  adminBadge: {
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    fontSize: "0.7rem"
-  },
-  countBadge: {
-    minWidth: "20px",
-    height: "20px",
-    padding: "0 6px",
-    borderRadius: "999px",
-    background: "var(--gradient-primary)",
-    color: "var(--text-inverse)",
-    fontSize: "0.72rem",
-    fontWeight: 700,
-    lineHeight: "20px",
-    textAlign: "center"
   },
   main: {
     paddingTop: "32px",

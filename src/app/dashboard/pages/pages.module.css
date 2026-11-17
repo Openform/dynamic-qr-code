@@ -4,50 +4,8 @@
  * (globals.css: .glass-card-static, .btn, .input-field, .badge…).
  */
 
-/* ---- Header ---- */
-
-.header {
-  background: rgba(10, 10, 26, 0.8);
-  backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--glass-border);
-}
-
-.headerSticky {
-  position: sticky;
-  top: 0;
-  z-index: 50;
-}
-
-.headerInner {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 16px;
-  min-height: 64px;
-  padding-top: 10px;
-  padding-bottom: 10px;
-}
-
 .wrapper {
   min-height: 100vh;
-}
-
-.logo {
-  font-size: 1.4rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-
-.nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.navOn {
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.06);
 }
 
 /* ---- List ---- */
@@ -228,7 +186,7 @@
 /* The bar with Save and the tabs, kept at the top while scrolling. */
 .top {
   position: sticky;
-  top: 0;
+  top: var(--app-top, 0px);
   z-index: 50;
   background: rgba(16, 16, 36, 0.92);
   backdrop-filter: blur(20px);

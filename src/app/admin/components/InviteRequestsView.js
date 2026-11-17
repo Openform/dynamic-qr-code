@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { getPackage, describeLimit } from "@/lib/packages"
 import { REPLY_PROMISE, REPLY_WINDOW_MS } from "@/lib/inviteRequests"
 import { formatDateTime, timeAgo, useNow } from "./adminTime"
@@ -191,6 +191,7 @@ function EmailAlertsPanel({ status }) {
 }
 
 export default function InviteRequestsView({ initialRequests, alertStatus }) {
+  const router = useRouter()
   const [requests, setRequests] = useState(initialRequests)
   const [view, setView] = useState("open")
   const [busyId, setBusyId] = useState(null)
@@ -214,6 +215,8 @@ export default function InviteRequestsView({ initialRequests, alertStatus }) {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || "Could not update the request.")
       setRequests((prev) => prev.map((r) => (r.id === request.id ? data.request : r)))
+      // The sidebar counts the open requests.
+      router.refresh()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -233,6 +236,7 @@ export default function InviteRequestsView({ initialRequests, alertStatus }) {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || "Could not delete the request.")
       setRequests((prev) => prev.filter((r) => r.id !== request.id))
+      router.refresh()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -242,20 +246,6 @@ export default function InviteRequestsView({ initialRequests, alertStatus }) {
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <div className={`container ${styles.headerInner}`}>
-          <div className={styles.headerGroup}>
-            <Link href="/admin">
-              <span className={`gradient-text ${styles.logo}`}>QR Go</span>
-            </Link>
-            <span className={`badge badge-purple ${styles.adminBadge}`}>Admin</span>
-          </div>
-          <Link href="/admin" className="btn btn-ghost btn-sm">
-            ← Back to Accounts
-          </Link>
-        </div>
-      </header>
-
       <main className={`container ${styles.main}`}>
         <h1 className={styles.pageTitle}>Invite requests</h1>
         <p className={styles.pageSubtitle}>

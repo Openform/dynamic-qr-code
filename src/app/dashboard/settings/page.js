@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import Link from "next/link"
+import { useRouter } from "next/navigation"
 import Avatar from "../components/Avatar"
 import { PRESET_AVATARS, localAvatar } from "@/lib/avatars"
 
@@ -34,6 +34,7 @@ function Message({ msg }) {
 }
 
 export default function SettingsPage() {
+  const router = useRouter()
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState("")
@@ -144,6 +145,8 @@ export default function SettingsPage() {
       setName(data.name || "")
       setAvatar(data.avatar ?? null)
       setProfileMsg({ type: "success", text: "Profile updated" })
+      // The sidebar shows the name and picture too.
+      router.refresh()
     } catch (err) {
       setProfileMsg({ type: "error", text: err.message })
     } finally {
@@ -220,20 +223,6 @@ export default function SettingsPage() {
 
   return (
     <div className="page-wrapper">
-      {/* ---- Header ---- */}
-      <header style={styles.header}>
-        <div className="container" style={styles.headerInner}>
-          <Link href="/dashboard">
-            <span className="gradient-text" style={styles.logo}>
-              QR Go
-            </span>
-          </Link>
-          <Link href="/dashboard" className="btn btn-ghost btn-sm">
-            ← Back to Dashboard
-          </Link>
-        </div>
-      </header>
-
       {/* ---- Main ---- */}
       <main className="container" style={styles.main}>
         <h1 style={styles.pageTitle}>Profile Settings</h1>
@@ -241,7 +230,7 @@ export default function SettingsPage() {
           Manage your profile picture, display name, and password.
         </p>
 
-        <div style={{ display: "flex", gap: "24px" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0 24px" }}>
           {/* ---- Profile card ---- */}
           <section
             className="glass-card-static animate-fadeIn"
@@ -470,26 +459,6 @@ const styles = {
     justifyContent: "center",
     minHeight: "100vh"
   },
-  header: {
-    position: "sticky",
-    top: 0,
-    zIndex: 50,
-    backdropFilter: "blur(16px)",
-    WebkitBackdropFilter: "blur(16px)",
-    background: "rgba(10, 10, 26, 0.85)",
-    borderBottom: "1px solid rgba(255,255,255,0.06)"
-  },
-  headerInner: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    height: "64px"
-  },
-  logo: {
-    fontSize: "1.4rem",
-    fontWeight: 700,
-    letterSpacing: "-0.02em"
-  },
   main: {
     maxWidth: "1440px",
     width: "100%",
@@ -506,15 +475,18 @@ const styles = {
     marginTop: "6px",
     marginBottom: "28px"
   },
+  // Side by side (3 : 2) where there's room, one above the other on phones.
   card: {
     padding: "28px",
     marginBottom: "24px",
-    width: "60%"
+    flex: "3 1 420px",
+    minWidth: 0
   },
   card2: {
     padding: "28px",
     marginBottom: "24px",
-    width: "40%"
+    flex: "2 1 300px",
+    minWidth: 0
   },
   cardTitle: {
     fontSize: "1.15rem",

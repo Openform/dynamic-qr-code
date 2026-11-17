@@ -64,7 +64,7 @@ hours. Linking to `/#request-invite` opens the form on the landing page (the
 `/register` page does this for visitors without a code).
 
 Each request is saved in the `invite_requests` table (created automatically on
-first run) and listed at **Invite requests** in the admin header
+first run) and listed at **Invite requests** under Admin in the sidebar
 (`/admin/invites`), with a count of open ones. Open requests are listed oldest
 first and flagged when they're close to, or past, 24 hours old. Reply (the
 **Reply by email** button opens your mail app), then **Mark done**. Spam can be
@@ -93,7 +93,7 @@ Each IP address can send 5 requests an hour, and requests from simple spam bots
 ### Legal pages
 
 Admins edit the Privacy Policy (`/privacy`) and Terms & Conditions (`/terms`)
-at **Legal pages** in the admin header (`/admin/legal`). The editor has a
+at **Legal pages** under Admin in the sidebar (`/admin/legal`). The editor has a
 formatting toolbar (headings, bold, italic, lists, links, tables), a live preview and
 the "Last updated" date shown on the page. Changes go live as soon as they're
 saved.
@@ -324,7 +324,7 @@ requests, to `PAGE_REPORT_EMAILS` (comma-separated), or to the invite alert
 recipients when that isn't set. More reports about the same page don't send
 another email until it's been dealt with.
 
-Admins see reported pages at **Page reports** in the admin header
+Admins see reported pages at **Page reports** under Admin in the sidebar
 (`/admin/reports`), with a count of pages waiting. **View page** shows the
 page as visitors see it (`/admin/pages/<page>`), with a list of where its
 buttons and links go. Then:
@@ -341,7 +341,7 @@ all its codes and pages stop showing.
 
 Every scan of a code is recorded after the visitor has been redirected, so
 recording never slows a scan down. Each account sees its analytics at
-**Analytics** in the dashboard header (`/dashboard/analytics`), or for one code
+**Analytics** in the sidebar (`/dashboard/analytics`), or for one code
 from the **📈 Analytics** link on its card. Admins see every account at
 **Platform analytics** on `/admin/analytics`.
 
