@@ -1,0 +1,190 @@
+/* "Report this page": QR Go's own look, like the password page, since it's
+   QR Go speaking rather than the business. */
+
+.page {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  overflow: hidden;
+}
+
+.orbCyan,
+.orbPurple {
+  position: absolute;
+}
+
+.orbCyan {
+  width: 380px;
+  height: 380px;
+  top: -100px;
+  left: -100px;
+}
+
+.orbPurple {
+  width: 320px;
+  height: 320px;
+  bottom: -80px;
+  right: -80px;
+}
+
+.card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 520px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 24px;
+  padding: 32px 24px;
+}
+
+.icon {
+  width: 56px;
+  height: 56px;
+  margin-bottom: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cyan);
+  background: rgba(0, 212, 255, 0.1);
+  border: 1px solid rgba(0, 212, 255, 0.25);
+}
+
+.title {
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.body {
+  color: var(--text-secondary);
+  font-size: 0.98rem;
+  line-height: 1.6;
+  margin-top: 10px;
+}
+
+.pageTitle {
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.form {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+.reasons {
+  border: none;
+  padding: 0;
+  margin: 0 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.legend {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.optional {
+  font-weight: 400;
+  color: var(--text-tertiary);
+}
+
+.reason {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 0.95rem;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.reason input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  accent-color: var(--cyan);
+}
+
+.reason:has(input:checked) {
+  border-color: var(--cyan);
+  background: rgba(0, 212, 255, 0.06);
+}
+
+.reason:has(input:focus-visible) {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+/* 16px, so phones don't zoom in when the field is tapped. */
+.message {
+  font-size: 1rem;
+  resize: vertical;
+  min-height: 96px;
+  line-height: 1.5;
+}
+
+.hint {
+  margin-top: 6px;
+  font-size: 0.82rem;
+  color: var(--text-tertiary);
+}
+
+/* Off screen, not display: none, which some bots look for. */
+.trap {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.submit {
+  margin-top: 20px;
+  justify-content: center;
+}
+
+.note {
+  margin-top: 20px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.footer {
+  margin-top: 16px;
+  font-size: 0.9rem;
+}
+
+.link {
+  color: var(--cyan);
+  font-weight: 500;
+}
+
+.done {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.backButton {
+  margin-top: 24px;
+}

@@ -87,7 +87,8 @@ jobs:
       # per destination add up to each code's total, password-protected codes
       # ask for, check and remember their password, and campaign pages (and
       # their photos) keep to their package's rules, stay private to their
-      # account and only show through a code that links to them.
+      # account, only show through a code that links to them, and can be
+      # reported by visitors and taken down by admins.
       - run: npx vitest run db.test
         env:
           ANALYTICS_DB_TEST: '1'

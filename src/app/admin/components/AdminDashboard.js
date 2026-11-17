@@ -110,7 +110,7 @@ function Usage({ account }) {
   )
 }
 
-export default function AdminDashboard({ currentAdminId, openInviteCount = 0 }) {
+export default function AdminDashboard({ currentAdminId, openInviteCount = 0, openReportCount = 0 }) {
   const [accounts, setAccounts] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState("")
@@ -354,6 +354,21 @@ export default function AdminDashboard({ currentAdminId, openInviteCount = 0 }) 
               {openInviteCount > 0 && (
                 <span style={styles.countBadge} aria-hidden="true">
                   {openInviteCount}
+                </span>
+              )}
+            </Link>
+            <Link
+              href="/admin/reports"
+              id="admin-reports-link"
+              className="btn btn-ghost btn-sm"
+              aria-label={
+                openReportCount > 0 ? `Page reports, ${openReportCount} open` : undefined
+              }
+            >
+              Page reports
+              {openReportCount > 0 && (
+                <span style={styles.countBadge} aria-hidden="true">
+                  {openReportCount}
                 </span>
               )}
             </Link>

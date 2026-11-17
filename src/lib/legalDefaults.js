@@ -16,6 +16,8 @@ We collect the following types of information:
 - **Account details** — your name, email address and password. Passwords are stored as a secure hash and are never visible to us.
 - **QR code content** — the names, destinations, collections and design settings of the QR codes you create. Depending on what a code does, its destination can be a web link, an email address with a subject and message, a phone number with a message, a WhatsApp number or a place. Wi-Fi codes include the network name and password, which we store encrypted. Email addresses, phone numbers and messages you add to a code are shown to anyone who scans it.
 - **Scan data** — when someone scans one of your codes we record the time of the scan, an approximate location (country and city), the device type, operating system, browser and preferred language.
+- **Campaign pages** — the text, photos and settings of any campaign pages you make. Photos are resized and saved again in your browser before they're uploaded, which removes hidden details such as where a photo was taken. Everything on a page is shown to anyone who opens it.
+- **Reports about pages** — if you report a campaign page, we store the reason you chose and any message you write. We don't store who sent a report: your IP address is only used briefly to limit how many reports can be sent.
 
 We do not store the IP address of people who scan your codes. It is used briefly to estimate location and to create an anonymous identifier for counting unique scans, then discarded.
 
@@ -67,7 +69,7 @@ By creating an account or using QR Go, you agree to these Terms and to our [Priv
 
 ## 2. The service
 
-QR Go lets you create dynamic QR codes whose destinations can be changed after they are printed, and view analytics about how they are scanned. Features and usage limits depend on the plan assigned to your account.
+QR Go lets you create dynamic QR codes whose destinations can be changed after they are printed, make simple campaign pages for them to link to, and view analytics about how they are scanned. Features and usage limits depend on the plan assigned to your account.
 
 ## 3. Your account
 
@@ -89,31 +91,41 @@ You also agree not to interfere with the service, try to access it in unauthoris
 
 You keep ownership of the content you add to QR Go, such as code names and destination links. You give us permission to store and process it only as needed to provide the service. You are responsible for making sure your destinations are lawful and that you have the right to use them.
 
-## 6. Availability of your codes
+## 6. Campaign pages
+
+Some plans include campaign pages: simple web pages, hosted by QR Go, that your codes can send people to.
+
+- You are responsible for everything on your pages, including text, photos, prices, offers and links, and for making sure it is accurate, lawful and yours to use.
+- Prices, offers and promo codes on your pages are your offers to your customers, not ours.
+- Pages must follow the acceptable use rules above. In particular, they must not ask visitors for passwords, PINs or bank details, or pretend to be another business or person.
+- Anyone who opens a page can report it to us. If we believe a page breaks these Terms or puts people at risk, we may take it down without notice. Your dashboard will show that we have, and you can contact us if you think it was a mistake. We may also suspend your account (see section 8).
+- Photos you upload are stored only to show them on your pages. They are deleted once you remove them from a page and save it, or when you delete the page or your account.
+
+## 7. Availability of your codes
 
 Dynamic QR codes rely on our service to redirect each scan. Wi-Fi codes are different: their details are stored in the code itself, so they keep working without our service, but they can’t be changed after they’re created and their scans can’t be counted. If the service is unavailable, or your account is suspended or closed, your codes will stop redirecting to their destinations. We aim to keep QR Go running reliably but do not guarantee uninterrupted access.
 
-## 7. Suspension and termination
+## 8. Suspension and termination
 
 We may suspend or close your account if you break these Terms or if your use of the service puts others at risk. You can stop using QR Go at any time.
 
-## 8. Disclaimers
+## 9. Disclaimers
 
 QR Go is provided “as is” and “as available”. To the extent allowed by law, we make no warranties of any kind, whether express or implied, about the service.
 
-## 9. Limitation of liability
+## 10. Limitation of liability
 
 To the extent allowed by law, we are not liable for any indirect, incidental or consequential loss arising from your use of QR Go, including lost profits, lost data or the cost of reprinting materials.
 
-## 10. Changes to these terms
+## 11. Changes to these terms
 
 We may update these Terms from time to time. If we make significant changes we will let you know by email or through the service. Continuing to use QR Go after changes take effect means you accept the updated Terms.
 
-## 11. Governing law
+## 12. Governing law
 
 These Terms are governed by the laws of [Jurisdiction], and any disputes will be handled by the courts of that jurisdiction.
 
-## 12. Contact us
+## 13. Contact us
 
 If you have questions about these Terms, email us at [legal@example.com](mailto:legal@example.com).`;
 

@@ -61,6 +61,21 @@ export function ownerFilePath(pageId, buttonId, type) {
   return `/api/pages/${pageId}/files/${buttonId}.${type}`;
 }
 
+/** "Report this page": a form under the page's own path, so it checks the code and page like the page does. */
+export function pageReportPath(shortId, pageId) {
+  return `${pagePath(shortId, pageId)}/report`;
+}
+
+/** Where admins see any account's page, from the reports screen. */
+export function adminPagePath(pageId) {
+  return `/admin/pages/${pageId}`;
+}
+
+/** Where admins load a page's image, for that view. */
+export function adminImagePath(pageId, image) {
+  return `/api/admin/pages/${pageId}/images/${image.id}-${image.hash}`;
+}
+
 /** `{ [imageId]: { src, width, height } }` for the page component, from a page's images. */
 export function imagesFor(images, srcOf) {
   return Object.fromEntries((images ?? []).map((image) => [image.id, { src: srcOf(image), width: image.width, height: image.height }]));

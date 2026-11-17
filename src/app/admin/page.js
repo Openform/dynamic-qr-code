@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation"
 import { getAdminUser } from "@/lib/admin"
-import { countOpenInviteRequests } from "@/lib/db"
+import { countOpenInviteRequests, countPagesWithOpenReports } from "@/lib/db"
 import AdminDashboard from "./components/AdminDashboard"
 
 export const metadata = {
@@ -16,6 +16,6 @@ export default async function AdminPage() {
   const admin = await getAdminUser()
   if (!admin) redirect("/dashboard")
 
-  const openInviteCount = await countOpenInviteRequests()
-  return <AdminDashboard currentAdminId={admin.id} openInviteCount={openInviteCount} />
+  const [openInviteCount, openReportCount] = await Promise.all([countOpenInviteRequests(), countPagesWithOpenReports()])
+  return <AdminDashboard currentAdminId={admin.id} openInviteCount={openInviteCount} openReportCount={openReportCount} />
 }

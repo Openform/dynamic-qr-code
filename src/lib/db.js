@@ -1587,6 +1587,169 @@ async function deletePage(id, userId) {
   return result.affectedRows > 0;
 }
 
+// ──────────────────────────────────────────────
+// Page reports and take-downs (lib/pageReports.js)
+// ──────────────────────────────────────────────
+// Visitors report a page from its footer; admins (/admin/reports) take a page
+// down, restore it, or close its reports. Unlike the functions above, the
+// admin ones reach any account's pages.
+
+/** A UTC column value as an ISO string, or null. */
+function utcToIsoOrNull(value) {
+  return value ? utcToIso(value) : null;
+}
+
+/**
+ * Save a visitor's report about a page (fields already checked). Returns
+ * `{ openCount }`, how many of the page's reports are now open, so only the
+ * first one is emailed.
+ */
+async function createPageReport({ pageId, reason, message }) {
+  await ensureSchema();
+  await pool.execute(
+    `INSERT INTO campaign_page_reports (page_id, reason, message, created_at)
+     VALUES (:pageId, :reason, :message, UTC_TIMESTAMP())`,
+    { pageId, reason, message: message ?? null }
+  );
+  const [rows] = await pool.execute(
+    'SELECT COUNT(*) AS count FROM campaign_page_reports WHERE page_id = :pageId AND handled_at IS NULL',
+    { pageId }
+  );
+  return { openCount: Number(rows[0]?.count) || 0 };
+}
+
+/** The title a page shows (its header's), from its stored content. */
+function pageTitleOf(rawContent) {
+  const title = parsePageContentColumn(rawContent)?.blocks?.[0]?.title;
+  return typeof title === 'string' ? title : '';
+}
+
+/**
+ * Reports for admins, newest first, each with its page and the page's owner:
+ * `{ id, pageId, reason, message, createdAt, handledAt, handledByName, page:
+ * { name, title, published, takenDownAt, takenDownByName, ownerId, ownerName,
+ * ownerEmail, ownerDisabled } }`. With `pageId`, only that page's.
+ */
+async function getPageReports({ pageId = null } = {}) {
+  await ensureSchema();
+  const [rows] = await pool.query(
+    `SELECT r.id, r.page_id AS pageId, r.reason, r.message, r.created_at AS createdAt,
+            r.handled_at AS handledAt, hb.name AS handledByName,
+            p.name AS pageName, p.published, p.taken_down_at AS takenDownAt, tb.name AS takenDownByName,
+            p.user_id AS ownerId, u.name AS ownerName, u.email AS ownerEmail, u.disabled_at AS ownerDisabledAt
+       FROM campaign_page_reports r
+       JOIN campaign_pages p ON p.id = r.page_id
+       JOIN users u ON u.id = p.user_id
+       LEFT JOIN users hb ON hb.id = r.handled_by
+       LEFT JOIN users tb ON tb.id = p.taken_down_by
+      ${pageId === null ? '' : 'WHERE r.page_id = ?'}
+      ORDER BY r.created_at DESC, r.id DESC
+      LIMIT 500`,
+    pageId === null ? [] : [pageId]
+  );
+  const ids = [...new Set(rows.map((row) => row.pageId))];
+  const titles = {};
+  if (ids.length > 0) {
+    const [pages] = await pool.query('SELECT id, content FROM campaign_pages WHERE id IN (?)', [ids]);
+    for (const page of pages) titles[page.id] = pageTitleOf(page.content);
+  }
+  return rows.map((row) => ({
+    id: row.id,
+    pageId: row.pageId,
+    reason: row.reason,
+    message: row.message ?? null,
+    createdAt: utcToIso(row.createdAt),
+    handledAt: utcToIsoOrNull(row.handledAt),
+    handledByName: row.handledByName ?? null,
+    page: {
+      name: row.pageName,
+      title: titles[row.pageId] ?? '',
+      published: Boolean(row.published),
+      takenDownAt: utcToIsoOrNull(row.takenDownAt),
+      takenDownByName: row.takenDownByName ?? null,
+      ownerId: row.ownerId,
+      ownerName: row.ownerName,
+      ownerEmail: row.ownerEmail,
+      ownerDisabled: Boolean(row.ownerDisabledAt),
+    },
+  }));
+}
+
+/** How many pages have reports nobody has dealt with yet, for the admin header. */
+async function countPagesWithOpenReports() {
+  await ensureSchema();
+  const [rows] = await pool.query(
+    'SELECT COUNT(DISTINCT page_id) AS count FROM campaign_page_reports WHERE handled_at IS NULL'
+  );
+  return Number(rows[0]?.count) || 0;
+}
+
+/** Any account's page with its content and owner, for admins, or null. */
+async function getPageForAdmin(id) {
+  await ensureSchema();
+  const [rows] = await pool.execute(
+    `SELECT ${PAGE_SUMMARY_COLUMNS}, p.content, p.kept_button AS keptButton,
+            p.user_id AS ownerId, u.name AS ownerName, u.email AS ownerEmail, u.disabled_at AS ownerDisabledAt
+       FROM campaign_pages p
+       JOIN users u ON u.id = p.user_id
+      WHERE p.id = :id
+      LIMIT 1`,
+    { id }
+  );
+  if (!rows[0]) return null;
+  const { content, ownerDisabledAt, ...row } = rows[0];
+  return { ...toPageSummary(row), ownerDisabled: Boolean(ownerDisabledAt), content: parsePageContentColumn(content) };
+}
+
+/** Mark a page's open reports as dealt with by an admin. */
+async function closeOpenPageReports(conn, pageId, adminId) {
+  await conn.execute(
+    `UPDATE campaign_page_reports SET handled_at = UTC_TIMESTAMP(), handled_by = :adminId
+      WHERE page_id = :pageId AND handled_at IS NULL`,
+    { pageId, adminId }
+  );
+}
+
+/**
+ * An admin acting on a page (any account's): 'take-down' hides it from
+ * visitors and closes its open reports; 'restore' shows it again (if its
+ * owner has it switched on); 'close-reports' closes its open reports and
+ * leaves it as it is. Returns false if there's no such page.
+ */
+async function actOnPage(pageId, action, adminId) {
+  await ensureSchema();
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [pages] = await conn.execute('SELECT id FROM campaign_pages WHERE id = :pageId FOR UPDATE', { pageId });
+    if (!pages[0]) {
+      await conn.rollback();
+      return false;
+    }
+    if (action === 'take-down') {
+      await conn.execute(
+        `UPDATE campaign_pages SET taken_down_at = UTC_TIMESTAMP(), taken_down_by = :adminId
+          WHERE id = :pageId AND taken_down_at IS NULL`,
+        { pageId, adminId }
+      );
+      await closeOpenPageReports(conn, pageId, adminId);
+    } else if (action === 'restore') {
+      await conn.execute('UPDATE campaign_pages SET taken_down_at = NULL, taken_down_by = NULL WHERE id = :pageId', { pageId });
+    } else if (action === 'close-reports') {
+      await closeOpenPageReports(conn, pageId, adminId);
+    } else {
+      throw new Error(`Unknown page action: ${action}`);
+    }
+    await conn.commit();
+    return true;
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
+}
+
 /**
  * Names of pages by id, for showing where a code sends scans: `{ [id]: name }`.
  * With a `userId`, only that account's pages; without (admins), any.
@@ -1929,6 +2092,11 @@ module.exports = {
   updatePage,
   setPagePublished,
   deletePage,
+  createPageReport,
+  getPageReports,
+  countPagesWithOpenReports,
+  getPageForAdmin,
+  actOnPage,
   getPageNames,
   getPageUsage,
   getPageUsageCounts,

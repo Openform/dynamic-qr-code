@@ -3,7 +3,7 @@
  */
 
 import { getSession, isAdminEmail } from '@/lib/auth';
-const { getUserById } = require('@/lib/db');
+import { getUserById } from '@/lib/db';
 
 /**
  * Return the signed-in user if they're an admin, otherwise null. The user is
