@@ -1,8 +1,10 @@
 import FormattedText from "@/app/components/FormattedText"
 import {
   CalendarIcon,
+  CalendarPlusIcon,
   ChatIcon,
   CheckCircleIcon,
+  ChevronDownIcon,
   ClockIcon,
   FlagIcon,
   InfoIcon,
@@ -10,9 +12,11 @@ import {
   MailIcon,
   MapPinIcon,
   PhoneIcon,
-  TagIcon
+  TagIcon,
+  UserIcon
 } from "@/app/components/icons"
-import { buttonLink } from "@/lib/campaignPages"
+import { buttonFile, buttonLink } from "@/lib/campaignPages"
+import { hoursRows, hoursStatus } from "@/lib/openingHours"
 import { pageLook } from "@/lib/pageTheme"
 import { SITE_URL } from "@/lib/site"
 import CopyCodeButton from "./CopyCodeButton"
@@ -28,16 +32,22 @@ import styles from "./CampaignPage.module.css"
  * through FormattedText (which builds React elements from lib/markdown.js),
  * and every button's link is rebuilt from its checked fields by buttonLink().
  * A block or button that doesn't pass is left out rather than shown wrong.
+ * Nothing needs JavaScript except the Copy button: questions open with the
+ * browser's own <details>, and the gallery is a row that scrolls sideways.
  *
  * Props:
  *   content    the page's stored content
  *   view       what to show now, from pageView() in lib/campaignPages.js
+ *              (its `nowMs` is the time opening hours are shown for)
  *   images     { [imageId]: { src, width, height } } for the page's images;
  *              blocks whose image isn't there are drawn without it
+ *   fileHref   (buttonId, type) → where a calendar or contact button's file
+ *              downloads from ('ics' or 'vcf'); without it those buttons
+ *              are left out
  *   className  extra classes for the root (the theme fonts' variables)
  *   reportHref where "Report this page" goes; left out when not given
  */
-export default function CampaignPage({ content, view, images = {}, className, reportHref = null }) {
+export default function CampaignPage({ content, view, images = {}, fileHref = null, className, reportHref = null }) {
   const look = pageLook(content)
   return (
     <div className={className ? `${styles.page} ${className}` : styles.page} style={look.style}>
@@ -45,9 +55,9 @@ export default function CampaignPage({ content, view, images = {}, className, re
         <Header header={view.header} images={images} showTagline={!view.ended} />
         <div className={styles.blocks}>
           {view.ended ? (
-            <Ended keptButton={view.keptButton} />
+            <Ended keptButton={view.keptButton} fileHref={fileHref} />
           ) : (
-            view.blocks.map((block) => <Block key={block.id} block={block} images={images} />)
+            view.blocks.map((block) => <Block key={block.id} block={block} images={images} fileHref={fileHref} nowMs={view.nowMs} />)
           )}
         </div>
         <footer className={styles.footer}>
@@ -94,7 +104,7 @@ function Header({ header, images, showTagline }) {
   )
 }
 
-function Block({ block, images }) {
+function Block({ block, images, fileHref, nowMs }) {
   switch (block.type) {
     case "text":
       return (
@@ -105,11 +115,19 @@ function Block({ block, images }) {
     case "image":
       return <ImageBlock block={block} images={images} />
     case "buttons":
-      return <Buttons items={block.items} />
+      return <Buttons items={block.items} fileHref={fileHref} />
     case "details":
       return <Details rows={block.rows} />
     case "offer":
       return <Offer block={block} />
+    case "faq":
+      return <Faq block={block} />
+    case "hours":
+      return <Hours block={block} nowMs={nowMs} />
+    case "prices":
+      return <Prices block={block} />
+    case "gallery":
+      return <Gallery block={block} images={images} />
     default:
       return null
   }
@@ -133,13 +151,23 @@ const BUTTON_ICONS = {
   call: PhoneIcon,
   email: MailIcon,
   whatsapp: ChatIcon,
-  directions: MapPinIcon
+  directions: MapPinIcon,
+  calendar: CalendarPlusIcon,
+  contact: UserIcon
+}
+
+/** Where a button goes: its link, or for calendar and contact buttons, its file. */
+function hrefOf(button, fileHref) {
+  const link = buttonLink(button)
+  if (link) return link
+  const file = fileHref ? buttonFile(button) : null
+  return file ? fileHref(button.id, file.type) : null
 }
 
 /** A stack of buttons; the first one in a block stands out as the main one. */
-function Buttons({ items }) {
+function Buttons({ items, fileHref }) {
   const buttons = (Array.isArray(items) ? items : [])
-    .map((button) => ({ ...button, href: buttonLink(button) }))
+    .map((button) => ({ ...button, href: hrefOf(button, fileHref) }))
     .filter((button) => button.href)
   if (buttons.length === 0) return null
   return (
@@ -201,7 +229,114 @@ function Offer({ block }) {
   )
 }
 
-function Ended({ keptButton }) {
+/** Questions that open to show their answers, with the browser's own <details>. */
+function Faq({ block }) {
+  const items = Array.isArray(block.items) ? block.items : []
+  if (items.length === 0) return null
+  return (
+    <section className={styles.listBlock}>
+      {block.title && <h2 className={styles.blockTitle}>{block.title}</h2>}
+      <div className={styles.faq}>
+        {items.map((item, index) => (
+          <details key={index} className={styles.faqItem}>
+            <summary className={styles.faqQuestion}>
+              <span>{item.question}</span>
+              <ChevronDownIcon size={20} className={styles.faqChevron} />
+            </summary>
+            <FormattedText content={item.answer} className={`${styles.prose} ${styles.faqAnswer}`} />
+          </details>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function Hours({ block, nowMs }) {
+  const status = block.showStatus === false ? null : hoursStatus(block, nowMs)
+  const rows = hoursRows(block, nowMs)
+  return (
+    <section className={styles.hours}>
+      <div className={styles.hoursHead}>
+        <ClockIcon size={22} className={styles.detailIcon} />
+        <div className={styles.detailText}>
+          <h2 className={styles.hoursTitle}>{block.title || "Opening hours"}</h2>
+          {status && (
+            <p className={styles.hoursStatus}>
+              <span className={status.open ? styles.dotOpen : styles.dotClosed} aria-hidden="true" />
+              {status.text}
+            </p>
+          )}
+        </div>
+      </div>
+      <table className={styles.hoursTable}>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.days} className={row.today ? styles.today : undefined} aria-current={row.today ? "date" : undefined}>
+              <th scope="row">{row.days}</th>
+              <td>{row.hours}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {block.note && <p className={styles.hoursNote}>{block.note}</p>}
+    </section>
+  )
+}
+
+function Prices({ block }) {
+  const items = Array.isArray(block.items) ? block.items : []
+  if (items.length === 0) return null
+  return (
+    <section className={styles.listBlock}>
+      {block.title && <h2 className={styles.blockTitle}>{block.title}</h2>}
+      <ul className={styles.prices}>
+        {items.map((item, index) => (
+          <li key={index} className={styles.priceItem}>
+            <div className={styles.priceRow}>
+              <span className={styles.priceName}>
+                {item.name}
+                {item.tag && <span className={styles.priceTag}>{item.tag}</span>}
+              </span>
+              {item.price && <span className={styles.price}>{item.price}</span>}
+            </div>
+            {item.description && <p className={styles.priceDescription}>{item.description}</p>}
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+/** Photos in a row that scrolls sideways, each snapping into place; the next one peeks in. */
+function Gallery({ block, images }) {
+  const photos = (Array.isArray(block.items) ? block.items : [])
+    .map((item) => ({ alt: item.alt, image: imageOf(images, item.image) }))
+    .filter((photo) => photo.image)
+  if (photos.length === 0) return null
+  if (photos.length === 1) {
+    const [{ alt, image }] = photos
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img className={styles.image} src={image.src} width={image.width} height={image.height} alt={alt} loading="lazy" />
+  }
+  return (
+    <section className={styles.gallery} tabIndex={0} aria-label={`${photos.length} photos. Scroll sideways to see them all.`}>
+      {photos.map(({ alt, image }, index) => (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          key={index}
+          className={styles.galleryPhoto}
+          src={image.src}
+          width={image.width}
+          height={image.height}
+          alt={alt}
+          loading={index < 2 ? undefined : "lazy"}
+        />
+      ))}
+    </section>
+  )
+}
+
+function Ended({ keptButton, fileHref }) {
   return (
     <>
       <section className={styles.ended}>
@@ -209,7 +344,7 @@ function Ended({ keptButton }) {
         <h2 className={styles.endedTitle}>This campaign has ended</h2>
         <p className={styles.endedText}>Thanks for stopping by.</p>
       </section>
-      {keptButton && <Buttons items={[keptButton]} />}
+      {keptButton && <Buttons items={[keptButton]} fileHref={fileHref} />}
     </>
   )
 }

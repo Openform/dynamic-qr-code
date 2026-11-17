@@ -5,7 +5,7 @@ import { campaignFontClasses } from "@/app/components/campaign/fonts"
 import { getSession } from "@/lib/auth"
 import { pageView } from "@/lib/campaignPages"
 import { getPageById, getPageImages } from "@/lib/db"
-import { imagesFor, ownerImagePath } from "@/lib/pageReference"
+import { imagesFor, ownerFilePath, ownerImagePath } from "@/lib/pageReference"
 
 /**
  * GET /dashboard/pages/[id]/preview — the owner's preview of one of their
@@ -62,6 +62,7 @@ export default async function CampaignPagePreview({ params, searchParams }) {
         content={page.content}
         view={view}
         images={imagesFor(await getPageImages(pageId), (image) => ownerImagePath(pageId, image))}
+        fileHref={(buttonId, type) => ownerFilePath(pageId, buttonId, type)}
         className={campaignFontClasses}
       />
     </>

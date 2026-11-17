@@ -700,3 +700,88 @@
   opacity: 0.6;
   pointer-events: none;
 }
+
+/* A short field (a price, a tag) beside a wider one in a .fieldRow. */
+.narrowField {
+  flex: 0 1 140px;
+  min-width: 110px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- Opening hours: a row per day ---- */
+
+.hoursGrid {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border);
+  background: var(--bg-tertiary);
+}
+
+.hoursDay {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 8px 12px;
+}
+
+.hoursDay + .hoursDay {
+  border-top: 1px solid var(--glass-border);
+}
+
+.hoursDayName {
+  flex: 0 0 120px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.hoursTimes {
+  flex: 1 1 260px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.hoursPeriod {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.hoursPeriod input {
+  /* Room for "08:00 AM" where the browser shows a 12-hour clock. */
+  width: 148px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+/* A small action that reads as a link, for one repeated on every row. */
+.textButton {
+  padding: 4px 0;
+  border: none;
+  background: none;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.textButton:hover {
+  color: var(--text-primary);
+}
+
+.hoursDay > .fieldError {
+  flex-basis: 100%;
+  margin: 0;
+}

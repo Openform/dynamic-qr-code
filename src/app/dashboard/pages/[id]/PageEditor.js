@@ -8,11 +8,12 @@ import { campaignFontClasses } from "@/app/components/campaign/fonts"
 import { AFTER_END, FONTS, PAGE_LIMITS, THEMES, pageView, parsePageInput } from "@/lib/campaignPages"
 import { pageLook, THEME_FONTS } from "@/lib/pageTheme"
 import { ADDABLE_BLOCKS, allButtons, examplesLeft, isoToLocalInput, localInputToIso, move, newBlock, pageStatus } from "@/lib/pageEditing"
-import { imagesFor, pagePreviewPath } from "@/lib/pageReference"
+import { imagesFor, ownerFilePath, pagePreviewPath } from "@/lib/pageReference"
 import { prepareImage } from "@/lib/imageResize"
 import { formatChangeTime } from "../../components/scheduledChanges"
 import PagesHeader from "../PagesHeader"
-import BlockEditor, { TextField } from "./BlockEditor"
+import BlockEditor from "./BlockEditor"
+import { TextField } from "./fields"
 import styles from "../pages.module.css"
 
 const BRAND_SWATCHES = [
@@ -512,10 +513,19 @@ export default function PageEditor({ pageId }) {
           </div>
           <div className={styles.phone}>
             <div className={styles.screen}>
-              <CampaignPage content={content} view={pageView(previewPage)} images={imageMap} className={campaignFontClasses} />
+              <CampaignPage
+                content={content}
+                view={pageView(previewPage)}
+                images={imageMap}
+                fileHref={(buttonId, type) => ownerFilePath(pageId, buttonId, type)}
+                className={campaignFontClasses}
+              />
             </div>
           </div>
-          <p className={styles.previewNote}>The preview is drawn by the same code as the real page, including what you haven’t saved yet.</p>
+          <p className={styles.previewNote}>
+            The preview is drawn by the same code as the real page, including what you haven’t saved yet. Calendar and contact buttons
+            download what you last saved.
+          </p>
         </aside>
       </main>
     </div>

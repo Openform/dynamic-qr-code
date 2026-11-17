@@ -8,6 +8,7 @@
  */
 
 import { isPageEnded } from './campaignPages';
+import { isValidTimeZone } from './scheduleInput';
 
 /** Blocks the editor offers to add (the header is always there). */
 export const ADDABLE_BLOCKS = [
@@ -16,6 +17,10 @@ export const ADDABLE_BLOCKS = [
   { type: 'details', label: 'Details' },
   { type: 'offer', label: 'Offer' },
   { type: 'image', label: 'Image' },
+  { type: 'gallery', label: 'Gallery' },
+  { type: 'faq', label: 'FAQ' },
+  { type: 'hours', label: 'Opening hours' },
+  { type: 'prices', label: 'Price list' },
 ];
 
 /** What each block is called in the editor. */
@@ -26,11 +31,16 @@ export const BLOCK_LABELS = {
   buttons: 'Buttons',
   details: 'Details',
   offer: 'Offer',
+  faq: 'FAQ',
+  hours: 'Opening hours',
+  prices: 'Price list',
+  gallery: 'Gallery',
 };
 
 /**
  * The fields each kind of button asks for, in the order shown. `key` is the
  * field's name in the button's `fields` (lib/campaignPages.js BUTTON_KINDS).
+ * `time` fields hold an ISO time and are edited in the browser's local time.
  */
 export const BUTTON_FIELDS = {
   link: [{ key: 'url', label: 'Web address', placeholder: 'example.com/menu', prefix: 'https://' }],
@@ -44,6 +54,21 @@ export const BUTTON_FIELDS = {
     { key: 'message', label: 'Message to start with (optional)', placeholder: 'Hi! I’d like to order…', multiline: true },
   ],
   directions: [{ key: 'query', label: 'Address or place', placeholder: 'Shop 4, The Old Mill, Woodstock' }],
+  calendar: [
+    { key: 'title', label: 'Event name', placeholder: 'Summer market' },
+    { key: 'startsAt', label: 'Starts', type: 'datetime-local', time: true },
+    { key: 'endsAt', label: 'Ends (optional)', type: 'datetime-local', time: true },
+    { key: 'location', label: 'Place (optional)', placeholder: 'The Old Mill, Woodstock' },
+    { key: 'details', label: 'Details (optional)', placeholder: 'Bring a blanket!', multiline: true },
+  ],
+  contact: [
+    { key: 'name', label: 'Name', placeholder: 'Thandi Mokoena, or your business’s name' },
+    { key: 'organisation', label: 'Business (optional)', placeholder: 'Bean There Café' },
+    { key: 'phone', label: 'Phone number', placeholder: '021 555 0100', type: 'tel' },
+    { key: 'email', label: 'Email address', placeholder: 'hello@example.com', type: 'email' },
+    { key: 'website', label: 'Website', placeholder: 'example.com' },
+    { key: 'address', label: 'Address (optional)', placeholder: 'Shop 4, The Old Mill, Woodstock' },
+  ],
 };
 
 /** The label a new button of each kind starts with. */
@@ -53,7 +78,35 @@ export const BUTTON_DEFAULT_LABELS = {
   email: 'Email us',
   whatsapp: 'WhatsApp us',
   directions: 'Get directions',
+  calendar: 'Add to calendar',
+  contact: 'Save our contact',
 };
+
+export const DEFAULT_TIME_ZONE = 'Africa/Johannesburg';
+
+/** The browser's time zone, e.g. "Africa/Johannesburg", or South Africa's when it can't be read. */
+export function localTimeZone() {
+  try {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return isValidTimeZone(zone) ? zone : DEFAULT_TIME_ZONE;
+  } catch {
+    return DEFAULT_TIME_ZONE;
+  }
+}
+
+/** A day's opening times: closed, or open from `open` to `close`. */
+export function hoursDay(open = null, close = null) {
+  return { periods: open ? [{ open, close }] : [] };
+}
+
+/** The hours a new Opening hours block starts with: weekdays, Saturday morning, closed Sunday. */
+export function defaultHoursDays() {
+  return [
+    ...Array.from({ length: 5 }, () => hoursDay('08:00', '17:00')),
+    hoursDay('09:00', '13:00'),
+    hoursDay(),
+  ];
+}
 
 /** Every block and button id in use on a page. */
 function idsIn(content) {
@@ -98,6 +151,14 @@ export function newBlock(content, type) {
       return { ...base, rows: [{ icon: 'calendar', label: '', value: '' }] };
     case 'offer':
       return { ...base, label: '', headline: '', text: '', code: '', copyButton: true };
+    case 'faq':
+      return { ...base, title: 'Questions', items: [{ question: '', answer: '' }] };
+    case 'hours':
+      return { ...base, title: 'Opening hours', timeZone: localTimeZone(), days: defaultHoursDays(), note: '', showStatus: true };
+    case 'prices':
+      return { ...base, title: '', items: [{ name: '', price: '', description: '', tag: '' }] };
+    case 'gallery':
+      return { ...base, items: [] };
     default:
       throw new Error(`Unknown block type: ${type}`);
   }
@@ -161,6 +222,12 @@ function isExample(kind, fields) {
       return digits(fields?.number) === digits(EXAMPLE_NUMBER);
     case 'email':
       return /@example\.com$/i.test(String(fields?.to ?? ''));
+    case 'contact':
+      return (
+        (Boolean(fields?.phone) && digits(fields.phone) === digits(EXAMPLE_NUMBER)) ||
+        /@example\.com$/i.test(String(fields?.email ?? '')) ||
+        isExample('link', { url: fields?.website })
+      );
     default:
       return false;
   }

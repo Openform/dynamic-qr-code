@@ -34,6 +34,23 @@ export function CalendarIcon(props) {
   )
 }
 
+export function CalendarPlusIcon(props) {
+  return (
+    <Icon {...props}>
+      <path d="M8 2v4M16 2v4M21 13V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8M3 10h18M16 19h6M19 16v6" />
+    </Icon>
+  )
+}
+
+export function UserIcon(props) {
+  return (
+    <Icon {...props}>
+      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </Icon>
+  )
+}
+
 export function PencilIcon(props) {
   return (
     <Icon {...props}>

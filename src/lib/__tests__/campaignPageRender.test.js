@@ -38,9 +38,9 @@ function content(change = (page) => page) {
   return checked.content;
 }
 
-function render(pageContent, { ended = false, keptButton = null, images, reportHref } = {}) {
+function render(pageContent, { ended = false, keptButton = null, images, reportHref, fileHref, nowMs } = {}) {
   const page = { content: pageContent, endsAt: ended ? '2000-01-01 00:00:00' : null, afterEnd: 'ended', keptButton };
-  return renderToStaticMarkup(createElement(CampaignPage, { content: pageContent, view: pageView(page), images, reportHref }));
+  return renderToStaticMarkup(createElement(CampaignPage, { content: pageContent, view: pageView(page, nowMs), images, reportHref, fileHref }));
 }
 
 /** Every href in the HTML. */
@@ -153,5 +153,88 @@ describe('CampaignPage', () => {
   it('only shows “Report this page” when there’s somewhere to report to', () => {
     expect(render(content())).not.toContain('Report this page');
     expect(render(content(), { reportHref: '/r/abc/p/1/report' })).toContain('Report this page');
+  });
+});
+
+describe('CampaignPage, newer blocks', () => {
+  // Monday 16 November 2026, 12:00 in Johannesburg.
+  const MONDAY_NOON = Date.parse('2026-11-16T10:00:00Z');
+  const week = (periods) => Array.from({ length: 7 }, () => ({ periods }));
+
+  const more = (blocks) =>
+    content((page) => ({
+      ...page,
+      blocks: [page.blocks[0], ...blocks],
+    }));
+
+  it('draws questions that open with the browser’s own <details>', () => {
+    const html = render(more([{ id: 'faq', type: 'faq', title: 'Questions', items: [{ question: 'Do you deliver?', answer: 'Yes, within **10 km**.' }] }]));
+    expect(html).toContain('Questions');
+    expect(html).toMatch(/<details[^>]*><summary[^>]*><span>Do you deliver\?<\/span>/);
+    expect(html).toContain('<strong>10 km</strong>');
+  });
+
+  it('draws opening hours with whether it’s open when the page is opened', () => {
+    const hours = { id: 'hours', type: 'hours', title: '', timeZone: 'Africa/Johannesburg', days: week([{ open: '08:00', close: '17:00' }]), note: 'Closed on public holidays' };
+    const html = render(more([hours]), { nowMs: MONDAY_NOON });
+    expect(html).toContain('Opening hours');
+    expect(html).toContain('Open now · closes 17:00');
+    expect(html).toContain('Every day');
+    expect(html).toContain('aria-current="date"');
+    expect(html).toContain('Closed on public holidays');
+    expect(render(more([{ ...hours, showStatus: false }]), { nowMs: MONDAY_NOON })).not.toContain('Open now');
+  });
+
+  it('draws a price list', () => {
+    const html = render(more([{ id: 'coffee', type: 'prices', title: 'Coffee', items: [{ name: 'Flat white', price: 'R38', description: 'Double shot', tag: 'New' }] }]));
+    for (const text of ['Coffee', 'Flat white', 'R38', 'Double shot', 'New']) expect(html).toContain(text);
+  });
+
+  it('draws a gallery of the photos it’s given, scrolling sideways', () => {
+    const gallery = { id: 'gallery', type: 'gallery', items: [{ image: 31, alt: 'The counter' }, { image: 32, alt: 'Fresh bread' }] };
+    const images = { 31: { src: '/i/31-aa', width: 1600, height: 1200 }, 32: { src: '/i/32-bb', width: 1600, height: 1200 } };
+    const html = render(more([gallery]), { images });
+    expect(html).toContain('aria-label="2 photos. Scroll sideways to see them all."');
+    expect(html).toContain('alt="The counter"');
+    expect(html).toContain('alt="Fresh bread"');
+    // One photo is just a photo; none is nothing.
+    expect(render(more([gallery]), { images: { 31: images[31] } })).not.toContain('Scroll sideways');
+    expect(render(more([gallery]))).not.toContain('<img');
+  });
+
+  it('links calendar and contact buttons to their files, and leaves them out with nowhere to download from', () => {
+    const blocks = [
+      {
+        id: 'b',
+        type: 'buttons',
+        items: [
+          { id: 'b-cal', kind: 'calendar', label: 'Add to calendar', fields: { title: 'Market', startsAt: '2026-12-06T08:00:00Z' } },
+          { id: 'b-card', kind: 'contact', label: 'Save our contact', fields: { name: 'Bean There', phone: '021 555 0100' } },
+          { id: 'b-call', kind: 'call', label: 'Call us', fields: { number: '021 555 0100' } },
+        ],
+      },
+    ];
+    const fileHref = (buttonId, type) => `/r/abc/p/4/f/${buttonId}.${type}`;
+    const links = hrefs(render(more(blocks), { fileHref }));
+    expect(links).toEqual(expect.arrayContaining(['/r/abc/p/4/f/b-cal.ics', '/r/abc/p/4/f/b-card.vcf', 'tel:0215550100']));
+    const html = render(more(blocks));
+    expect(html).not.toContain('Add to calendar');
+    expect(html).toContain('Call us');
+  });
+
+  it('never turns what a customer typed into HTML', () => {
+    const attack = '<img src=x onerror=alert(1)>';
+    const html = render(
+      more([
+        { id: 'faq', type: 'faq', title: attack, items: [{ question: attack, answer: attack }] },
+        { id: 'p', type: 'prices', title: attack, items: [{ name: attack, price: '<b>R5</b>', description: attack, tag: '<i>x</i>' }] },
+        { id: 'h', type: 'hours', title: attack, timeZone: 'Africa/Johannesburg', days: week([]), note: attack },
+      ]),
+      { nowMs: MONDAY_NOON }
+    );
+    expect(html).not.toContain('<img');
+    expect(html).not.toContain('<b>');
+    expect(html).not.toContain('<i>');
+    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
   });
 });

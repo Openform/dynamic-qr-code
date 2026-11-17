@@ -27,7 +27,8 @@ describe('templates', () => {
   });
 
   it('flag their example details until they’re replaced', () => {
-    expect(examplesLeft(templateContent('contact', 'Us'))).toEqual(['Call us', 'WhatsApp us', 'Email us', 'Visit our website']);
+    expect(examplesLeft(templateContent('contact', 'Us'))).toEqual(['Call us', 'WhatsApp us', 'Email us', 'Visit our website', 'Save our contact']);
+    expect(examplesLeft(templateContent('menu', 'Us'))).toEqual(['Order on WhatsApp']);
     expect(examplesLeft(templateContent('blank', 'Us'))).toEqual([]);
 
     const content = templateContent('offer', 'Sale');
@@ -65,6 +66,22 @@ describe('new blocks and buttons', () => {
     expect(parsePageContent(withText)).toMatchObject({ ok: false, path: 'blocks.4.text', error: 'Enter the text.' });
   });
 
+  it('starts opening hours and galleries ready to save, and lists ready to fill in', () => {
+    for (const type of ['hours', 'gallery']) {
+      const content = page();
+      content.blocks.push(newBlock(content, type));
+      expect(parsePageContent(content).ok, type).toBe(true);
+    }
+    const hours = newBlock(page(), 'hours');
+    expect(hours.days.map((day) => day.periods.length)).toEqual([1, 1, 1, 1, 1, 1, 0]);
+    expect(Intl.DateTimeFormat('en-US', { timeZone: hours.timeZone })).toBeTruthy();
+    for (const [type, path] of [['faq', 'items.0.question'], ['prices', 'items.0.name']]) {
+      const content = page();
+      content.blocks.push(newBlock(content, type));
+      expect(parsePageContent(content)).toMatchObject({ ok: false, path: `blocks.4.${path}` });
+    }
+  });
+
   it('has fields for every kind of button', () => {
     expect(Object.keys(BUTTON_FIELDS).sort()).toEqual(BUTTON_KINDS.map((k) => k.id).sort());
     const button = newButton(page(), 'whatsapp');
@@ -72,7 +89,7 @@ describe('new blocks and buttons', () => {
   });
 
   it('lists every button, for the one to keep after the end', () => {
-    expect(allButtons(templateContent('contact', 'Us')).map((b) => b.id)).toEqual(['button-1', 'button-2', 'button-3', 'button-4']);
+    expect(allButtons(templateContent('contact', 'Us')).map((b) => b.id)).toEqual(['button-1', 'button-2', 'button-3', 'button-4', 'button-5']);
   });
 
   it('moves items up and down, and not past either end', () => {

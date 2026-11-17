@@ -66,9 +66,10 @@ const lastClock = new Map();
 
 /**
  * The day (0 = Monday) and minutes after midnight on the local clock in
- * `timeZone` at `ms`. Throws a RangeError for an unknown time zone.
+ * `timeZone` at `ms`. Throws a RangeError for an unknown time zone. Opening
+ * hours on campaign pages (lib/openingHours.js) read the clock the same way.
  */
-function localClock(ms, timeZone) {
+export function localClock(ms, timeZone) {
   const last = lastClock.get(timeZone);
   if (last?.ms === ms) return last.clock;
   let format = clockFormats.get(timeZone);

@@ -51,6 +51,16 @@ export function ownerImagePath(pageId, image) {
   return `/api/pages/${pageId}/images/${image.id}-${image.hash}`;
 }
 
+/** Where a visitor downloads a calendar or contact button's file (`type` is 'ics' or 'vcf'). */
+export function pageFilePath(shortId, pageId, buttonId, type) {
+  return `${pagePath(shortId, pageId)}/f/${buttonId}.${type}`;
+}
+
+/** Where the page's owner downloads one, from the saved page, for the editor and the preview. */
+export function ownerFilePath(pageId, buttonId, type) {
+  return `/api/pages/${pageId}/files/${buttonId}.${type}`;
+}
+
 /** `{ [imageId]: { src, width, height } }` for the page component, from a page's images. */
 export function imagesFor(images, srcOf) {
   return Object.fromEntries((images ?? []).map((image) => [image.id, { src: srcOf(image), width: image.width, height: image.height }]));

@@ -17,6 +17,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import mysql from 'mysql2/promise';
+import { MAX_STORED_IMAGES } from '../pageImageFiles';
 
 const enabled = process.env.ANALYTICS_DB_TEST === '1';
 
@@ -225,8 +226,8 @@ describe.skipIf(!enabled)('photos on campaign pages (database)', () => {
     const full = (
       await db.createPageWithinLimit({ userId: owner.id, name: 'Full', content: contentWith(), endsAt: null, afterEnd: 'ended', keptButton: null }, () => 100)
     ).page;
-    for (let i = 0; i < 12; i += 1) expect((await uploadFile(full.id, anotherPng())).status).toBe(201);
-    // None of the 12 is used by the saved page, so they make room for the 13th.
+    for (let i = 0; i < MAX_STORED_IMAGES; i += 1) expect((await uploadFile(full.id, anotherPng())).status).toBe(201);
+    // None of them is used by the saved page, so they make room for one more.
     expect((await uploadFile(full.id, anotherPng())).status).toBe(201);
     expect((await db.getPageImages(full.id)).length).toBe(1);
   });

@@ -8,10 +8,18 @@
  */
 
 import { CONTENT_VERSION, DEFAULT_BRAND, DEFAULT_THEME } from './campaignPages';
-import { EXAMPLE_EMAIL, EXAMPLE_NUMBER, EXAMPLE_URL } from './pageEditing';
+import { EXAMPLE_EMAIL, EXAMPLE_NUMBER, EXAMPLE_URL, defaultHoursDays, localTimeZone } from './pageEditing';
 
 function header(title, tagline) {
   return { id: 'header', type: 'header', hidden: false, cover: null, logo: null, title, tagline };
+}
+
+function hours(timeZone) {
+  return { id: 'hours-1', type: 'hours', hidden: false, title: 'Opening hours', timeZone, days: defaultHoursDays(), note: '', showStatus: true };
+}
+
+function prices(id, title, items) {
+  return { id, type: 'prices', hidden: false, title, items: items.map(([name, price, description = '', tag = '']) => ({ name, price, description, tag })) };
 }
 
 const TEMPLATE_BLOCKS = {
@@ -76,7 +84,41 @@ const TEMPLATE_BLOCKS = {
     },
   ],
 
-  contact: (title) => [
+  menu: (title, { timeZone }) => [
+    header(title, 'Coffee, breakfast and lunch, made fresh every day.'),
+    prices('prices-1', 'Coffee', [
+      ['Flat white', 'R38', 'A double shot, with any milk'],
+      ['Cappuccino', 'R36', '', 'Popular'],
+      ['Americano', 'R30'],
+    ]),
+    prices('prices-2', 'Breakfast', [
+      ['Eggs on sourdough', 'R75', 'Two eggs, any style'],
+      ['Granola bowl', 'R68', 'With yoghurt and fresh fruit', 'Vegan option'],
+      ['Toast and jam', 'R45'],
+    ]),
+    hours(timeZone),
+    {
+      id: 'buttons-1',
+      type: 'buttons',
+      hidden: false,
+      items: [
+        { id: 'button-1', kind: 'whatsapp', label: 'Order on WhatsApp', fields: { number: EXAMPLE_NUMBER, message: '' } },
+        { id: 'button-2', kind: 'directions', label: 'Get directions', fields: { query: 'Your address' } },
+      ],
+    },
+    {
+      id: 'faq-1',
+      type: 'faq',
+      hidden: false,
+      title: 'Questions',
+      items: [
+        { question: 'Can I book a table?', answer: 'Yes. Send us a WhatsApp and we’ll keep one for you.' },
+        { question: 'Do you have vegan options?', answer: 'Ask for oat milk in any coffee, and the granola bowl can be made vegan.' },
+      ],
+    },
+  ],
+
+  contact: (title, { timeZone }) => [
     header(title, 'What you do, in one sentence.'),
     {
       id: 'buttons-1',
@@ -87,16 +129,20 @@ const TEMPLATE_BLOCKS = {
         { id: 'button-2', kind: 'whatsapp', label: 'WhatsApp us', fields: { number: EXAMPLE_NUMBER, message: '' } },
         { id: 'button-3', kind: 'email', label: 'Email us', fields: { to: EXAMPLE_EMAIL, subject: '' } },
         { id: 'button-4', kind: 'link', label: 'Visit our website', fields: { url: EXAMPLE_URL } },
+        {
+          id: 'button-5',
+          kind: 'contact',
+          label: 'Save our contact',
+          fields: { name: title, organisation: '', phone: EXAMPLE_NUMBER, email: EXAMPLE_EMAIL, website: EXAMPLE_URL, address: '' },
+        },
       ],
     },
+    hours(timeZone),
     {
       id: 'details-1',
       type: 'details',
       hidden: false,
-      rows: [
-        { icon: 'clock', label: 'Open', value: 'Mon – Fri, 8am – 5pm' },
-        { icon: 'pin', label: 'Where', value: 'Your address' },
-      ],
+      rows: [{ icon: 'pin', label: 'Where', value: 'Your address' }],
     },
   ],
 
@@ -107,12 +153,16 @@ const TEMPLATE_BLOCKS = {
 export const PAGE_TEMPLATES = [
   { id: 'offer', name: 'Sale or offer', description: 'An offer with a promo code, details and buttons to order.' },
   { id: 'event', name: 'Event', description: 'Date, time and place, with directions and a link to book.' },
-  { id: 'contact', name: 'Contact card', description: 'A short intro and buttons to call, email or WhatsApp.' },
+  { id: 'menu', name: 'Menu or price list', description: 'Prices in sections, opening hours, questions and a button to order.' },
+  { id: 'contact', name: 'Contact card', description: 'Buttons to call, email or WhatsApp, a contact to save, and your hours.' },
   { id: 'blank', name: 'Blank', description: 'Just a header. Add the blocks you need.' },
 ];
 
-/** A new page's content from a template (an unknown one gives a blank page). */
-export function templateContent(templateId, title) {
-  const blocks = (TEMPLATE_BLOCKS[templateId] ?? TEMPLATE_BLOCKS.blank)(title);
+/**
+ * A new page's content from a template (an unknown one gives a blank page).
+ * Opening hours are on the clock in `timeZone`, the browser's own by default.
+ */
+export function templateContent(templateId, title, { timeZone = localTimeZone() } = {}) {
+  const blocks = (TEMPLATE_BLOCKS[templateId] ?? TEMPLATE_BLOCKS.blank)(title, { timeZone });
   return { v: CONTENT_VERSION, theme: DEFAULT_THEME, brand: DEFAULT_BRAND, font: null, blocks };
 }

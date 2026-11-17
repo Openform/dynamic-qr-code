@@ -4,7 +4,7 @@ import { redirect } from "next/navigation"
 import CampaignPage from "@/app/components/campaign/CampaignPage"
 import { campaignFontClasses } from "@/app/components/campaign/fonts"
 import { imageIdsInContent, pageView } from "@/lib/campaignPages"
-import { imagesFor, pageImagePath } from "@/lib/pageReference"
+import { imagesFor, pageFilePath, pageImagePath } from "@/lib/pageReference"
 import { getPageImages } from "@/lib/db"
 import { pageLook } from "@/lib/pageTheme"
 import { loadPublicPage } from "@/lib/publicPage"
@@ -82,6 +82,7 @@ export default async function PublicCampaignPage({ params }) {
       content={result.page.content}
       view={pageView(result.page)}
       images={await loadImages(shortId, result.page)}
+      fileHref={(buttonId, type) => pageFilePath(shortId, result.page.id, buttonId, type)}
       className={campaignFontClasses}
     />
   )

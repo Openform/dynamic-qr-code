@@ -2,9 +2,12 @@
 
 import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon, EyeIcon, EyeOffIcon, TrashIcon } from "@/app/components/icons"
 import { BUTTON_KINDS, DETAIL_ICONS, PAGE_LIMITS } from "@/lib/campaignPages"
-import { BLOCK_LABELS, BUTTON_DEFAULT_LABELS, BUTTON_FIELDS, move, newButton } from "@/lib/pageEditing"
+import { BLOCK_LABELS, BUTTON_DEFAULT_LABELS, BUTTON_FIELDS, isoToLocalInput, localInputToIso, move, newButton } from "@/lib/pageEditing"
 import { LOGO_MAX_SIDE, PHOTO_MAX_SIDE } from "@/lib/imageResize"
-import { useState } from "react"
+import { dayHoursText } from "@/lib/openingHours"
+import { IconButton, ImageField, SubItemHead, TextField } from "./fields"
+import HoursFields from "./HoursFields"
+import { FaqFields, GalleryFields, PricesFields } from "./ListBlockFields"
 import styles from "../pages.module.css"
 
 /**
@@ -121,6 +124,14 @@ function Fields({ block, path, content, set, onChange, errorFor, images, onUploa
       return <ButtonsFields block={block} path={path} content={content} onChange={onChange} errorFor={errorFor} />
     case "details":
       return <DetailsFields block={block} path={path} onChange={onChange} errorFor={errorFor} />
+    case "faq":
+      return <FaqFields block={block} path={path} onChange={onChange} errorFor={errorFor} />
+    case "hours":
+      return <HoursFields block={block} path={path} onChange={onChange} errorFor={errorFor} />
+    case "prices":
+      return <PricesFields block={block} path={path} onChange={onChange} errorFor={errorFor} />
+    case "gallery":
+      return <GalleryFields block={block} path={path} onChange={onChange} errorFor={errorFor} images={images} onUpload={onUpload} />
     case "offer":
       return (
         <>
@@ -164,21 +175,14 @@ function ButtonsFields({ block, path, content, onChange, errorFor }) {
         const id = (key) => `${item.id}-${key}`
         return (
           <div key={item.id} className={styles.subItem}>
-            <div className={styles.subHead}>
-              <span className={styles.subTitle}>
-                Button {index + 1}
-                {index === 0 ? " · the main one" : ""}
-              </span>
-              <IconButton label={`Move button ${index + 1} up`} onClick={() => setItems(move(items, index, -1))} disabled={index === 0}>
-                <ArrowUpIcon size={16} />
-              </IconButton>
-              <IconButton label={`Move button ${index + 1} down`} onClick={() => setItems(move(items, index, 1))} disabled={index === items.length - 1}>
-                <ArrowDownIcon size={16} />
-              </IconButton>
-              <IconButton label={`Remove button ${index + 1}`} onClick={() => setItems(items.filter((_, i) => i !== index))} disabled={items.length === 1}>
-                <TrashIcon size={16} />
-              </IconButton>
-            </div>
+            <SubItemHead
+              title={`Button ${index + 1}${index === 0 ? " · the main one" : ""}`}
+              name="button"
+              index={index}
+              count={items.length}
+              onMove={(step) => setItems(move(items, index, step))}
+              onRemove={() => setItems(items.filter((_, i) => i !== index))}
+            />
             <div className={styles.fieldRow}>
               <div className={styles.field}>
                 <label htmlFor={id("kind")} className={styles.fieldLabel}>
@@ -194,21 +198,27 @@ function ButtonsFields({ block, path, content, onChange, errorFor }) {
               </div>
               <TextField id={id("label")} label="Label" value={item.label} onChange={(label) => setItem(index, { ...item, label })} max={PAGE_LIMITS.buttonLabel} error={errorFor(`${itemPath}.label`)} />
             </div>
-            {(BUTTON_FIELDS[item.kind] ?? []).map((field) => (
-              <TextField
-                key={field.key}
-                id={id(field.key)}
-                label={field.label}
-                type={field.type}
-                value={item.fields?.[field.key] ?? ""}
-                onChange={(value) => setItem(index, { ...item, fields: { ...item.fields, [field.key]: value } })}
-                placeholder={field.placeholder}
-                multiline={field.multiline}
-                rows={2}
-                error={errorFor(`${itemPath}.fields.${field.key}`)}
-                hint={field.key === "url" ? "https:// is added for you." : undefined}
-              />
-            ))}
+            {(BUTTON_FIELDS[item.kind] ?? []).map((field) => {
+              const stored = item.fields?.[field.key] ?? ""
+              return (
+                <TextField
+                  key={field.key}
+                  id={id(field.key)}
+                  label={field.label}
+                  type={field.type}
+                  // Times are stored as ISO and edited in the browser's own time.
+                  value={field.time ? isoToLocalInput(stored) : stored}
+                  onChange={(value) =>
+                    setItem(index, { ...item, fields: { ...item.fields, [field.key]: field.time ? localInputToIso(value) ?? "" : value } })
+                  }
+                  placeholder={field.placeholder}
+                  multiline={field.multiline}
+                  rows={2}
+                  error={errorFor(`${itemPath}.fields.${field.key}`)}
+                  hint={fieldHint(item.kind, field.key)}
+                />
+              )
+            })}
           </div>
         )
       })}
@@ -236,18 +246,14 @@ function DetailsFields({ block, path, onChange, errorFor }) {
         const id = (key) => `${block.id}-row-${index}-${key}`
         return (
           <div key={index} className={styles.subItem}>
-            <div className={styles.subHead}>
-              <span className={styles.subTitle}>Detail {index + 1}</span>
-              <IconButton label={`Move detail ${index + 1} up`} onClick={() => setRows(move(rows, index, -1))} disabled={index === 0}>
-                <ArrowUpIcon size={16} />
-              </IconButton>
-              <IconButton label={`Move detail ${index + 1} down`} onClick={() => setRows(move(rows, index, 1))} disabled={index === rows.length - 1}>
-                <ArrowDownIcon size={16} />
-              </IconButton>
-              <IconButton label={`Remove detail ${index + 1}`} onClick={() => setRows(rows.filter((_, i) => i !== index))} disabled={rows.length === 1}>
-                <TrashIcon size={16} />
-              </IconButton>
-            </div>
+            <SubItemHead
+              name="detail"
+              title={`Detail ${index + 1}`}
+              index={index}
+              count={rows.length}
+              onMove={(step) => setRows(move(rows, index, step))}
+              onRemove={() => setRows(rows.filter((_, i) => i !== index))}
+            />
             <div className={styles.fieldRow}>
               <div className={styles.field} style={{ flex: "0 1 150px" }}>
                 <label htmlFor={id("icon")} className={styles.fieldLabel}>
@@ -282,110 +288,27 @@ function DetailsFields({ block, path, onChange, errorFor }) {
   )
 }
 
-/**
- * A photo for a block: a thumbnail of the one chosen, and buttons to upload
- * one (resized in the browser first) or remove it. `onUpload(file, maxSide)`
- * resolves to the new image's id.
- */
-function ImageField({ id, label, value, images, onChange, onUpload, maxSide, round = false, error, hint }) {
-  const [busy, setBusy] = useState(false)
-  const [uploadError, setUploadError] = useState("")
-  const image = value ? images?.[value] : null
-
-  async function choose(e) {
-    const file = e.target.files?.[0]
-    e.target.value = ""
-    if (!file) return
-    setBusy(true)
-    setUploadError("")
-    try {
-      onChange(await onUpload(file, maxSide))
-    } catch (err) {
-      setUploadError(err.message || "That photo couldn’t be uploaded.")
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const message = uploadError || error
-  return (
-    <div className={styles.field}>
-      <span className={styles.fieldLabel} id={`${id}-label`}>
-        {label}
-      </span>
-      <div className={styles.imageRow}>
-        {image ? (
-          // A preview of the owner's own upload.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={image.src} alt="" className={round ? styles.thumbRound : styles.thumb} />
-        ) : (
-          <span className={round ? styles.thumbRound : styles.thumb} aria-hidden="true" />
-        )}
-        <label className={`btn btn-secondary btn-sm${busy ? ` ${styles.busy}` : ""}`} htmlFor={id}>
-          {busy ? "Uploading…" : image ? "Replace" : "Upload photo"}
-        </label>
-        <input
-          id={id}
-          type="file"
-          accept="image/jpeg,image/png,image/webp,image/*"
-          className={styles.fileInput}
-          onChange={choose}
-          disabled={busy}
-          aria-labelledby={`${id}-label`}
-        />
-        {image && (
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => onChange(null)} disabled={busy}>
-            Remove
-          </button>
-        )}
-      </div>
-      {message ? <p className={styles.fieldError}>{message}</p> : hint ? <p className={styles.hint}>{hint}</p> : null}
-    </div>
-  )
-}
-
-/** A labelled text input or textarea, with its error or hint under it. */
-export function TextField({ id, label, value, onChange, max, placeholder, type = "text", multiline = false, rows = 3, error, hint }) {
-  const className = `input-field${multiline ? ` ${styles.textarea}` : ""}${error ? " input-error" : ""}`
-  const common = {
-    id,
-    className,
-    value: value ?? "",
-    maxLength: max,
-    placeholder,
-    onChange: (e) => onChange(e.target.value),
-    "aria-invalid": error ? true : undefined,
-    "aria-describedby": error || hint ? `${id}-note` : undefined
-  }
-  return (
-    <div className={styles.field}>
-      <label htmlFor={id} className={styles.fieldLabel}>
-        {label}
-      </label>
-      {multiline ? <textarea rows={rows} {...common} /> : <input type={type} {...common} />}
-      {error ? (
-        <p id={`${id}-note`} className={styles.fieldError}>
-          {error}
-        </p>
-      ) : hint ? (
-        <p id={`${id}-note`} className={styles.hint}>
-          {hint}
-        </p>
-      ) : null}
-    </div>
-  )
-}
-
-function IconButton({ label, onClick, disabled, children }) {
-  return (
-    <button type="button" className={styles.iconButton} aria-label={label} title={label} onClick={onClick} disabled={disabled}>
-      {children}
-    </button>
-  )
-}
-
 function kindDescription(kind) {
-  return { link: "Open a website", call: "Call a number", email: "Write an email", whatsapp: "Open a WhatsApp chat", directions: "Get directions" }[kind] ?? kind
+  return (
+    {
+      link: "Open a website",
+      call: "Call a number",
+      email: "Write an email",
+      whatsapp: "Open a WhatsApp chat",
+      directions: "Get directions",
+      calendar: "Add an event to their calendar",
+      contact: "Save a contact to their phone"
+    }[kind] ?? kind
+  )
+}
+
+/** The note under a button's field, where it needs one. */
+function fieldHint(kind, key) {
+  if (key === "url") return "https:// is added for you."
+  if (kind === "calendar" && key === "startsAt") return "In your time zone. Phones show it in theirs."
+  if (kind === "calendar" && key === "endsAt") return "Leave it empty for an hour-long event."
+  if (kind === "contact" && key === "website") return "Add at least one of the phone number, email address and website."
+  return undefined
 }
 
 /** A block in a few words, for its row while it's closed. */
@@ -403,6 +326,14 @@ function summaryOf(block) {
       return (block.rows ?? []).map((row) => row.value).filter(Boolean).join(" · ")
     case "offer":
       return block.headline
+    case "faq":
+      return (block.items ?? []).map((item) => item.question).filter(Boolean).join(" · ")
+    case "hours":
+      return `Mon ${dayHoursText(block, 0)} · Sat ${dayHoursText(block, 5)} · Sun ${dayHoursText(block, 6)}`
+    case "prices":
+      return [block.title, (block.items ?? []).map((item) => item.name).filter(Boolean).join(", ")].filter(Boolean).join(": ")
+    case "gallery":
+      return block.items?.length ? `${block.items.length} photo${block.items.length === 1 ? "" : "s"}` : "No photos yet"
     default:
       return ""
   }

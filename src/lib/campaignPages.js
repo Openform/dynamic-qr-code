@@ -1,6 +1,7 @@
 /**
  * Campaign pages: a simple mobile page a code can send scans to, built from
- * blocks (a header, text, an image, buttons, details, an offer) and a theme.
+ * blocks (a header, text, an image, buttons, details, an offer, questions,
+ * opening hours, a price list, a gallery) and a theme.
  * QR Go owns the layout; the account chooses the content and the look.
  *
  * This file holds the rules for what a page may contain. The API checks every
@@ -26,12 +27,14 @@
  * code types (lib/contentTypes.js), so only https://, mailto:, tel: and the
  * WhatsApp and Google Maps links they make can appear, and every text field
  * rejects control characters and the invisible characters that change text
- * direction.
+ * direction. Calendar and contact buttons download a file instead, built on
+ * the server from the saved page's checked fields (lib/pageFiles.js).
  */
 
-import { checkText, normalizeLines, parseContent } from './contentTypes';
+import { checkText, isValidEmailAddress, normalizeLines, parseContent } from './contentTypes';
 import { contrastRatio } from './qrStyle';
 import { parseIsoWithOffset, isTooFarAhead } from './destinationChanges';
+import { isValidTimeZone } from './scheduleInput';
 import { toSqlDateTime, sqlToIso } from './analyticsFilters';
 
 export const CONTENT_VERSION = 1;
@@ -40,9 +43,27 @@ export const CONTENT_VERSION = 1;
 export const PAGE_LIMITS = {
   name: 100, // campaign_pages.name
   blocks: 20,
-  images: 6,
+  images: 16, // shown on one page; a gallery holds up to 8
   buttons: 6,
   detailRows: 8,
+  blockTitle: 80,
+  faqItems: 12,
+  faqQuestion: 150,
+  faqAnswer: 1000,
+  hoursPeriods: 2, // a day can have a break, e.g. 12:00–15:00 and 18:00–22:00
+  hoursNote: 160,
+  priceItems: 30,
+  priceName: 80,
+  priceDescription: 200,
+  price: 24,
+  priceTag: 24,
+  galleryImages: 8,
+  eventTitle: 120,
+  eventLocation: 200,
+  eventDetails: 500,
+  contactName: 100,
+  contactOrganisation: 100,
+  contactAddress: 200,
   title: 120,
   tagline: 200,
   text: 2000,
@@ -71,17 +92,25 @@ export const FONTS = [
   { id: 'fraunces', name: 'Fraunces' },
 ];
 
-export const BLOCK_TYPES = ['header', 'text', 'image', 'buttons', 'details', 'offer'];
+export const BLOCK_TYPES = ['header', 'text', 'image', 'buttons', 'details', 'offer', 'faq', 'hours', 'prices', 'gallery'];
 
 /**
- * What a button can do, and the code type (lib/contentTypes.js) whose fields
- * and link it uses:
+ * What a button can do. Most open a link built by a code type
+ * (lib/contentTypes.js) from its fields:
  *
  *   link       { url }
  *   call       { number }
  *   email      { to, subject?, body? }
  *   whatsapp   { number, message? }
  *   directions { query }
+ *
+ * Two download a file instead (`file` is its extension), built from the
+ * fields by lib/pageFiles.js:
+ *
+ *   calendar   { title, startsAt, endsAt?, location?, details? } — an event
+ *              (.ics); times are ISO, as Date#toISOString() gives them
+ *   contact    { name, organisation?, phone?, email?, website?, address? } —
+ *              a contact card (.vcf) with a phone number, email or website
  */
 export const BUTTON_KINDS = [
   { id: 'link', label: 'Link', contentType: 'url' },
@@ -89,6 +118,8 @@ export const BUTTON_KINDS = [
   { id: 'email', label: 'Email', contentType: 'email' },
   { id: 'whatsapp', label: 'WhatsApp', contentType: 'whatsapp' },
   { id: 'directions', label: 'Directions', contentType: 'location' },
+  { id: 'calendar', label: 'Add to calendar', file: 'ics' },
+  { id: 'contact', label: 'Save contact', file: 'vcf' },
 ];
 
 /** Icons a Details row can show. */
@@ -106,6 +137,8 @@ export const DEFAULT_BRAND = '#1F6F4A';
 
 const BLOCK_ID = /^[A-Za-z0-9_-]{1,32}$/;
 const HEX_COLOR = /^#[0-9A-Fa-f]{6}$/;
+// "HH:MM", 00:00 to 23:59.
+const TIME_OF_DAY = /^([01]\d|2[0-3]):[0-5]\d$/;
 const BUTTON_KIND_BY_ID = new Map(BUTTON_KINDS.map((k) => [k.id, k]));
 
 function fail(path, error) {
@@ -194,13 +227,92 @@ function parseButton(input, path, ctx) {
   const label = field(input.label, `${path}.label`, { label: 'a label', max: PAGE_LIMITS.buttonLabel, required: true });
   if (label.error) return label;
 
-  const checked = parseContent(kind.contentType, isObject(input.fields) ? input.fields : {});
+  const checked = checkButtonFields(kind, isObject(input.fields) ? input.fields : {}, ctx.nowMs);
   if (!checked.ok) return { error: fail(`${path}.fields${checked.field ? `.${checked.field}` : ''}`, checked.error) };
-  if (kind.id === 'link' && !isWebLink(checked.destination)) {
-    return { error: fail(`${path}.fields.url`, WEB_LINK_ERROR) };
-  }
   ctx.buttonIds.add(input.id);
   return { button: { id: input.id, kind: kind.id, label: label.value, fields: checked.content } };
+}
+
+/**
+ * A button's fields, checked for its kind: `{ ok: true, content, destination? }`
+ * (`destination` is the link for kinds that open one) or
+ * `{ ok: false, field, error }`.
+ */
+function checkButtonFields(kind, fields, nowMs) {
+  if (kind.id === 'calendar') return checkEventFields(fields, nowMs);
+  if (kind.id === 'contact') return checkContactFields(fields);
+  const checked = parseContent(kind.contentType, fields);
+  if (!checked.ok) return checked;
+  if (kind.id === 'link' && !isWebLink(checked.destination)) return { ok: false, field: 'url', error: WEB_LINK_ERROR };
+  return checked;
+}
+
+function fieldError(field, error) {
+  return { ok: false, field, error };
+}
+
+/** A calendar button's event. */
+function checkEventFields(fields, nowMs = Date.now()) {
+  const title = checkText(fields.title, { label: 'the event’s name', max: PAGE_LIMITS.eventTitle, required: true });
+  if (title.error) return fieldError('title', title.error);
+
+  const startMs = typeof fields.startsAt === 'string' && fields.startsAt ? parseIsoWithOffset(fields.startsAt) : NaN;
+  if (Number.isNaN(startMs)) return fieldError('startsAt', 'Enter when the event starts.');
+  if (isTooFarAhead(startMs, nowMs)) return fieldError('startsAt', 'The event can be at most 5 years ahead.');
+  let endsAt = '';
+  if (typeof fields.endsAt === 'string' && fields.endsAt) {
+    const endMs = parseIsoWithOffset(fields.endsAt);
+    if (Number.isNaN(endMs)) return fieldError('endsAt', 'Enter a valid end, or leave it empty.');
+    if (endMs <= startMs) return fieldError('endsAt', 'The event has to end after it starts.');
+    if (isTooFarAhead(endMs, nowMs)) return fieldError('endsAt', 'The event can be at most 5 years ahead.');
+    endsAt = new Date(endMs).toISOString();
+  }
+
+  const location = checkText(fields.location, { label: 'the place', max: PAGE_LIMITS.eventLocation });
+  if (location.error) return fieldError('location', location.error);
+  const details = checkText(fields.details, { label: 'the details', max: PAGE_LIMITS.eventDetails, multiline: true });
+  if (details.error) return fieldError('details', details.error);
+
+  return {
+    ok: true,
+    content: {
+      title: title.value,
+      startsAt: new Date(startMs).toISOString(),
+      endsAt,
+      location: location.value,
+      details: normalizeLines(details.value),
+    },
+  };
+}
+
+/** A contact button's card: a name and at least one way to get in touch. */
+function checkContactFields(fields) {
+  const name = checkText(fields.name, { label: 'the name', max: PAGE_LIMITS.contactName, required: true });
+  if (name.error) return fieldError('name', name.error);
+  const organisation = checkText(fields.organisation, { label: 'the business name', max: PAGE_LIMITS.contactOrganisation });
+  if (organisation.error) return fieldError('organisation', organisation.error);
+
+  let phone = '';
+  if (String(fields.phone ?? '').trim()) {
+    const checked = parseContent('phone', { number: fields.phone });
+    if (!checked.ok) return fieldError('phone', checked.error);
+    phone = checked.content.number;
+  }
+  const email = String(fields.email ?? '').trim();
+  if (email && !isValidEmailAddress(email)) return fieldError('email', 'Enter a valid email address, like hello@example.com.');
+  let website = '';
+  if (String(fields.website ?? '').trim()) {
+    const checked = parseContent('url', { url: fields.website });
+    if (!checked.ok) return fieldError('website', checked.error);
+    if (!isWebLink(checked.destination)) return fieldError('website', WEB_LINK_ERROR);
+    website = checked.destination;
+  }
+  if (!phone && !email && !website) return fieldError('phone', 'Add a phone number, email address or website.');
+
+  const address = checkText(fields.address, { label: 'the address', max: PAGE_LIMITS.contactAddress });
+  if (address.error) return fieldError('address', address.error);
+
+  return { ok: true, content: { name: name.value, organisation: organisation.value, phone, email, website, address: address.value } };
 }
 
 function parseButtonsBlock(input, path, ctx) {
@@ -263,6 +375,136 @@ function parseOfferBlock(input, path) {
   };
 }
 
+/** A list in a block: at least one item and at most `max`, each checked by `parseItem`. */
+function parseItems(input, path, { max, empty, tooMany, allowEmpty = false }, parseItem) {
+  const items = Array.isArray(input) ? input : [];
+  if (items.length === 0 && !allowEmpty) return { error: fail(path, empty) };
+  if (items.length > max) return { error: fail(path, tooMany) };
+  const out = [];
+  for (let i = 0; i < items.length; i += 1) {
+    const checked = parseItem(isObject(items[i]) ? items[i] : {}, `${path}.${i}`);
+    if (checked.error) return checked;
+    out.push(checked.item);
+  }
+  return { items: out };
+}
+
+/** An optional heading over a block, like "Questions" or "Coffee". */
+function blockTitle(input, path) {
+  return field(input.title, `${path}.title`, { label: 'the heading', max: PAGE_LIMITS.blockTitle });
+}
+
+function parseFaqBlock(input, path) {
+  const title = blockTitle(input, path);
+  if (title.error) return title;
+  const items = parseItems(
+    input.items,
+    `${path}.items`,
+    {
+      max: PAGE_LIMITS.faqItems,
+      empty: 'Add at least one question.',
+      tooMany: `A FAQ block can have at most ${PAGE_LIMITS.faqItems} questions.`,
+    },
+    (item, itemPath) => {
+      const question = field(item.question, `${itemPath}.question`, { label: 'the question', max: PAGE_LIMITS.faqQuestion, required: true });
+      if (question.error) return question;
+      const answer = field(item.answer, `${itemPath}.answer`, { label: 'the answer', max: PAGE_LIMITS.faqAnswer, required: true, multiline: true });
+      if (answer.error) return answer;
+      return { item: { question: question.value, answer: answer.value } };
+    }
+  );
+  if (items.error) return items;
+  return { block: { title: title.value, items: items.items } };
+}
+
+/** A day's opening times: none (closed), or up to two "HH:MM" to "HH:MM" periods. */
+function parseDay(input, path) {
+  const periods = Array.isArray(input?.periods) ? input.periods : [];
+  if (periods.length > PAGE_LIMITS.hoursPeriods) {
+    return { error: fail(path, `A day can have at most ${PAGE_LIMITS.hoursPeriods} opening times.`) };
+  }
+  const out = [];
+  for (let i = 0; i < periods.length; i += 1) {
+    const period = isObject(periods[i]) ? periods[i] : {};
+    for (const key of ['open', 'close']) {
+      if (typeof period[key] !== 'string' || !TIME_OF_DAY.test(period[key])) {
+        return { error: fail(`${path}.periods.${i}.${key}`, key === 'open' ? 'Enter when it opens.' : 'Enter when it closes.') };
+      }
+    }
+    out.push({ open: period.open, close: period.close });
+  }
+  return { day: { periods: out } };
+}
+
+/**
+ * Opening hours: a time for each day, Monday first, on the local clock in
+ * `timeZone` (lib/openingHours.js works out "Open now"). A close at or
+ * before the open runs past midnight, and the same open and close means
+ * open all day, as in weekly schedules.
+ */
+function parseHoursBlock(input, path) {
+  const title = blockTitle(input, path);
+  if (title.error) return title;
+  if (!isValidTimeZone(input.timeZone)) return { error: fail(`${path}.timeZone`, 'Choose the time zone the hours are in.') };
+  const days = Array.isArray(input.days) ? input.days : [];
+  if (days.length !== 7) return { error: fail(`${path}.days`, 'Opening hours need a time for every day of the week.') };
+  const out = [];
+  for (let i = 0; i < 7; i += 1) {
+    const checked = parseDay(days[i], `${path}.days.${i}`);
+    if (checked.error) return checked;
+    out.push(checked.day);
+  }
+  const note = field(input.note, `${path}.note`, { label: 'the note', max: PAGE_LIMITS.hoursNote });
+  if (note.error) return note;
+  return { block: { title: title.value, timeZone: input.timeZone, days: out, note: note.value, showStatus: input.showStatus !== false } };
+}
+
+function parsePricesBlock(input, path) {
+  const title = blockTitle(input, path);
+  if (title.error) return title;
+  const items = parseItems(
+    input.items,
+    `${path}.items`,
+    {
+      max: PAGE_LIMITS.priceItems,
+      empty: 'Add at least one item.',
+      tooMany: `A price list can have at most ${PAGE_LIMITS.priceItems} items.`,
+    },
+    (item, itemPath) => {
+      const name = field(item.name, `${itemPath}.name`, { label: 'the item’s name', max: PAGE_LIMITS.priceName, required: true });
+      if (name.error) return name;
+      const price = field(item.price, `${itemPath}.price`, { label: 'the price', max: PAGE_LIMITS.price });
+      if (price.error) return price;
+      const description = field(item.description, `${itemPath}.description`, { label: 'the description', max: PAGE_LIMITS.priceDescription });
+      if (description.error) return description;
+      const tag = field(item.tag, `${itemPath}.tag`, { label: 'the tag', max: PAGE_LIMITS.priceTag });
+      if (tag.error) return tag;
+      return { item: { name: name.value, price: price.value, description: description.value, tag: tag.value } };
+    }
+  );
+  if (items.error) return items;
+  return { block: { title: title.value, items: items.items } };
+}
+
+function parseGalleryBlock(input, path, ctx) {
+  // Empty while the owner is adding photos; it isn't shown until it has one.
+  const items = parseItems(
+    input.items,
+    `${path}.items`,
+    { max: PAGE_LIMITS.galleryImages, tooMany: `A gallery can have at most ${PAGE_LIMITS.galleryImages} photos.`, allowEmpty: true },
+    (item, itemPath) => {
+      const image = checkImage(item.image, `${itemPath}.image`, ctx.imageIds, 'the photo');
+      if (image.error) return image;
+      if (image.value === null) return { error: fail(`${itemPath}.image`, 'Choose a photo, or remove this one.') };
+      const alt = field(item.alt, `${itemPath}.alt`, { label: 'the description', max: PAGE_LIMITS.imageAlt });
+      if (alt.error) return alt;
+      return { item: { image: image.value, alt: alt.value } };
+    }
+  );
+  if (items.error) return items;
+  return { block: { items: items.items } };
+}
+
 const BLOCK_PARSERS = {
   header: parseHeader,
   text: parseTextBlock,
@@ -270,6 +512,10 @@ const BLOCK_PARSERS = {
   buttons: parseButtonsBlock,
   details: parseDetailsBlock,
   offer: parseOfferBlock,
+  faq: parseFaqBlock,
+  hours: parseHoursBlock,
+  prices: parsePricesBlock,
+  gallery: parseGalleryBlock,
 };
 
 function parseBlock(input, path, ctx, index) {
@@ -291,7 +537,7 @@ function parseBlock(input, path, ctx, index) {
   return { block: { id: input.id, type: input.type, hidden, ...checked.block } };
 }
 
-/** Every image a page's content shows (header cover and logo, image blocks). */
+/** Every image a page's content shows (header cover and logo, image blocks, galleries). */
 export function imageIdsInContent(content) {
   const ids = new Set();
   for (const block of Array.isArray(content?.blocks) ? content.blocks : []) {
@@ -307,6 +553,8 @@ function imagesIn(block) {
       return [block.cover, block.logo];
     case 'image':
       return [block.image];
+    case 'gallery':
+      return Array.isArray(block.items) ? block.items.map((item) => item?.image) : [];
     default:
       return [];
   }
@@ -322,7 +570,7 @@ function imagesIn(block) {
  * `{ ok: false, path, error }` with where the problem is (e.g.
  * "blocks.2.items.0.fields.number") and a message to show.
  */
-export function parsePageContent(input, { imageIds = new Set() } = {}) {
+export function parsePageContent(input, { imageIds = new Set(), nowMs = Date.now() } = {}) {
   if (!isObject(input)) return fail('content', 'The page’s content is missing.');
 
   const theme = THEMES.some((t) => t.id === input.theme) ? input.theme : null;
@@ -345,7 +593,7 @@ export function parsePageContent(input, { imageIds = new Set() } = {}) {
     return fail('blocks', `A page can have at most ${PAGE_LIMITS.blocks} blocks.`);
   }
 
-  const ctx = { imageIds, ids: new Set(), buttonIds: new Set() };
+  const ctx = { imageIds, nowMs, ids: new Set(), buttonIds: new Set() };
   const out = [];
   for (let i = 0; i < blocks.length; i += 1) {
     const checked = parseBlock(blocks[i], `blocks.${i}`, ctx, i);
@@ -388,7 +636,7 @@ export function parsePageInput(body, { imageIds = new Set(), nowMs = Date.now() 
   const name = checkPageName(body.name);
   if (name.error) return fail('name', name.error);
 
-  const checked = parsePageContent(body.content, { imageIds });
+  const checked = parsePageContent(body.content, { imageIds, nowMs });
   if (!checked.ok) return checked;
 
   let endsAt = null;
@@ -426,14 +674,27 @@ export function newPageContent(title) {
 
 /**
  * The link a stored button opens, rebuilt from its checked fields. Null when
- * the button isn't one this file would accept (then it must not be shown).
+ * the button isn't one this file would accept (then it must not be shown),
+ * and for buttons that download a file (see buttonFile).
  */
 export function buttonLink(button) {
   const kind = BUTTON_KIND_BY_ID.get(button?.kind);
-  if (!kind) return null;
-  const checked = parseContent(kind.contentType, button.fields);
-  if (!checked.ok || (kind.id === 'link' && !isWebLink(checked.destination))) return null;
-  return checked.destination;
+  if (!kind || kind.file) return null;
+  const checked = checkButtonFields(kind, isObject(button.fields) ? button.fields : {});
+  return checked.ok ? checked.destination : null;
+}
+
+/**
+ * For a stored calendar or contact button: `{ type: 'ics' | 'vcf', fields }`
+ * with its fields checked again, ready for lib/pageFiles.js. Null for other
+ * buttons and for ones that don't pass (then it must not be shown).
+ */
+export function buttonFile(button) {
+  const kind = BUTTON_KIND_BY_ID.get(button?.kind);
+  if (!kind?.file) return null;
+  // A saved event only gets nearer, so "too far ahead" isn't checked again.
+  const checked = checkButtonFields(kind, isObject(button.fields) ? button.fields : {}, Infinity);
+  return checked.ok ? { type: kind.file, fields: checked.content } : null;
 }
 
 /**
@@ -472,18 +733,32 @@ export function isPageEnded(page, nowMs = Date.now()) {
 
 /**
  * What a page shows at `nowMs`, from its stored row: `{ ended, header,
- * blocks, keptButton }`. While it's live, `blocks` are the blocks under the
- * header that aren't hidden. Once it has ended, `blocks` is empty and
- * `keptButton` is the one button the owner chose to keep showing (or null).
+ * blocks, keptButton, nowMs }`. While it's live, `blocks` are the blocks
+ * under the header that aren't hidden. Once it has ended, `blocks` is empty
+ * and `keptButton` is the one button the owner chose to keep showing (or
+ * null). `nowMs` is kept for what depends on the time, like "Open now".
  */
 export function pageView(page, nowMs = Date.now()) {
   const all = Array.isArray(page?.content?.blocks) ? page.content.blocks : [];
   const header = all[0]?.type === 'header' ? all[0] : null;
   const rest = header ? all.slice(1) : all;
   if (!isPageEnded(page, nowMs)) {
-    return { ended: false, header, blocks: rest.filter((block) => !block.hidden), keptButton: null };
+    return { ended: false, header, blocks: rest.filter((block) => !block.hidden), keptButton: null, nowMs };
   }
   const buttons = rest.flatMap((block) => (block.type === 'buttons' && Array.isArray(block.items) ? block.items : []));
   const keptButton = page.keptButton ? buttons.find((button) => button.id === page.keptButton) ?? null : null;
-  return { ended: true, header, blocks: [], keptButton };
+  return { ended: true, header, blocks: [], keptButton, nowMs };
+}
+
+/**
+ * A button visitors can see on the page at `nowMs`, or null: one in a
+ * Buttons block that isn't hidden, or once the page has ended, the one kept
+ * button. Calendar and contact files are only served for these.
+ */
+export function shownButton(page, buttonId, nowMs = Date.now()) {
+  const view = pageView(page, nowMs);
+  const buttons = view.ended
+    ? [view.keptButton].filter(Boolean)
+    : view.blocks.flatMap((block) => (block.type === 'buttons' && Array.isArray(block.items) ? block.items : []));
+  return buttons.find((button) => button.id === buttonId) ?? null;
 }

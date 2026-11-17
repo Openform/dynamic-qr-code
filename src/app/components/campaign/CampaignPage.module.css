@@ -312,6 +312,239 @@
   border: var(--cp-btn-border);
 }
 
+/* ---- Questions, opening hours, price lists ---- */
+
+.listBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.blockTitle {
+  font-family: var(--cp-head-font);
+  font-weight: var(--cp-head-weight);
+  letter-spacing: var(--cp-head-tracking);
+  font-size: 1.35rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.faq {
+  border-radius: var(--cp-radius);
+  background: var(--cp-surface);
+  border: var(--cp-surface-border);
+}
+
+.faqItem + .faqItem {
+  border-top: 1px solid var(--cp-divider);
+}
+
+.faqQuestion {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  list-style: none;
+}
+
+.faqQuestion::-webkit-details-marker {
+  display: none;
+}
+
+.faqQuestion:focus-visible {
+  outline: 3px solid var(--cp-accent);
+  outline-offset: -3px;
+  border-radius: var(--cp-radius);
+}
+
+.faqChevron {
+  color: var(--cp-accent);
+  transition: transform 0.15s ease;
+}
+
+.faqItem[open] .faqChevron {
+  transform: rotate(180deg);
+}
+
+.faqAnswer {
+  padding: 0 16px 16px;
+  color: var(--cp-text);
+}
+
+.hours {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--cp-radius);
+  background: var(--cp-surface);
+  border: var(--cp-surface-border);
+}
+
+.hoursHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.hoursTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.hoursStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.94rem;
+  font-weight: 600;
+}
+
+.dotOpen,
+.dotClosed {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--cp-accent);
+}
+
+.dotClosed {
+  background: transparent;
+  border: 2px solid var(--cp-muted);
+}
+
+.hoursTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.94rem;
+}
+
+.hoursTable th,
+.hoursTable td {
+  padding: 7px 0;
+  border-top: 1px solid var(--cp-divider);
+  vertical-align: top;
+}
+
+.hoursTable th {
+  padding-right: 12px;
+  font-weight: 400;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.hoursTable td {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.today th,
+.today td {
+  font-weight: 700;
+}
+
+.hoursNote {
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--cp-muted);
+}
+
+.prices {
+  display: flex;
+  flex-direction: column;
+}
+
+.priceItem {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 0;
+}
+
+.priceItem + .priceItem {
+  border-top: 1px solid var(--cp-divider);
+}
+
+.priceRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.priceName {
+  min-width: 0;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.priceTag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--cp-surface);
+  border: var(--cp-surface-border);
+  font-size: 0.75rem;
+  font-weight: 600;
+  vertical-align: 2px;
+  white-space: nowrap;
+}
+
+.price {
+  flex: none;
+  max-width: 45%;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.priceDescription {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--cp-muted);
+  overflow-wrap: anywhere;
+}
+
+/* ---- Gallery: a row that scrolls sideways, reaching the screen's edges ---- */
+
+.gallery {
+  display: flex;
+  gap: 10px;
+  margin: 0 -24px;
+  padding: 0 24px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-padding: 0 24px;
+  scrollbar-width: thin;
+  overscroll-behavior-x: contain;
+}
+
+.gallery:focus-visible {
+  outline: 3px solid var(--cp-accent);
+  outline-offset: 3px;
+}
+
+.galleryPhoto {
+  flex: 0 0 86%;
+  width: 86%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: var(--cp-radius);
+  background: var(--cp-cover);
+  scroll-snap-align: start;
+}
+
 /* ---- After the end date ---- */
 
 .ended {

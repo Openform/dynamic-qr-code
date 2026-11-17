@@ -269,18 +269,19 @@ describe('parsePageContent', () => {
       });
     });
 
-    it('shows at most 6 different images', () => {
-      const ids = new Set([1, 2, 3, 4, 5, 6, 7]);
+    it('shows at most 16 different images, counting galleries', () => {
+      const ids = new Set(Array.from({ length: 17 }, (_, i) => i + 1));
       const page = samplePage();
       page.blocks[0].cover = 1;
       page.blocks[0].logo = 2;
       page.blocks[5].image = 3;
-      for (const id of [4, 5, 6]) page.blocks.push({ id: `img${id}`, type: 'image', image: id });
+      for (const id of [4, 5, 6, 7, 8]) page.blocks.push({ id: `img${id}`, type: 'image', image: id });
+      page.blocks.push({ id: 'gallery', type: 'gallery', items: [9, 10, 11, 12, 13, 14, 15, 16].map((image) => ({ image, alt: '' })) });
       expect(parsePageContent(page, { imageIds: ids }).ok).toBe(true);
       // The same image twice counts once.
       page.blocks.push({ id: 'again', type: 'image', image: 6 });
       expect(parsePageContent(page, { imageIds: ids }).ok).toBe(true);
-      page.blocks.push({ id: 'img7', type: 'image', image: 7 });
+      page.blocks.push({ id: 'img17', type: 'image', image: 17 });
       expect(parsePageContent(page, { imageIds: ids })).toMatchObject({ ok: false, path: 'blocks' });
     });
   });
