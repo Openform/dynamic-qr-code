@@ -9,9 +9,14 @@
 .shell {
   --sidebar-width: 240px;
   --app-top: 0px;
+  /* How the sidebar collapses, expands and opens over the screen: gently at
+     first, so the names have faded before it's narrow. */
+  --sidebar-motion: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   min-height: 100vh;
+  /* The screen slides along as the sidebar changes width. */
+  transition: grid-template-columns var(--sidebar-motion);
 }
 
 /* Narrower laptop screens, and the page editor, get the sidebar as icons. */
@@ -34,7 +39,6 @@
    screens, the editor): it opens over the screen, which stays as it is. */
 .overlay .sidebar {
   width: 240px;
-  background: #0d0d20;
   box-shadow: var(--shadow-lg);
 }
 
@@ -71,7 +75,11 @@
   white-space: nowrap;
 }
 
-/* ---- Sidebar ---- */
+/* ---- Sidebar ----
+   It's laid out the same at any width, so it can change width smoothly:
+   the icons, the avatar and the toggle sit where the 72px sidebar centres
+   them, and stay there. Only the names, the logo and the counts come and go
+   (see "Too narrow for names" below). */
 
 .sidebar {
   /* Sticky in its column, so it stays put while the screen scrolls. */
@@ -79,11 +87,15 @@
   top: 0;
   z-index: 60;
   align-self: start;
+  width: 100%;
   height: 100vh;
   height: 100dvh;
-  background: rgba(13, 13, 32, 0.96);
+  background: #0d0d20;
   border-right: 1px solid var(--glass-border);
   container: sidebar / inline-size;
+  transition:
+    width var(--sidebar-motion),
+    box-shadow var(--sidebar-motion);
 }
 
 .panel {
@@ -91,23 +103,46 @@
   flex-direction: column;
   height: 100%;
   padding: 12px 12px 16px;
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
+/* The logo, and the button beside it (the toggle on computers, Close in the
+   phone menu). The button keeps to the right, so as the sidebar narrows it
+   moves with the edge and comes to rest above the icons. */
 .brand {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 48px;
-  padding: 0 12px;
+  height: 48px;
   margin-bottom: 12px;
 }
 
-/* Collapses and expands the sidebar, beside the logo. Its name shows in a
-   tag on hover: below it while the sidebar is wide (which can't show
-   anything past its edge), beside it like the links' names when it's icons. */
+.logo {
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+/* In the sidebar it has the room beside the button, and is cut off at the
+   button rather than run under it while the sidebar narrows. */
+.brand .logo {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  max-width: calc(100% - 68px);
+  overflow: hidden;
+  translate: 0 -50%;
+  transition:
+    opacity 0.15s ease,
+    visibility 0.15s;
+}
+
+/* Collapses and expands the sidebar. Its name shows in a tag on hover:
+   below it while the sidebar is wide (which can't show anything past its
+   edge), beside it like the links' names when it's icons. */
 .toggle {
   position: relative;
   display: inline-flex;
@@ -116,7 +151,8 @@
   flex: none;
   width: 36px;
   height: 36px;
-  margin-right: -8px;
+  /* Centred over the icons when the sidebar is 72px wide. */
+  margin: 0 6px 0 auto;
   border-radius: var(--radius-sm);
   color: var(--text-tertiary);
 }
@@ -146,6 +182,7 @@
   font-weight: 500;
   opacity: 0;
   pointer-events: none;
+  transition: none;
 }
 
 .toggle:hover .label,
@@ -154,17 +191,18 @@
   transition: opacity var(--transition-fast);
 }
 
-/* The toggle's label and icon for each width: "Collapse" while the sidebar
-   is wide, "Expand" while it's icons (see the container query below). */
-.whenIcons {
-  display: none;
+/* The toggle's arrow points in while the sidebar is wide, and turns round
+   to point out as it narrows to icons. */
+.chevron {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: rotate var(--sidebar-motion);
 }
 
-.logo {
-  font-size: 1.4rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  white-space: nowrap;
+/* The toggle's label for each width: "Collapse" while the sidebar is wide,
+   "Expand" while it's icons (see the container query below). */
+.whenIcons {
+  display: none;
 }
 
 .nav {
@@ -184,6 +222,7 @@
   height: 1px;
   margin: 10px 12px;
   background: var(--glass-border);
+  transition: margin var(--sidebar-motion);
 }
 
 .group {
@@ -191,12 +230,28 @@
 }
 
 .groupLabel {
+  position: relative;
   padding: 0 12px 6px;
   font-size: 0.7rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-tertiary);
+  transition: color 0.15s ease;
+}
+
+/* When the sidebar is icons, a line stands in for the "Admin" heading,
+   halfway between the sections above and below it. */
+.groupLabel::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  left: 4px;
+  height: 1px;
+  background: var(--glass-border);
+  opacity: 0;
+  transition: opacity 0.15s ease;
 }
 
 .item {
@@ -206,7 +261,8 @@
   gap: 12px;
   width: 100%;
   min-height: 42px;
-  padding: 8px 12px;
+  /* Puts the icon in the middle of the 72px sidebar. */
+  padding: 8px 14px;
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
   font-size: 0.92rem;
@@ -251,6 +307,7 @@
   width: 3px;
   border-radius: 3px;
   background: var(--gradient-primary);
+  transition: left var(--sidebar-motion);
 }
 
 .icon {
@@ -265,11 +322,13 @@
   color: var(--cyan);
 }
 
+/* Cut off, not shortened with "…", so as the sidebar narrows a name slides
+   under its edge while it fades. */
 .label {
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+  transition: opacity 0.15s ease;
 }
 
 .count {
@@ -285,6 +344,7 @@
   font-weight: 700;
   line-height: 20px;
   text-align: center;
+  transition: opacity 0.15s ease;
 }
 
 .footer {
@@ -296,9 +356,11 @@
   border-top: 1px solid var(--glass-border);
 }
 
+/* The same height at any width, and the avatar in line with the icons. */
 .account {
   gap: 10px;
-  padding-left: 8px;
+  min-height: 52px;
+  padding-left: 9px;
 }
 
 .account .label {
@@ -318,6 +380,40 @@
   color: var(--text-tertiary);
 }
 
+/* ---- Too narrow for names ----
+   As the sidebar narrows to icons, the names, logo and counts fade out
+   before they'd be cut off, and as it widens they fade in once they fit.
+   (Only while it changes width: below 121px it's icons, as follows.) */
+
+@container sidebar (max-width: 223px) {
+  .brand .logo {
+    opacity: 0;
+    visibility: hidden;
+  }
+
+  .label {
+    opacity: 0;
+    transition-duration: 0.1s;
+  }
+
+  /* A count moves to the corner of its icon, so it goes at once rather
+     than fade out in the wrong place. */
+  .count {
+    opacity: 0;
+    transition: none;
+  }
+
+  .groupLabel {
+    color: transparent;
+  }
+
+  /* The toggle's own name waits until the sidebar has settled, rather than
+     ride along with it and be cut off at the edge. */
+  .toggle .label {
+    visibility: hidden;
+  }
+}
+
 /* ---- Icons only ----
    When the sidebar is narrow, each link shows its icon, with its name in a
    label beside it on hover or keyboard focus. The name stays in the link for
@@ -325,45 +421,24 @@
 
 @container sidebar (max-width: 120px) {
   .panel {
-    padding: 12px 10px 16px;
     /* Visible, so the names can show beside the sidebar. */
     overflow: visible;
-  }
-
-  .brand {
-    flex-direction: column;
-    justify-content: center;
-    gap: 6px;
-    padding: 0;
-  }
-
-  /* Under the logo, the size of the links, with its name beside it as
-     theirs is. */
-  .toggle {
-    width: 100%;
-    height: 42px;
-    margin: 0;
   }
 
   .toggle .label {
     top: 50%;
     right: auto;
-    left: calc(100% + 14px);
+    left: calc(100% + 20px);
     translate: 0 -50%;
+    visibility: visible;
   }
 
-  .logo {
-    font-size: 0.95rem;
-  }
-
-  .item {
-    justify-content: center;
-    gap: 0;
-    padding: 10px;
+  .chevron {
+    rotate: 180deg;
   }
 
   .item[aria-current]::before {
-    left: -10px;
+    left: -12px;
   }
 
   .label {
@@ -381,6 +456,7 @@
     opacity: 0;
     pointer-events: none;
     translate: 0 -50%;
+    transition: none;
   }
 
   /* A name fades in but goes at once, so moving to the next icon never
@@ -408,28 +484,16 @@
     padding: 0 4px;
     font-size: 0.62rem;
     line-height: 17px;
+    opacity: 1;
+    transition: opacity 0.15s ease;
   }
 
-  .group {
-    margin-top: 0;
-  }
-
-  /* The "Admin" heading becomes a line above the admin sections. */
-  .groupLabel {
-    height: 1px;
-    margin: 10px 4px;
-    padding: 0;
-    overflow: hidden;
-    background: var(--glass-border);
-    color: transparent;
+  .groupLabel::after {
+    opacity: 1;
   }
 
   .divider {
     margin: 10px 4px;
-  }
-
-  .account {
-    padding: 7px;
   }
 
   .account .label {
@@ -515,7 +579,7 @@
   justify-content: center;
   width: 40px;
   height: 40px;
-  margin-right: -8px;
+  margin: 0 4px 0 auto;
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
 }
@@ -564,6 +628,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .shell,
+  .sidebar,
+  .chevron,
+  .divider,
+  .item[aria-current]::before,
   .drawer {
     transition: none;
   }

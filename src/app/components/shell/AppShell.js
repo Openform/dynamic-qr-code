@@ -22,8 +22,7 @@ import {
   LogOutIcon,
   MailIcon,
   MenuIcon,
-  PanelLeftCloseIcon,
-  PanelLeftOpenIcon,
+  PanelLeftIcon,
   QrCodeIcon,
   ScaleIcon,
   ShieldIcon,
@@ -300,11 +299,10 @@ function Sidebar({ user, adminCounts, pathname, onNavigate, onToggle, onClose })
           QR Go
         </Link>
         {onToggle && (
-          // Both labels and icons are here; the stylesheet shows the pair
-          // that fits how wide the sidebar is.
+          // Both labels are here; the stylesheet shows the one that fits how
+          // wide the sidebar is, and turns the arrow round as it narrows.
           <button type="button" className={styles.toggle} onClick={onToggle}>
-            <PanelLeftCloseIcon size={18} className={styles.whenWide} />
-            <PanelLeftOpenIcon size={18} className={styles.whenIcons} />
+            <PanelLeftIcon size={18} chevronClassName={styles.chevron} />
             <span className={styles.label}>
               <span className={styles.whenWide}>Collapse sidebar</span>
               <span className={styles.whenIcons}>Expand sidebar</span>

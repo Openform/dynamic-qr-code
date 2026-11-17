@@ -575,20 +575,17 @@ export function CloseIcon(props) {
   )
 }
 
-export function PanelLeftCloseIcon(props) {
+/**
+ * A panel on the left with an arrow pointing into it (Lucide's
+ * panel-left-close). `chevronClassName` goes on the arrow, so it can be
+ * turned round to point out (panel-left-open).
+ */
+export function PanelLeftIcon({ chevronClassName, ...props }) {
   return (
     <Icon {...props}>
       <rect x="3" y="3" width="18" height="18" rx="2" />
-      <path d="M9 3v18M16 15l-3-3 3-3" />
-    </Icon>
-  )
-}
-
-export function PanelLeftOpenIcon(props) {
-  return (
-    <Icon {...props}>
-      <rect x="3" y="3" width="18" height="18" rx="2" />
-      <path d="M9 3v18M14 9l3 3-3 3" />
+      <path d="M9 3v18" />
+      <path className={chevronClassName} d="M16 15l-3-3 3-3" />
     </Icon>
   )
 }
