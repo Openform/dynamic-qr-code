@@ -41,22 +41,42 @@ it will render in the fallback font.
 
 ## Campaign page fonts
 
-Campaign pages (`src/app/components/campaign/`) use two more fonts for their
-headings: the Night theme's **Space Grotesk** and the Bold theme's
-**Fraunces**. They're loaded with `next/font/local` in
-`src/app/components/campaign/fonts.js`, exposed as `--font-space-grotesk` and
-`--font-fraunces`, and not preloaded, so a browser only downloads the one a
-page actually uses.
+Campaign pages (`src/app/components/campaign/`) can use eight more fonts,
+for their headings and, for the ones marked "text" below, their paragraphs
+too (`FONTS` in `src/lib/campaignPages.js`). They're loaded with
+`next/font/local` in `src/app/components/campaign/fonts.js`, each exposed as a
+CSS variable (`--font-outfit` and so on), and none is preloaded, so a
+browser only downloads the ones a page actually uses. Nothing is fetched from
+a font service, by visitors or by the build.
 
-- `SpaceGroteskVariable.woff2` (22 KB, weights 300–700): the Latin subset
-  `space-grotesk-latin-wght-normal.woff2` from
-  [@fontsource-variable/space-grotesk](https://www.npmjs.com/package/@fontsource-variable/space-grotesk)
-  5.3.0. License: SIL Open Font License 1.1 (`LICENSE-SpaceGrotesk.txt`).
-- `FrauncesVariable.woff2` (37 KB, weights 100–900): the Latin subset
-  `fraunces-latin-wght-normal.woff2` from
-  [@fontsource-variable/fraunces](https://www.npmjs.com/package/@fontsource-variable/fraunces)
-  5.3.0. License: SIL Open Font License 1.1 (`LICENSE-Fraunces.txt`).
+Each file is the Latin subset of the variable font (`<name>-latin-wght-normal.woff2`)
+from its [Fontsource](https://fontsource.org) package on npm, version 5.3.0,
+copied here once with its licence. All are under the SIL Open Font License 1.1,
+which allows self-hosting; each licence file must stay next to its font.
 
-Both cover Basic Latin and Latin-1 (so English and Afrikaans text, including
-ê, ë and ô). Other characters fall back to Inter, then the system font. To
-update them, take the same files from a newer release of those packages.
+| File | Font | Weights | Used for | Package | Licence |
+| --- | --- | --- | --- | --- | --- |
+| `SpaceGroteskVariable.woff2` (22 KB) | Space Grotesk (the Night theme's headings) | 300–700 | headings, text | `@fontsource-variable/space-grotesk` | `LICENSE-SpaceGrotesk.txt` |
+| `FrauncesVariable.woff2` (37 KB) | Fraunces (the Bold theme's headings) | 100–900 | headings | `@fontsource-variable/fraunces` | `LICENSE-Fraunces.txt` |
+| `OutfitVariable.woff2` (32 KB) | Outfit | 100–900 | headings, text | `@fontsource-variable/outfit` | `LICENSE-Outfit.txt` |
+| `NunitoVariable.woff2` (39 KB) | Nunito | 200–1000 | headings, text | `@fontsource-variable/nunito` | `LICENSE-Nunito.txt` |
+| `LoraVariable.woff2` (38 KB) | Lora | 400–700 | headings, text | `@fontsource-variable/lora` | `LICENSE-Lora.txt` |
+| `PlayfairDisplayVariable.woff2` (38 KB) | Playfair Display | 400–900 | headings | `@fontsource-variable/playfair-display` | `LICENSE-PlayfairDisplay.txt` |
+| `OswaldVariable.woff2` (28 KB) | Oswald | 200–700 | headings | `@fontsource-variable/oswald` | `LICENSE-Oswald.txt` |
+| `CaveatVariable.woff2` (75 KB) | Caveat | 400–700 | headings | `@fontsource-variable/caveat` | `LICENSE-Caveat.txt` |
+
+They cover Basic Latin and Latin-1 (so English and Afrikaans text, including
+ê, ë and ô). Other characters fall back to Inter, then the system font.
+
+To add or update one, without touching the app's dependencies:
+
+```bash
+npm pack @fontsource-variable/outfit
+tar -xzf fontsource-variable-outfit-*.tgz
+cp package/files/outfit-latin-wght-normal.woff2 src/app/fonts/OutfitVariable.woff2
+cp package/LICENSE src/app/fonts/LICENSE-Outfit.txt
+```
+
+A new font also needs a `localFont` call in `fonts.js`, an entry in `FONTS`
+(`src/lib/campaignPages.js`) and a font stack in `src/lib/pageTheme.js`;
+`src/lib/__tests__/pageFonts.test.js` checks that the four agree.

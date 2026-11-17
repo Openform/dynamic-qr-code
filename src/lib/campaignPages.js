@@ -17,7 +17,10 @@
  *     v: 1,                 // CONTENT_VERSION, so the shape can change later
  *     theme: 'fresh',       // one of THEMES
  *     brand: '#1F6F4A',     // the brand colour, as #RRGGBB
- *     font: null,           // one of FONTS, or null for the theme's own font
+ *     font: null,           // the headings' font: one of FONTS, or null for the theme's own
+ *     bodyFont: null,       // the text's font: one of BODY_FONTS, or null for Inter
+ *     textSize: 'standard', // one of TEXT_SIZES
+ *     headingSize: 'standard', // one of HEADING_SIZES
  *     blocks: [ … ],        // top to bottom; the header is always first
  *   }
  *
@@ -85,11 +88,43 @@ export const THEMES = [
   { id: 'bold', name: 'Bold' },
 ];
 
-/** Fonts a page can use instead of its theme's own. */
+/**
+ * Fonts a page can use (all self-hosted; see src/app/fonts/README.md). Any
+ * of them can be the headings' font. Only those marked `body` can be the
+ * text's: the ones that stay easy to read in paragraphs on a phone, not the
+ * display, condensed or handwritten ones.
+ */
 export const FONTS = [
-  { id: 'inter', name: 'Inter' },
-  { id: 'space-grotesk', name: 'Space Grotesk' },
-  { id: 'fraunces', name: 'Fraunces' },
+  { id: 'inter', name: 'Inter', body: true },
+  { id: 'outfit', name: 'Outfit', body: true },
+  { id: 'nunito', name: 'Nunito', body: true },
+  { id: 'space-grotesk', name: 'Space Grotesk', body: true },
+  { id: 'lora', name: 'Lora', body: true },
+  { id: 'fraunces', name: 'Fraunces', body: false },
+  { id: 'playfair-display', name: 'Playfair Display', body: false },
+  { id: 'oswald', name: 'Oswald', body: false },
+  { id: 'caveat', name: 'Caveat', body: false },
+];
+
+/** Fonts the text can use. */
+export const BODY_FONTS = FONTS.filter((font) => font.body);
+
+/**
+ * Text sizes, as steps rather than any size, so text never gets too small
+ * to read on a phone and the layout keeps its proportions. Sizes are
+ * relative to the visitor's own browser setting.
+ */
+export const TEXT_SIZES = [
+  { id: 'standard', name: 'Standard', scale: 1 },
+  { id: 'large', name: 'Large', scale: 1.125 },
+  { id: 'larger', name: 'Larger', scale: 1.25 },
+];
+
+/** Heading sizes, relative to the text size. */
+export const HEADING_SIZES = [
+  { id: 'smaller', name: 'Smaller', scale: 0.85 },
+  { id: 'standard', name: 'Standard', scale: 1 },
+  { id: 'larger', name: 'Larger', scale: 1.15 },
 ];
 
 export const BLOCK_TYPES = ['header', 'text', 'image', 'buttons', 'details', 'offer', 'faq', 'hours', 'prices', 'gallery'];
@@ -584,6 +619,16 @@ export function parsePageContent(input, { imageIds = new Set(), nowMs = Date.now
     if (!FONTS.some((f) => f.id === input.font)) return fail('font', 'Choose a font.');
     font = input.font;
   }
+  let bodyFont = null;
+  if (input.bodyFont !== null && input.bodyFont !== undefined && input.bodyFont !== '') {
+    if (!BODY_FONTS.some((f) => f.id === input.bodyFont)) return fail('bodyFont', 'Choose a font for the text.');
+    bodyFont = input.bodyFont;
+  }
+  // Pages saved before sizes could be chosen have neither: they're standard.
+  const textSize = input.textSize ?? 'standard';
+  if (!TEXT_SIZES.some((size) => size.id === textSize)) return fail('textSize', 'Choose a text size.');
+  const headingSize = input.headingSize ?? 'standard';
+  if (!HEADING_SIZES.some((size) => size.id === headingSize)) return fail('headingSize', 'Choose a heading size.');
 
   const blocks = Array.isArray(input.blocks) ? input.blocks : [];
   if (blocks.length === 0 || blocks[0]?.type !== 'header') {
@@ -608,7 +653,7 @@ export function parsePageContent(input, { imageIds = new Set(), nowMs = Date.now
 
   return {
     ok: true,
-    content: { v: CONTENT_VERSION, theme, brand, font, blocks: out },
+    content: { v: CONTENT_VERSION, theme, brand, font, bodyFont, textSize, headingSize, blocks: out },
     buttonIds: ctx.buttonIds,
   };
 }
@@ -668,6 +713,9 @@ export function newPageContent(title) {
     theme: DEFAULT_THEME,
     brand: DEFAULT_BRAND,
     font: null,
+    bodyFont: null,
+    textSize: 'standard',
+    headingSize: 'standard',
     blocks: [{ id: 'header', type: 'header', hidden: false, cover: null, logo: null, title, tagline: '' }],
   };
 }

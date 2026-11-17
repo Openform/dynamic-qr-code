@@ -148,6 +148,7 @@ describe('CampaignPage', () => {
     const html = render(content((page) => ({ ...page, theme: 'bold', brand: '#8A3B1F' })));
     expect(html).toContain('--cp-bg:#8A3B1F');
     expect(html).toContain('--cp-head-font:var(--font-fraunces)');
+    expect(html).toContain('--cp-text-scale:1');
   });
 
   it('only shows “Report this page” when there’s somewhere to report to', () => {

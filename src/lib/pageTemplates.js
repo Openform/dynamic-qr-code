@@ -180,5 +180,5 @@ export const PAGE_TEMPLATES = [
  */
 export function templateContent(templateId, title, { timeZone = localTimeZone() } = {}) {
   const blocks = (TEMPLATE_BLOCKS[templateId] ?? TEMPLATE_BLOCKS.blank)(title, { timeZone });
-  return { v: CONTENT_VERSION, theme: DEFAULT_THEME, brand: DEFAULT_BRAND, font: null, blocks };
+  return { v: CONTENT_VERSION, theme: DEFAULT_THEME, brand: DEFAULT_BRAND, font: null, bodyFont: null, textSize: 'standard', headingSize: 'standard', blocks };
 }

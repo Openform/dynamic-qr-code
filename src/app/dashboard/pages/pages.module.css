@@ -791,3 +791,65 @@
   font-size: inherit;
   color: inherit;
 }
+
+/* ---- Fonts and sizes in the Look card ---- */
+
+.fonts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.font {
+  min-height: 58px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  border: 2px solid var(--glass-border);
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.fontOn {
+  border-color: var(--cyan);
+}
+
+.fontSample {
+  font-size: 1.1rem;
+  line-height: 1.25;
+}
+
+.fontCaption {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.segmented {
+  align-self: flex-start;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  border: 1px solid var(--glass-border);
+}
+
+.segmented button {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.segmented .segmentOn {
+  background: var(--cyan);
+  color: var(--bg-primary);
+}

@@ -5,8 +5,8 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import CampaignPage from "@/app/components/campaign/CampaignPage"
 import { campaignFontClasses } from "@/app/components/campaign/fonts"
-import { AFTER_END, FONTS, PAGE_LIMITS, THEMES, pageView, parsePageInput } from "@/lib/campaignPages"
-import { pageLook, THEME_FONTS } from "@/lib/pageTheme"
+import { AFTER_END, PAGE_LIMITS, THEMES, pageView, parsePageInput } from "@/lib/campaignPages"
+import { pageLook } from "@/lib/pageTheme"
 import { ADDABLE_BLOCKS, allButtons, examplesLeft, isoToLocalInput, localInputToIso, move, newBlock, pageStatus } from "@/lib/pageEditing"
 import { imagesFor, ownerFilePath, pagePreviewPath } from "@/lib/pageReference"
 import { prepareImage } from "@/lib/imageResize"
@@ -14,6 +14,7 @@ import { formatChangeTime } from "../../components/scheduledChanges"
 import PagesHeader from "../PagesHeader"
 import BlockEditor from "./BlockEditor"
 import { TextField } from "./fields"
+import TypeFields from "./TypeFields"
 import styles from "../pages.module.css"
 
 const BRAND_SWATCHES = [
@@ -24,8 +25,6 @@ const BRAND_SWATCHES = [
   { hex: "#F4B860", name: "Amber" },
   { hex: "#111418", name: "Black" }
 ]
-
-const FONT_NAMES = Object.fromEntries(FONTS.map((f) => [f.id, f.name]))
 
 /** What the editor's form holds for a page from the API. */
 function draftFrom(page) {
@@ -431,20 +430,8 @@ export default function PageEditor({ pageId }) {
                   </div>
                   <p className={styles.hint}>Text on buttons switches between light and dark by itself, so it always stays readable.</p>
                 </div>
-                <div className={styles.field}>
-                  <label htmlFor="page-font" className={styles.fieldLabel}>
-                    Heading font
-                  </label>
-                  <select id="page-font" className="input-field" value={content.font ?? ""} onChange={(e) => changeContent({ font: e.target.value || null })}>
-                    <option value="">Theme’s font ({FONT_NAMES[THEME_FONTS[content.theme]]})</option>
-                    {FONTS.map((font) => (
-                      <option key={font.id} value={font.id}>
-                        {font.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
               </div>
+              <TypeFields content={content} onChange={changeContent} />
             </section>
 
             <section className={`glass-card-static ${styles.card}`} aria-labelledby="blocks-card-title">

@@ -1,6 +1,6 @@
 /**
  * The colours, fonts and shapes of a campaign page, worked out from its theme,
- * brand colour and font (lib/campaignPages.js). The page component applies
+ * brand colour, fonts and text sizes (lib/campaignPages.js). The page component applies
  * them as CSS custom properties (--cp-…), so one stylesheet draws every theme.
  *
  * Text is kept readable whatever brand colour is chosen: words on the brand
@@ -13,7 +13,7 @@
  */
 
 import { contrastRatio } from './qrStyle';
-import { pickTextColor, DEFAULT_BRAND } from './campaignPages';
+import { pickTextColor, DEFAULT_BRAND, BODY_FONTS, HEADING_SIZES, TEXT_SIZES } from './campaignPages';
 
 const WHITE = '#FFFFFF';
 const BLACK = '#000000';
@@ -27,9 +27,33 @@ export const THEME_FONTS = { fresh: 'inter', night: 'space-grotesk', bold: 'frau
 // module), with fallbacks for while a font loads.
 const FONT_STACKS = {
   inter: 'var(--font-inter), system-ui, -apple-system, "Segoe UI", sans-serif',
+  outfit: 'var(--font-outfit), var(--font-inter), system-ui, sans-serif',
+  nunito: 'var(--font-nunito), var(--font-inter), system-ui, sans-serif',
   'space-grotesk': 'var(--font-space-grotesk), var(--font-inter), system-ui, sans-serif',
+  lora: 'var(--font-lora), Georgia, "Times New Roman", serif',
   fraunces: 'var(--font-fraunces), Georgia, "Times New Roman", serif',
+  'playfair-display': 'var(--font-playfair-display), Georgia, "Times New Roman", serif',
+  oswald: 'var(--font-oswald), "Arial Narrow", var(--font-inter), sans-serif',
+  caveat: 'var(--font-caveat), "Comic Sans MS", cursive',
 };
+
+/** The CSS font-family for one of the fonts in lib/campaignPages.js FONTS (Inter for an unknown one). */
+export function fontStack(fontId) {
+  return FONT_STACKS[fontId] ?? FONT_STACKS.inter;
+}
+
+// Headings in some fonts need their own weight, spacing or size to look
+// right whatever the theme: the themes tighten letters a little, which
+// suits most fonts but crowds the condensed, serif and handwritten ones,
+// and a handwritten font looks small beside the others at the same size.
+const HEADING_TUNING = {
+  lora: { tracking: '0' },
+  'playfair-display': { tracking: '0' },
+  oswald: { tracking: '0.01em', weight: 600 },
+  caveat: { tracking: '0', weight: 700, scale: 1.25 },
+};
+
+const scaleOf = (sizes, id) => (sizes.find((size) => size.id === id) ?? sizes.find((size) => size.id === 'standard')).scale;
 
 function rgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -200,6 +224,10 @@ export function pageLook(content) {
   const theme = THEME_TOKENS[content?.theme] ? content.theme : 'fresh';
   const brand = /^#[0-9A-Fa-f]{6}$/.test(content?.brand ?? '') ? content.brand.toUpperCase() : DEFAULT_BRAND;
   const font = FONT_STACKS[content?.font] ? content.font : THEME_FONTS[theme];
+  const bodyFont = BODY_FONTS.some((f) => f.id === content?.bodyFont) ? content.bodyFont : 'inter';
+  const tuning = HEADING_TUNING[font] ?? {};
+  const textScale = scaleOf(TEXT_SIZES, content?.textSize);
+  const headScale = textScale * scaleOf(HEADING_SIZES, content?.headingSize) * (tuning.scale ?? 1);
   const t = THEME_TOKENS[theme](brand);
 
   const style = {
@@ -214,9 +242,13 @@ export function pageLook(content) {
     '--cp-logo-bg': t.logoBg,
     '--cp-logo-ink': t.logoInk,
     '--cp-head-font': FONT_STACKS[font],
-    '--cp-body-font': FONT_STACKS.inter,
-    '--cp-head-weight': String(t.headWeight),
-    '--cp-head-tracking': t.headTracking,
+    '--cp-body-font': FONT_STACKS[bodyFont],
+    '--cp-head-weight': String(tuning.weight ?? t.headWeight),
+    '--cp-head-tracking': tuning.tracking ?? t.headTracking,
+    // Multipliers for the stylesheet's sizes: text, and headings (which
+    // grow with the text too).
+    '--cp-text-scale': String(textScale),
+    '--cp-head-scale': String(Math.round(headScale * 1000) / 1000),
     '--cp-radius': t.radius,
     '--cp-btn-radius': t.btnRadius,
     '--cp-btn-bg': t.btnBg,
@@ -233,5 +265,5 @@ export function pageLook(content) {
     '--cp-code-border': t.codeBorder,
     '--cp-accent': t.accent,
   };
-  return { theme, brand, font, colors: t, style, dark: luminanceOf(t.bg) < 0.2 };
+  return { theme, brand, font, bodyFont, colors: t, style, dark: luminanceOf(t.bg) < 0.2 };
 }
