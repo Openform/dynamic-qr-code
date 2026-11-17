@@ -298,9 +298,19 @@ export default function PageEditor({ pageId }) {
           {problem && <p className={styles.errorBox} role="alert">{problem.error}</p>}
           {justSaved && !dirty && <p className={styles.savedBox} role="status">Saved. Scanners see the new version now.</p>}
           {examples.length > 0 && (
-            <p className={styles.notice}>
-              These buttons still have the template’s example details: {examples.join(", ")}. Put in your own before you share the page.
-            </p>
+            <div className={styles.notice}>
+              Before you share the page, put in your own details. These still have the template’s examples, or words in [square
+              brackets]:{" "}
+              {examples.map((example, i) => (
+                <span key={`${example.blockId}-${i}`}>
+                  {i > 0 && ", "}
+                  <button type="button" className={styles.textButton} onClick={() => setOpenId(example.blockId)}>
+                    {example.label}
+                  </button>
+                </span>
+              ))}
+              .
+            </div>
           )}
 
           <fieldset disabled={!canEdit} style={{ border: "none", display: "contents" }}>

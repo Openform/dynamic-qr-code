@@ -13,6 +13,7 @@ import {
   isoToLocalInput,
   localInputToIso,
   examplesLeft,
+  hasPlaceholder,
 } from '../pageEditing';
 import { BUTTON_KINDS } from '../campaignPages';
 
@@ -26,19 +27,53 @@ describe('templates', () => {
     }
   });
 
-  it('flag their example details until they’re replaced', () => {
-    expect(examplesLeft(templateContent('contact', 'Us'))).toEqual(['Call us', 'WhatsApp us', 'Email us', 'Visit our website', 'Save our contact']);
-    expect(examplesLeft(templateContent('menu', 'Us'))).toEqual(['Order on WhatsApp']);
-    expect(examplesLeft(templateContent('blank', 'Us'))).toEqual([]);
+  it('flag their examples and placeholders until they’re replaced', () => {
+    const labels = (id) => examplesLeft(templateContent(id, 'Us')).map((example) => example.label);
+    expect(labels('contact')).toEqual(['Header', 'Call us', 'WhatsApp us', 'Email us', 'Visit our website', 'Save our contact', 'Opening hours', 'Details']);
+    expect(labels('menu')).toEqual(['Header', 'Price list “Coffee”', 'Price list “Breakfast”', 'Opening hours', 'Order on WhatsApp', 'Get directions', 'FAQ “Questions”']);
+    expect(labels('blank')).toEqual([]);
+    // Every other template has something to fill in, and says which block it's in.
+    for (const { id } of PAGE_TEMPLATES.filter((t) => t.id !== 'blank')) {
+      const content = templateContent(id, 'Us');
+      const examples = examplesLeft(content);
+      expect(examples.length, id).toBeGreaterThan(0);
+      for (const { blockId } of examples) expect(content.blocks.some((block) => block.id === blockId)).toBe(true);
+    }
 
     const content = templateContent('offer', 'Sale');
+    content.blocks[0].tagline = 'Cakes, this weekend';
+    Object.assign(content.blocks[1], { headline: '20% off all whole cakes', code: 'FRIDAY20' });
     content.blocks[2].items[0].fields.number = '+27 82 123 4567';
     content.blocks[2].items[1].fields.url = 'https://cakes.co.za';
+    content.blocks[3].rows = [{ icon: 'pin', label: 'Where', value: 'Shop 4, The Old Mill' }];
     expect(examplesLeft(content)).toEqual([]);
+  });
+
+  it('use placeholders in square brackets, never made-up prices', () => {
+    for (const { id } of PAGE_TEMPLATES) {
+      for (const block of templateContent(id, 'Us').blocks.filter((b) => b.type === 'prices')) {
+        for (const item of block.items) expect(item.price, id).toBe('[Price]');
+      }
+    }
   });
 
   it('falls back to a blank page for an unknown template', () => {
     expect(templateContent('nope', 'X').blocks).toHaveLength(1);
+  });
+});
+
+describe('hasPlaceholder', () => {
+  it('finds words in square brackets anywhere in a block', () => {
+    expect(hasPlaceholder('[Your address]')).toBe(true);
+    expect(hasPlaceholder('From [time]')).toBe(true);
+    expect(hasPlaceholder({ rows: [{ value: 'Shop 4' }, { value: '[Dates]' }] })).toBe(true);
+    expect(hasPlaceholder({ rows: [{ value: 'Shop 4' }] })).toBe(false);
+  });
+
+  it('leaves Markdown links alone', () => {
+    expect(hasPlaceholder('See [our menu](https://example.com/menu).')).toBe(false);
+    expect(hasPlaceholder('See [our menu](https://example.com/menu) and [this].')).toBe(true);
+    expect(hasPlaceholder('[]')).toBe(false);
   });
 });
 

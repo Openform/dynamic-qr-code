@@ -785,3 +785,9 @@
   flex-basis: 100%;
   margin: 0;
 }
+
+.notice .textButton {
+  padding: 0;
+  font-size: inherit;
+  color: inherit;
+}

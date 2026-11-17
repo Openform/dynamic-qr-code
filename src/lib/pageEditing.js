@@ -233,9 +233,42 @@ function isExample(kind, fields) {
   }
 }
 
-/** The labels of buttons that still have a template's example details. */
+// A template's placeholder: words in square brackets, like "[Your address]",
+// that aren't the start of a Markdown link ("[our menu](https://…)").
+const PLACEHOLDER = /\[[^[\]\n]+\](?!\()/;
+
+/** True when `value` (text, or any text inside an object or list) still has a placeholder. */
+export function hasPlaceholder(value) {
+  if (typeof value === 'string') return PLACEHOLDER.test(value);
+  if (Array.isArray(value)) return value.some(hasPlaceholder);
+  if (value && typeof value === 'object') return Object.values(value).some(hasPlaceholder);
+  return false;
+}
+
+/** A block's name for a list: "Details", or "Price list “Coffee”" when it has a heading. */
+function blockName(block) {
+  const label = BLOCK_LABELS[block.type] ?? block.type;
+  return block.type !== 'header' && block.title && block.title !== label ? `${label} “${block.title}”` : label;
+}
+
+/**
+ * What still has a template's examples, for the editor to list before the
+ * page is shared: `[{ blockId, label }]`, one for each button with an
+ * example phone number, email address or link or a placeholder, and one for
+ * each other block with a placeholder.
+ */
 export function examplesLeft(content) {
-  return allButtons(content)
-    .filter((button) => isExample(button.kind, button.fields))
-    .map((button) => button.label || 'A button');
+  const found = [];
+  for (const block of content?.blocks ?? []) {
+    if (block.type === 'buttons') {
+      for (const button of block.items ?? []) {
+        if (isExample(button.kind, button.fields) || hasPlaceholder(button.label) || hasPlaceholder(button.fields)) {
+          found.push({ blockId: block.id, label: button.label || 'A button' });
+        }
+      }
+    } else if (hasPlaceholder(block)) {
+      found.push({ blockId: block.id, label: blockName(block) });
+    }
+  }
+  return found;
 }
