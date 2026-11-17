@@ -33,7 +33,8 @@ import styles from "./CampaignPage.module.css"
  * and every button's link is rebuilt from its checked fields by buttonLink().
  * A block or button that doesn't pass is left out rather than shown wrong.
  * Nothing needs JavaScript except the Copy button: questions open with the
- * browser's own <details>, and the gallery is a row that scrolls sideways.
+ * browser's own <details> (one at a time, sliding where the browser can), and
+ * the gallery is a row that scrolls sideways.
  *
  * Props:
  *   content    the page's stored content
@@ -260,7 +261,13 @@ function Offer({ block }) {
   )
 }
 
-/** Questions that open to show their answers, with the browser's own <details>. */
+/**
+ * Questions that open to show their answers, with the browser's own
+ * <details>, so no script. Sharing a `name` makes them an accordion: opening
+ * one closes the others in the block. The answer slides open and shut where
+ * the browser supports it (CampaignPage.module.css), and just appears where
+ * it doesn't.
+ */
 function Faq({ block }) {
   const items = Array.isArray(block.items) ? block.items : []
   if (items.length === 0) return null
@@ -269,12 +276,17 @@ function Faq({ block }) {
       {block.title && <h2 className={styles.blockTitle}>{block.title}</h2>}
       <div className={styles.faq}>
         {items.map((item, index) => (
-          <details key={index} className={styles.faqItem}>
+          <details key={index} className={styles.faqItem} name={`faq-${block.id}`}>
             <summary className={styles.faqQuestion}>
               <span>{item.question}</span>
               <ChevronDownIcon size={20} className={styles.faqChevron} />
             </summary>
-            <FormattedText content={item.answer} className={`${styles.prose} ${styles.faqAnswer}`} />
+            {/* The row that slides open, and the part it clips while it does. */}
+            <div className={styles.faqBody}>
+              <div className={styles.faqClip}>
+                <FormattedText content={item.answer} className={`${styles.prose} ${styles.faqAnswer}`} />
+              </div>
+            </div>
           </details>
         ))}
       </div>

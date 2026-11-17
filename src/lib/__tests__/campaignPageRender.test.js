@@ -177,11 +177,18 @@ describe('CampaignPage, newer blocks', () => {
       blocks: [page.blocks[0], ...blocks],
     }));
 
-  it('draws questions that open with the browser’s own <details>', () => {
-    const html = render(more([{ id: 'faq', type: 'faq', title: 'Questions', items: [{ question: 'Do you deliver?', answer: 'Yes, within **10 km**.' }] }]));
+  it('draws questions that open with the browser’s own <details>, one at a time in each block', () => {
+    const html = render(
+      more([
+        { id: 'faq', type: 'faq', title: 'Questions', items: [{ question: 'Do you deliver?', answer: 'Yes, within **10 km**.' }, { question: 'Open Sundays?', answer: 'No.' }] },
+        { id: 'faq-2', type: 'faq', title: 'Booking', items: [{ question: 'Can I book?', answer: 'Yes.' }] },
+      ])
+    );
     expect(html).toContain('Questions');
     expect(html).toMatch(/<details[^>]*><summary[^>]*><span>Do you deliver\?<\/span>/);
     expect(html).toContain('<strong>10 km</strong>');
+    // A shared name per block makes the browser close the others when one opens.
+    expect([...html.matchAll(/<details[^>]* name="([^"]*)"/g)].map((m) => m[1])).toEqual(['faq-faq', 'faq-faq', 'faq-faq-2']);
   });
 
   it('draws opening hours with whether it’s open when the page is opened', () => {

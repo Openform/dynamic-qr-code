@@ -393,16 +393,63 @@
 
 .faqChevron {
   color: var(--cp-accent);
-  transition: transform 0.15s ease;
+  transition: transform 0.25s ease;
 }
 
 .faqItem[open] .faqChevron {
   transform: rotate(180deg);
 }
 
+/*
+ * The answer slides open and shut: its row grows from 0 to its full height
+ * (grid rows can animate where height: auto can't), and fades in.
+ *   - Opening: @starting-style gives the row somewhere to grow from, since the
+ *     answer isn't drawn at all while the question is closed.
+ *   - Closing: ::details-content keeps the answer drawn until the row has
+ *     shrunk, instead of hiding it at once.
+ * A browser without one of these just opens or closes at once, as before.
+ */
+.faqBody {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition:
+    grid-template-rows 0.25s ease,
+    opacity 0.25s ease;
+}
+
+.faqItem:not([open]) .faqBody {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+
+@starting-style {
+  .faqItem[open] .faqBody {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+}
+
+.faqItem::details-content {
+  transition: content-visibility 0.25s allow-discrete;
+}
+
+.faqClip {
+  min-height: 0;
+  overflow: hidden;
+}
+
 .faqAnswer {
   padding: 0 16px 16px;
   color: var(--cp-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .faqChevron,
+  .faqBody,
+  .faqItem::details-content {
+    transition: none;
+  }
 }
 
 .hours {
