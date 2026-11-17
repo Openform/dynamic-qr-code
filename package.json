@@ -9,11 +9,10 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "geoip:update": "node scripts/update-geoip.mjs"
+    "geoip:update": "node scripts/update-geoip.mjs",
+    "avatars:generate": "node scripts/generate-avatars.mjs"
   },
   "dependencies": {
-    "@dicebear/core": "^10.3.0",
-    "@dicebear/styles": "^10.2.0",
     "bcryptjs": "^3.0.3",
     "bwip-js": "^4.11.1",
     "ipaddr.js": "^2.4.0",
@@ -30,6 +29,8 @@
     "resend": "^6.33.0"
   },
   "devDependencies": {
+    "@dicebear/core": "^10.3.0",
+    "@dicebear/styles": "^10.2.0",
     "eslint": "^9",
     "eslint-config-next": "16.4.5",
     "vitest": "^4.1.12"

@@ -3,39 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import Avatar from "../components/Avatar"
-
-import { Style, avatar } from "@dicebear/core"
-import lorelei from "@dicebear/styles/lorelei.json" with { type: "json" }
-
-// Preset avatars served as static SVGs from /public/avatars.
-// Pick any seeds (names) you like!
-const seeds = [
-  "Felix",
-  "Aneka",
-  "Jude",
-  "Miya",
-  "Milo",
-  "Luna",
-  "Sophie",
-  "mqq401q4",
-  "rlnap45o"
-]
-
-const PRESET_AVATARS = seeds.map((seed) => ({
-  id: seed,
-  name: seed,
-  // Change "notionists" to whatever DiceBear style you prefer (e.g., "avataaars", "bottts")
-  url: `https://api.dicebear.com/10.x/lorelei/svg?seed=${seed}`
-}))
-
-// const PRESET_AVATARS = [
-//   "/avatars/avatar1.jpg",
-//   "/avatars/ocean.svg",
-//   "/avatars/sunset.svg",
-//   "/avatars/forest.svg",
-//   "/avatars/ember.svg",
-//   "/avatars/grape.svg"
-// ]
+import { PRESET_AVATARS, localAvatar } from "@/lib/avatars"
 
 // Uploaded images are downscaled to this square size before being stored as a
 // data URL, keeping the payload small (must stay under the server's cap).
@@ -99,7 +67,10 @@ export default function SettingsPage() {
         const u = data.user ?? data
         setUser(u)
         setName(u.name || "")
-        setAvatar(u.avatar ?? null)
+        // A preset picked before the presets were served from QR Go is still
+        // stored as its DiceBear URL: use its local path, so it shows as
+        // selected below and is saved as the local path.
+        setAvatar(localAvatar(u.avatar ?? null))
       } catch {
         // A network or parsing failure, not a sign-out (that's handled above),
         // so stay here and offer a retry instead of sending them to /login.
@@ -324,47 +295,25 @@ export default function SettingsPage() {
               </p>
               <div style={styles.presetGrid}>
                 {PRESET_AVATARS.map((preset) => {
-                  // Check if this preset URL matches the currently selected avatar
-                  const isSelected = avatar === preset.url
+                  const isSelected = avatar === preset.src
 
                   return (
                     <button
                       type="button"
-                      key={preset.id}
-                      onClick={() => setAvatar(preset.url)}
-                      aria-label={`Select ${preset.name} avatar`}
+                      key={preset.seed}
+                      onClick={() => setAvatar(preset.src)}
+                      aria-label={`Select ${preset.seed} avatar`}
                       aria-pressed={isSelected}
                       style={{
                         ...styles.presetBtn,
                         ...(isSelected ? styles.presetSelected : {})
                       }}
                     >
-                      {/* Pass the clean API URL directly to your UI component */}
-                      <Avatar src={preset.url} name="" size={56} />
+                      <Avatar src={preset.src} name="" size={56} />
                     </button>
                   )
                 })}
               </div>
-              {/* <div style={styles.presetGrid}>
-                {PRESET_AVATARS.map((preset) => {
-                  const selected = avatar === preset
-                  return (
-                    <button
-                      type="button"
-                      key={preset}
-                      onClick={() => setAvatar(preset)}
-                      aria-label={`Select ${preset.split("/").pop().replace(".svg", "")} avatar`}
-                      aria-pressed={selected}
-                      style={{
-                        ...styles.presetBtn,
-                        ...(selected ? styles.presetSelected : {})
-                      }}
-                    >
-                      <Avatar src={preset} name="" size={56} />
-                    </button>
-                  )
-                })}
-              </div> */}
 
               <div
                 style={{

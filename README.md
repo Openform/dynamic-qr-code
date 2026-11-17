@@ -548,6 +548,8 @@ You can start editing the page by modifying `app/page.js`. The page auto-updates
 
 This project self-hosts [Inter](https://rsms.me/inter/) with [`next/font/local`](https://nextjs.org/docs/app/getting-started/fonts), so no third-party font service is called. The font file and notes on how it was made are in `src/app/fonts/`.
 
+The preset profile pictures are served the same way, from `public/avatars/` (see its README), rather than from an avatar service.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
